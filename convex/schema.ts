@@ -1,0 +1,55 @@
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  workItems: defineTable({
+    userId: v.string(),
+    profileId: v.string(),
+    title: v.string(),
+    client: v.optional(v.string()),
+    status: v.string(),
+    workType: v.string(),
+    startDate: v.string(),
+    dueDate: v.string(),
+    earnings: v.number(),
+    notes: v.string(),
+    createdAt: v.optional(v.string()),
+  }).index("by_userId", ["userId"]),
+
+  settings: defineTable({
+    userId: v.string(),
+    studioName: v.string(),
+    profileName: v.string(),
+    profileTitle: v.string(),
+    profileBio: v.string(),
+    profileLocation: v.string(),
+    timeZone: v.string(),
+    dateFormat: v.string(),
+    weekStart: v.string(),
+    projectStages: v.array(v.string()),
+    notifications: v.record(v.string(), v.boolean()),
+    integrations: v.record(v.string(), v.boolean()),
+    integrationAccounts: v.record(v.string(), v.string()),
+    teamRole: v.string(),
+    teamMembers: v.array(
+      v.object({
+        id: v.string(),
+        name: v.string(),
+        role: v.string(),
+        email: v.string(),
+      })
+    ),
+    editorPermissions: v.record(v.string(), v.boolean()),
+    theme: v.string(),
+    accentColor: v.string(),
+    density: v.string(),
+  }).index("by_userId", ["userId"]),
+
+  salaryBatches: defineTable({
+    userId: v.string(),
+    number: v.number(),
+    completedDate: v.string(),
+    archived: v.boolean(),
+    archivedDate: v.string(),
+  }).index("by_userId", ["userId"]),
+});
