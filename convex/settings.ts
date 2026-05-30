@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
+import { mutation, query } from "./_generated/server";
 
 const teamMemberSchema = v.object({
   id: v.string(),
@@ -15,8 +15,8 @@ export const get = query({
     if (!identity) return null;
     const settings = await ctx.db
       .query("settings")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
-      .first();
+      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .unique();
     return settings ?? null;
   },
 });
@@ -25,12 +25,15 @@ export const upsert = mutation({
   args: {
     studioName: v.string(),
     profileName: v.string(),
+    profileUsername: v.string(),
     profileTitle: v.string(),
     profileBio: v.string(),
     profileLocation: v.string(),
+    profileImageUrl: v.string(),
     timeZone: v.string(),
     dateFormat: v.string(),
     weekStart: v.string(),
+    currencyCode: v.string(),
     projectStages: v.array(v.string()),
     notifications: v.record(v.string(), v.boolean()),
     integrations: v.record(v.string(), v.boolean()),
@@ -45,11 +48,11 @@ export const upsert = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const userId = identity.subject;
+    const userId = identity.tokenIdentifier;
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .first();
+      .unique();
     if (existing) {
       await ctx.db.patch(existing._id, args);
     } else {

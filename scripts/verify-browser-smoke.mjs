@@ -1,0 +1,161 @@
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createServer } from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
+
+const routes = ["/", "/projects", "/settings", "/profile"];
+const startupTimeoutMs = 30_000;
+const firefoxPath = findFirefox();
+
+if (!firefoxPath) {
+  console.log("Firefox was not found; skipping browser smoke verification.");
+  process.exit(0);
+}
+
+if (!canCaptureScreenshot(firefoxPath)) {
+  console.log("Firefox headless screenshots are unavailable in this environment; skipping browser smoke verification.");
+  process.exit(0);
+}
+
+const port = await getOpenPort();
+const baseUrl = `http://localhost:${port}`;
+const outputDirectory = mkdtempSync(join(tmpdir(), "cutlab-browser-smoke-"));
+const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
+const serverArgs = process.platform === "win32"
+  ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
+  : ["run", "start", "--", "-p", String(port)];
+
+let server;
+
+try {
+  server = spawn(serverCommand, serverArgs, {
+    env: { ...process.env, PORT: String(port) },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true
+  });
+
+  let output = "";
+  server.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  server.stderr.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+
+  await waitForServer(baseUrl, () => output);
+
+  for (const route of routes) {
+    const screenshotPath = join(outputDirectory, `${route === "/" ? "dashboard" : route.slice(1)}.png`);
+    const result = spawnSync(
+      firefoxPath,
+      ["--headless", "--window-size=1440,1000", "--screenshot", screenshotPath, `${baseUrl}${route}`],
+      { encoding: "utf8", timeout: 30_000, windowsHide: true }
+    );
+
+    const dimensions = readPngDimensions(screenshotPath);
+    if (!dimensions) {
+      throw new Error(`Firefox did not create a valid PNG for ${route}.\n${result.stderr || result.stdout}`);
+    }
+    if (dimensions.width < 1200 || dimensions.height < 800) {
+      throw new Error(`Browser screenshot for ${route} is unexpectedly small: ${dimensions.width}x${dimensions.height}.`);
+    }
+
+    const bytes = readFileSync(screenshotPath);
+    if (bytes.byteLength < 50_000) {
+      throw new Error(`Browser screenshot for ${route} looks too small to be a real rendered page: ${bytes.byteLength} bytes.`);
+    }
+  }
+
+  console.log(`Browser smoke verified ${routes.length} routes with Firefox headless against ${baseUrl}.`);
+} finally {
+  if (server && !server.killed) stopServer(server);
+  rmSync(outputDirectory, { recursive: true, force: true });
+}
+
+function findFirefox() {
+  const candidates = process.platform === "win32"
+    ? [
+        "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+        "C:\\Program Files (x86)\\Mozilla Firefox\\firefox.exe"
+      ]
+    : ["firefox"];
+
+  for (const candidate of candidates) {
+    if (candidate.includes("\\") && existsSync(candidate)) return candidate;
+    if (!candidate.includes("\\")) {
+      const result = spawnSync(candidate, ["--version"], { encoding: "utf8", timeout: 5_000 });
+      if (result.status === 0) return candidate;
+    }
+  }
+
+  return "";
+}
+
+function canCaptureScreenshot(browserPath) {
+  const directory = mkdtempSync(join(tmpdir(), "cutlab-firefox-preflight-"));
+  const screenshotPath = join(directory, "preflight.png");
+  try {
+    spawnSync(
+      browserPath,
+      ["--headless", "--window-size=400,300", "--screenshot", screenshotPath, "about:blank"],
+      { encoding: "utf8", timeout: 15_000, windowsHide: true }
+    );
+    return Boolean(readPngDimensions(screenshotPath));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+async function getOpenPort() {
+  return new Promise((resolve, reject) => {
+    const socket = createServer();
+    socket.on("error", reject);
+    socket.listen(0, () => {
+      const address = socket.address();
+      if (!address || typeof address === "string") {
+        socket.close(() => reject(new Error("Could not allocate a local port.")));
+        return;
+      }
+      const selectedPort = address.port;
+      socket.close(() => resolve(selectedPort));
+    });
+  });
+}
+
+async function waitForServer(url, getOutput) {
+  const started = Date.now();
+  while (Date.now() - started < startupTimeoutMs) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      if (response.ok) return;
+    } catch {
+      // Keep waiting until the server starts or the timeout expires.
+    }
+    if (server?.exitCode !== null) {
+      throw new Error(`Production server exited before browser verification.\n${getOutput()}`);
+    }
+    await delay(300);
+  }
+  throw new Error(`Production server did not start within ${startupTimeoutMs / 1000}s.\n${getOutput()}`);
+}
+
+function stopServer(child) {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
+    return;
+  }
+  child.kill("SIGTERM");
+}
+
+function readPngDimensions(path) {
+  if (!existsSync(path)) return null;
+  const bytes = readFileSync(path);
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 24 || !signature.every((byte, index) => bytes[index] === byte)) return null;
+  return {
+    width: bytes.readUInt32BE(16),
+    height: bytes.readUInt32BE(20)
+  };
+}

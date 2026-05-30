@@ -76,12 +76,15 @@ export type TeamMember = {
 export type SettingsState = {
   studioName: string;
   profileName: string;
+  profileUsername: string;
   profileTitle: string;
   profileBio: string;
   profileLocation: string;
+  profileImageUrl: string;
   timeZone: string;
   dateFormat: string;
   weekStart: string;
+  currencyCode: string;
   projectStages: string[];
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;

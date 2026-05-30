@@ -13,51 +13,72 @@ const SETTINGS_STORAGE_KEY = "video-editing-work-tracker:settings:v1";
 type ToastState = { message: string; tone: "success" | "info" | "warning" };
 
 const teamRoleOptions = ["Owner", "Editor", "Reviewer", "Client"];
-
-const defaultSettings: SettingsState = {
+const LEGACY_DEMO_SETTINGS = {
   studioName: "CutLab Studio",
   profileName: "Jordan Lee",
+  profileUsername: "jordanlee",
   profileTitle: "Video Editor & Storyteller",
   profileBio: "Clean, cinematic edits for creators, campaigns, and client stories.",
   profileLocation: "Los Angeles, CA",
-  timeZone: "Asia/Dubai",
-  dateFormat: "May 22, 2025",
+};
+
+const defaultSettings: SettingsState = {
+  studioName: "",
+  profileName: "",
+  profileUsername: "",
+  profileTitle: "",
+  profileBio: "",
+  profileLocation: "",
+  profileImageUrl: "",
+  timeZone: "UTC",
+  dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  projectStages: ["Review", "Edit", "Revision", "Client Review", "Delivered"],
+  currencyCode: "USD",
+  projectStages: [],
   notifications: {
-    "Project updates": true,
-    "Feedback received": true,
-    "Upcoming deadlines": true,
-    Mentions: true,
+    "Project updates": false,
+    "Feedback received": false,
+    "Upcoming deadlines": false,
+    Mentions: false,
     "Weekly summary": false,
   },
   integrations: {
-    "Google Drive": true,
+    "Google Drive": false,
     Dropbox: false,
-    Slack: true,
+    Slack: false,
     "Frame.io": false,
   },
   integrationAccounts: {
-    "Google Drive": "CutLab drive",
+    "Google Drive": "",
     Dropbox: "",
-    Slack: "cutlab.slack.com",
+    Slack: "",
     "Frame.io": "",
   },
-  teamRole: "Editor",
-  teamMembers: [
-    { id: "member-owner", name: "Jordan Lee", role: "Editor", email: "jordan@cutlab.local" },
-  ],
+  teamRole: "",
+  teamMembers: [],
   editorPermissions: {
-    "Create and edit projects": true,
-    "Upload media and assets": true,
-    "Manage project stages": true,
-    "Invite team members": true,
+    "Create and edit projects": false,
+    "Upload media and assets": false,
+    "Manage project stages": false,
+    "Invite team members": false,
     "Manage app settings": false,
   },
   theme: "Light",
   accentColor: "#5b3fa0",
   density: "Comfortable",
 };
+
+function isLegacyDemoSettings(value: unknown) {
+  if (!isPlainRecord(value)) return false;
+  return (
+    value.studioName === LEGACY_DEMO_SETTINGS.studioName &&
+    value.profileName === LEGACY_DEMO_SETTINGS.profileName &&
+    value.profileUsername === LEGACY_DEMO_SETTINGS.profileUsername &&
+    value.profileTitle === LEGACY_DEMO_SETTINGS.profileTitle &&
+    value.profileBio === LEGACY_DEMO_SETTINGS.profileBio &&
+    value.profileLocation === LEGACY_DEMO_SETTINGS.profileLocation
+  );
+}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -113,34 +134,123 @@ function colorSetting(value: unknown, fallback: string) {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
 }
 
+function booleanRecordSetting(value: unknown, fallback: Record<string, boolean>) {
+  const record = { ...fallback };
+  if (!isPlainRecord(value)) return record;
+  for (const key of Object.keys(record)) {
+    if (typeof value[key] === "boolean") {
+      record[key] = value[key];
+    }
+  }
+  return record;
+}
+
+function stringRecordSetting(value: unknown, fallback: Record<string, string>) {
+  const record = { ...fallback };
+  if (!isPlainRecord(value)) return record;
+  for (const key of Object.keys(record)) {
+    if (typeof value[key] === "string") {
+      record[key] = value[key].trim();
+    }
+  }
+  return record;
+}
+
+function normalizeStoredItem(value: unknown): WorkItem | null {
+  if (!isPlainRecord(value)) return null;
+  const id = typeof value.id === "string" && value.id.trim() ? value.id : "";
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : "";
+  if (!id || !title) return null;
+  return {
+    id,
+    profileId: stringSetting(value.profileId, "video-editing"),
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : undefined,
+    title,
+    client: typeof value.client === "string" ? value.client : "",
+    status: stringSetting(value.status, "Planned"),
+    workType: stringSetting(value.workType, "Job / Salary"),
+    startDate: stringSetting(value.startDate, iso(todayDate())),
+    dueDate: stringSetting(value.dueDate, iso(todayDate())),
+    earnings: typeof value.earnings === "number" && Number.isFinite(value.earnings) ? Math.max(0, value.earnings) : 0,
+    notes: typeof value.notes === "string" ? value.notes : "",
+  };
+}
+
+function normalizeSalaryState(value: unknown): SalaryState {
+  const batches = isPlainRecord(value) && Array.isArray(value.batches) ? value.batches : [];
+  return {
+    batches: batches.flatMap((batch, index): SalaryBatch[] => {
+      if (!isPlainRecord(batch)) return [];
+      const number = typeof batch.number === "number" && Number.isFinite(batch.number) ? Math.max(1, Math.floor(batch.number)) : index + 1;
+      return [{
+        id: typeof batch.id === "string" && batch.id.trim() ? batch.id : `batch-${number}`,
+        number,
+        completedDate: stringSetting(batch.completedDate, iso(todayDate())),
+        archived: typeof batch.archived === "boolean" ? batch.archived : false,
+        archivedDate: typeof batch.archivedDate === "string" ? batch.archivedDate : "",
+      }];
+    }),
+  };
+}
+
 function mergeSettings(stored: Partial<SettingsState>): SettingsState {
   const r = isPlainRecord(stored) ? stored : {};
   return {
     ...defaultSettings,
     studioName: stringSetting(r.studioName, defaultSettings.studioName),
     profileName: stringSetting(r.profileName, defaultSettings.profileName),
+    profileUsername: stringSetting(r.profileUsername, defaultSettings.profileUsername),
     profileTitle: stringSetting(r.profileTitle, defaultSettings.profileTitle),
     profileBio: stringSetting(r.profileBio, defaultSettings.profileBio),
     profileLocation: stringSetting(r.profileLocation, defaultSettings.profileLocation),
-    timeZone: optionSetting(r.timeZone, ["Asia/Dubai", "Pacific Time", "Eastern Time", "UTC"], defaultSettings.timeZone),
-    dateFormat: optionSetting(r.dateFormat, ["May 22, 2025", "22 May 2025", "2025-05-22"], defaultSettings.dateFormat),
+    profileImageUrl: typeof r.profileImageUrl === "string" ? r.profileImageUrl.trim() : defaultSettings.profileImageUrl,
+    timeZone: optionSetting(r.timeZone, ["UTC", "Pacific Time", "Eastern Time", "Asia/Dubai"], defaultSettings.timeZone),
+    dateFormat: optionSetting(r.dateFormat, ["Month Day, Year", "Day Month Year", "YYYY-MM-DD"], defaultSettings.dateFormat),
     weekStart: optionSetting(r.weekStart, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], defaultSettings.weekStart),
+    currencyCode: optionSetting(r.currencyCode, ["USD", "EUR", "GBP", "INR", "AED", "SAR"], defaultSettings.currencyCode),
     teamRole: optionSetting(r.teamRole, teamRoleOptions, defaultSettings.teamRole),
     theme: optionSetting(r.theme, ["Light", "Dark", "System"], defaultSettings.theme),
     accentColor: colorSetting(r.accentColor, defaultSettings.accentColor),
     density: optionSetting(r.density, ["Comfortable", "Compact"], defaultSettings.density),
-    projectStages: Array.isArray(r.projectStages) ? r.projectStages.filter((s): s is string => typeof s === "string" && !!s.trim()) : defaultSettings.projectStages,
-    teamMembers: Array.isArray(r.teamMembers) ? r.teamMembers.filter((m: unknown): m is TeamMember => isPlainRecord(m) && typeof (m as TeamMember).name === "string") : defaultSettings.teamMembers,
-    notifications: { ...defaultSettings.notifications, ...(isPlainRecord(r.notifications) ? r.notifications : {}) },
-    integrations: { ...defaultSettings.integrations, ...(isPlainRecord(r.integrations) ? r.integrations : {}) },
-    integrationAccounts: { ...defaultSettings.integrationAccounts, ...(isPlainRecord(r.integrationAccounts) ? r.integrationAccounts : {}) },
-    editorPermissions: { ...defaultSettings.editorPermissions, ...(isPlainRecord(r.editorPermissions) ? r.editorPermissions : {}) },
+    projectStages: Array.isArray(r.projectStages)
+      ? r.projectStages.flatMap((s): string[] => (typeof s === "string" && s.trim() ? [s.trim()] : []))
+      : defaultSettings.projectStages,
+    teamMembers: Array.isArray(r.teamMembers)
+      ? r.teamMembers.flatMap((m: unknown): TeamMember[] => {
+          if (!isPlainRecord(m) || typeof m.name !== "string" || !m.name.trim()) return [];
+          return [{
+            id: typeof m.id === "string" && m.id.trim() ? m.id : `member-${m.name.trim().toLowerCase().replace(/\s+/g, "-")}`,
+            name: m.name.trim(),
+            role: optionSetting(m.role, teamRoleOptions, "Editor"),
+            email: typeof m.email === "string" ? m.email.trim() : "",
+          }];
+        })
+      : defaultSettings.teamMembers,
+    notifications: booleanRecordSetting(r.notifications, defaultSettings.notifications),
+    integrations: booleanRecordSetting(r.integrations, defaultSettings.integrations),
+    integrationAccounts: stringRecordSetting(r.integrationAccounts, defaultSettings.integrationAccounts),
+    editorPermissions: booleanRecordSetting(r.editorPermissions, defaultSettings.editorPermissions),
   };
 }
 
 function readInitialSettings(): SettingsState {
   if (typeof window === "undefined") return freshDefaultSettings();
-  return mergeSettings(readJson<Partial<SettingsState>>(SETTINGS_STORAGE_KEY, {}));
+  const stored = readJson<Partial<SettingsState>>(SETTINGS_STORAGE_KEY, {});
+  if (isLegacyDemoSettings(stored)) {
+    removeKey(SETTINGS_STORAGE_KEY);
+    return freshDefaultSettings();
+  }
+  return mergeSettings(stored);
+}
+
+function readInitialItems(): WorkItem[] {
+  if (typeof window === "undefined") return [];
+  const stored = readJson<unknown>(STORAGE_KEY, []);
+  const storedItems = Array.isArray(stored) ? stored : [];
+  return storedItems.flatMap((item) => {
+    const normalized = normalizeStoredItem(item);
+    return normalized ? [normalized] : [];
+  });
 }
 
 function todayDate() {
@@ -162,6 +272,40 @@ function isDoneStatus(status: string) {
   );
 }
 
+function readObjectString(value: unknown, key: string) {
+  if (!value || typeof value !== "object") return "";
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === "string" ? candidate : "";
+}
+
+function deriveAuthProfile(user: ReturnType<typeof useUser>["user"]) {
+  if (!user) {
+    return { profileName: "", profileUsername: "", profileImageUrl: "" };
+  }
+
+  const externalAccountsRaw = (user as unknown as { externalAccounts?: unknown[] }).externalAccounts;
+  const externalAccounts = Array.isArray(externalAccountsRaw) ? externalAccountsRaw : [];
+  const githubAccount =
+    externalAccounts.find((account) => readObjectString(account, "provider") === "oauth_github") ??
+    externalAccounts.find((account) => readObjectString(account, "provider") === "github");
+
+  const profileName =
+    user.fullName?.trim() ||
+    [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+    user.username?.trim() ||
+    "";
+  const profileUsername =
+    readObjectString(githubAccount, "username").trim() ||
+    user.username?.trim() ||
+    "";
+  const profileImageUrl =
+    readObjectString(githubAccount, "imageUrl").trim() ||
+    user.imageUrl?.trim() ||
+    "";
+
+  return { profileName, profileUsername, profileImageUrl };
+}
+
 interface DataContextValue {
   items: WorkItem[];
   setItems: React.Dispatch<React.SetStateAction<WorkItem[]>>;
@@ -169,6 +313,7 @@ interface DataContextValue {
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
   salaryBatches: SalaryBatch[];
   reconcileSalaryBatches: (items: WorkItem[]) => void;
+  isAuthEnabled: boolean;
   isSignedIn: boolean;
   isAuthLoaded: boolean;
   toast: ToastState | null;
@@ -177,7 +322,87 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-export function DataProvider({ children }: { children: React.ReactNode }) {
+export function DataProvider({ children, mode = "local" }: { children: React.ReactNode; mode?: "local" | "cloud" }) {
+  if (mode === "cloud") {
+    return <CloudDataProvider>{children}</CloudDataProvider>;
+  }
+  return <LocalDataProvider>{children}</LocalDataProvider>;
+}
+
+function LocalDataProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItemsState] = useState<WorkItem[]>([]);
+  const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
+  const [toast, setToast] = useState<ToastState | null>(null);
+
+  useEffect(() => {
+    setItemsState(readInitialItems());
+    setSettingsState(readInitialSettings());
+    setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
+  const setItems = useCallback((updater: React.SetStateAction<WorkItem[]>) => {
+    setItemsState((prev: WorkItem[]) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      writeJson(STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const setSettings = useCallback((updater: React.SetStateAction<SettingsState>) => {
+    setSettingsState((prev: SettingsState) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      writeJson(SETTINGS_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const reconcileSalaryBatches = useCallback((workItems: WorkItem[]) => {
+    const completedBatchCount = Math.floor(
+      workItems.filter((w) => w.workType === "Job / Salary" && isDoneStatus(w.status)).length / 20,
+    );
+    setSalaryBatches((prev: SalaryBatch[]) => {
+      if (prev.length >= completedBatchCount) return prev;
+      const next = [...prev];
+      while (next.length < completedBatchCount) {
+        const n = next.length + 1;
+        next.push({
+          id: `batch-${n}`,
+          number: n,
+          completedDate: iso(todayDate()),
+          archived: false,
+          archivedDate: "",
+        });
+      }
+      writeJson(SALARY_STORAGE_KEY, { batches: next });
+      return next;
+    });
+  }, []);
+
+  const value: DataContextValue = {
+    items,
+    setItems,
+    settings,
+    setSettings,
+    salaryBatches,
+    reconcileSalaryBatches,
+    isAuthEnabled: false,
+    isSignedIn: false,
+    isAuthLoaded: true,
+    toast,
+    setToast,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+}
+
+function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn, user, isLoaded: clerkLoaded } = useUser();
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
@@ -199,11 +424,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (!clerkLoaded) return;
     if (isSignedIn) return;
 
-    const stored = readJson<WorkItem[]>(STORAGE_KEY, []);
+    const stored = readInitialItems();
     setItemsState(stored);
     setSettingsState(readInitialSettings());
 
-    const salState = readJson<SalaryState>(SALARY_STORAGE_KEY, { batches: [] });
+    const salState = normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] }));
     setSalaryBatches(salState.batches);
     setReady(true);
   }, [clerkLoaded, isSignedIn]);
@@ -217,9 +442,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     const hasConvexData = convexItems.length > 0 || convexSettings !== null;
     if (!hasConvexData) {
-      const localItems = readJson<WorkItem[]>(STORAGE_KEY, []);
+      const localItems = readInitialItems();
       const localSettings = readJson<Partial<SettingsState>>(SETTINGS_STORAGE_KEY, {});
-      const localBatches = readJson<SalaryState>(SALARY_STORAGE_KEY, { batches: [] });
+      const localBatches = normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] }));
 
       if (localItems.length > 0) {
         replaceAllItems({ items: localItems });
@@ -241,6 +466,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setSalaryBatches(convexBatches);
     setReady(true);
   }, [clerkLoaded, isSignedIn, convexItems, convexSettings, convexBatches, replaceAllItems, replaceAllBatches, upsertSettings]);
+
+  useEffect(() => {
+    if (!clerkLoaded || !isSignedIn || !user || !ready) return;
+
+    const authProfile = deriveAuthProfile(user);
+    if (!authProfile.profileName && !authProfile.profileUsername && !authProfile.profileImageUrl) return;
+
+    setSettingsState((current) => {
+      const next: SettingsState = {
+        ...current,
+        profileName: current.profileName.trim() || authProfile.profileName,
+        profileUsername: current.profileUsername.trim() || authProfile.profileUsername,
+        profileImageUrl: current.profileImageUrl.trim() || authProfile.profileImageUrl,
+      };
+
+      const changed =
+        next.profileName !== current.profileName ||
+        next.profileUsername !== current.profileUsername ||
+        next.profileImageUrl !== current.profileImageUrl;
+
+      if (changed) {
+        upsertSettings(next).catch(() => {});
+      }
+
+      return changed ? next : current;
+    });
+  }, [clerkLoaded, isSignedIn, ready, upsertSettings, user]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -317,6 +569,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setSettings,
     salaryBatches,
     reconcileSalaryBatches,
+    isAuthEnabled: true,
     isSignedIn: !!isSignedIn,
     isAuthLoaded: clerkLoaded && ready,
     toast,

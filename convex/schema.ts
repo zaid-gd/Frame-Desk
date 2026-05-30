@@ -4,6 +4,7 @@ import { v } from "convex/values";
 export default defineSchema({
   workItems: defineTable({
     userId: v.string(),
+    id: v.string(),
     profileId: v.string(),
     title: v.string(),
     client: v.optional(v.string()),
@@ -20,12 +21,15 @@ export default defineSchema({
     userId: v.string(),
     studioName: v.string(),
     profileName: v.string(),
+    profileUsername: v.string(),
     profileTitle: v.string(),
     profileBio: v.string(),
     profileLocation: v.string(),
+    profileImageUrl: v.string(),
     timeZone: v.string(),
     dateFormat: v.string(),
     weekStart: v.string(),
+    currencyCode: v.string(),
     projectStages: v.array(v.string()),
     notifications: v.record(v.string(), v.boolean()),
     integrations: v.record(v.string(), v.boolean()),
@@ -47,6 +51,7 @@ export default defineSchema({
 
   salaryBatches: defineTable({
     userId: v.string(),
+    id: v.string(),
     number: v.number(),
     completedDate: v.string(),
     archived: v.boolean(),

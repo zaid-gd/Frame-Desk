@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
+import { mutation, query } from "./_generated/server";
 
 export const list = query({
   args: {},
@@ -8,8 +8,8 @@ export const list = query({
     if (!identity) return [];
     return await ctx.db
       .query("salaryBatches")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
-      .collect();
+      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .take(500);
   },
 });
 
@@ -17,6 +17,7 @@ export const replaceAll = mutation({
   args: {
     batches: v.array(
       v.object({
+        id: v.optional(v.string()),
         number: v.number(),
         completedDate: v.string(),
         archived: v.boolean(),
@@ -27,17 +28,17 @@ export const replaceAll = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const userId = identity.subject;
+    const userId = identity.tokenIdentifier;
     const existing = await ctx.db
       .query("salaryBatches")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .collect();
+      .take(500);
     await Promise.all(existing.map((batch) => ctx.db.delete(batch._id)));
     await Promise.all(
       args.batches.map((batch) =>
         ctx.db.insert("salaryBatches", {
           ...batch,
-          id: "",
+          id: batch.id ?? `batch-${batch.number}`,
           userId,
         })
       )

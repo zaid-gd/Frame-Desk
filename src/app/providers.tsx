@@ -9,20 +9,30 @@ import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import { theme } from "./theme";
 import { DataProvider } from "@/lib/data-context";
 
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
 
 export function Providers({ children }: { children: React.ReactNode }) {
+  const app = (
+    <DataProvider mode={convex && clerkPublishableKey ? "cloud" : "local"}>
+      <AppRouterCacheProvider>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          {children}
+        </ThemeProvider>
+      </AppRouterCacheProvider>
+    </DataProvider>
+  );
+
+  if (!convex || !clerkPublishableKey) {
+    return app;
+  }
+
   return (
-    <ClerkProvider>
+    <ClerkProvider publishableKey={clerkPublishableKey}>
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <DataProvider>
-          <AppRouterCacheProvider>
-            <ThemeProvider theme={theme}>
-              <CssBaseline />
-              {children}
-            </ThemeProvider>
-          </AppRouterCacheProvider>
-        </DataProvider>
+        {app}
       </ConvexProviderWithClerk>
     </ClerkProvider>
   );

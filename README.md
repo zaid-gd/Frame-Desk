@@ -20,7 +20,7 @@ It is designed as a focused production dashboard rather than a generic task app.
 - Shows project volume, earned revenue, pending work, and delivery status.
 - Organizes clients from the project records already in the tracker.
 - Provides calendar, timeline, media, feedback, reports, team, settings, public profile, and organization profile views.
-- Stores tracker data locally in the browser.
+- Stores tracker data locally in the browser, with optional account-backed sync when Clerk and Convex are configured.
 
 ## Product Screens
 
@@ -84,6 +84,7 @@ The UI is intentionally quiet and utilitarian. It takes inspiration from product
 - Clear status and progress indicators
 - Minimal decoration
 - Local-first data model
+- Optional account sync
 - Fast access to common editor workflows
 
 ## Tech Stack
@@ -93,7 +94,8 @@ The UI is intentionally quiet and utilitarian. It takes inspiration from product
 - TypeScript
 - Material UI
 - Local browser storage
+- Clerk and Convex for optional sync
 
 ## Current Build
 
-CutLab Studio is currently packaged as a polished local-first tracker with production build checks, route verification, local persistence, and a GitHub-ready product showcase.
+CutLab Studio is currently packaged as a polished local-first tracker with production build checks, route verification, local persistence, optional account sync, and a GitHub-ready product showcase.

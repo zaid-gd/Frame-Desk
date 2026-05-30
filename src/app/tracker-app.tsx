@@ -61,6 +61,7 @@ import type { WorkItem, WorkTypeConfig } from "@/lib/types";
 
 const SALARY_BATCH_SIZE = 20;
 const SALARY_BATCH_AMOUNT = 10000;
+const AUTH_MODE_STORAGE_KEY = "cutlab-studio:auth-mode:v1";
 const sidebarWidth = 264;
 const headingFont = "Georgia, 'Times New Roman', serif";
 const defaultAccent = "#5b3fa0";
@@ -93,7 +94,7 @@ const outlineButtonSx = {
   "&:hover": { borderColor: accent, bgcolor: hoverBg }
 };
 
-type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "team" | "settings" | "profile" | "organization-profile";
+type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = "ALL" | "Job / Salary" | "Freelance" | "Personal Channel";
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -107,12 +108,15 @@ type TeamMember = {
 type SettingsState = {
   studioName: string;
   profileName: string;
+  profileUsername: string;
   profileTitle: string;
   profileBio: string;
   profileLocation: string;
+  profileImageUrl: string;
   timeZone: string;
   dateFormat: string;
   weekStart: string;
+  currencyCode: string;
   projectStages: string[];
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;
@@ -137,6 +141,15 @@ const billingOptions = ["ALL", "Paid", "Unpaid"];
 const dueOptions: DueFilter[] = ["ALL", "This Week", "Overdue", "Delivered"];
 const sortOptions: SortKey[] = ["createdAt_desc", "createdAt_asc", "dueDate_asc", "earnings_desc", "earnings_asc"];
 const teamRoleOptions = ["Owner", "Editor", "Reviewer", "Client"];
+const currencyOptions = ["USD", "EUR", "GBP", "INR", "AED", "SAR"];
+const currencyLabels: Record<string, string> = {
+  USD: "USD ($)",
+  EUR: "EUR (€)",
+  GBP: "GBP (£)",
+  INR: "INR (Rs)",
+  AED: "AED (Dh)",
+  SAR: "SAR (SR)"
+};
 const sortLabels: Record<SortKey, string> = {
   createdAt_desc: "Newest",
   createdAt_asc: "Oldest",
@@ -160,43 +173,44 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
 ];
 
 const defaultSettings: SettingsState = {
-  studioName: "CutLab Studio",
-  profileName: "Jordan Lee",
-  profileTitle: "Video Editor & Storyteller",
-  profileBio: "Clean, cinematic edits for creators, campaigns, and client stories.",
-  profileLocation: "Los Angeles, CA",
-  timeZone: "Asia/Dubai",
-  dateFormat: "May 22, 2025",
+  studioName: "",
+  profileName: "",
+  profileUsername: "",
+  profileTitle: "",
+  profileBio: "",
+  profileLocation: "",
+  profileImageUrl: "",
+  timeZone: "UTC",
+  dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  projectStages: ["Review", "Edit", "Revision", "Client Review", "Delivered"],
+  currencyCode: "USD",
+  projectStages: [],
   notifications: {
-    "Project updates": true,
-    "Feedback received": true,
-    "Upcoming deadlines": true,
-    Mentions: true,
+    "Project updates": false,
+    "Feedback received": false,
+    "Upcoming deadlines": false,
+    Mentions: false,
     "Weekly summary": false
   },
   integrations: {
-    "Google Drive": true,
+    "Google Drive": false,
     Dropbox: false,
-    Slack: true,
+    Slack: false,
     "Frame.io": false
   },
   integrationAccounts: {
-    "Google Drive": "CutLab drive",
+    "Google Drive": "",
     Dropbox: "",
-    Slack: "cutlab.slack.com",
+    Slack: "",
     "Frame.io": ""
   },
-  teamRole: "Editor",
-  teamMembers: [
-    { id: "member-owner", name: "Jordan Lee", role: "Editor", email: "jordan@cutlab.local" }
-  ],
+  teamRole: "",
+  teamMembers: [],
   editorPermissions: {
-    "Create and edit projects": true,
-    "Upload media and assets": true,
-    "Manage project stages": true,
-    "Invite team members": true,
+    "Create and edit projects": false,
+    "Upload media and assets": false,
+    "Manage project stages": false,
+    "Invite team members": false,
     "Manage app settings": false
   },
   theme: "Light",
@@ -225,11 +239,13 @@ const emptyForm = (): WorkItem => ({
 
 export function TrackerApp({ page }: { page: PageKey }) {
   const { items, setItems, settings, setSettings, isSignedIn, isAuthLoaded, toast, setToast, reconcileSalaryBatches } = useData();
+  const { openSignIn, openSignUp } = useClerk();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkItem | null>(null);
   const [form, setForm] = useState<WorkItem>(emptyForm);
   const [formError, setFormError] = useState("");
+  const [authChoiceOpen, setAuthChoiceOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [kindFilter, setKindFilter] = useState<ProjectKind>("ALL");
@@ -245,6 +261,18 @@ export function TrackerApp({ page }: { page: PageKey }) {
   useEffect(() => {
     applyRootThemeVariables(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !isAuthLoaded) return;
+    if (isSignedIn) {
+      window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, "account");
+      setAuthChoiceOpen(false);
+      return;
+    }
+
+    const savedMode = window.localStorage.getItem(AUTH_MODE_STORAGE_KEY);
+    setAuthChoiceOpen(!savedMode);
+  }, [isAuthLoaded, isSignedIn]);
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
   const clientOptions = useMemo(() => ["ALL", ...Array.from(new Set(projects.map((item) => item.client?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b))], [projects]);
@@ -305,6 +333,23 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
   function notify(message: string, tone: ToastState["tone"] = "success") {
     setToast({ message, tone });
+  }
+
+  function chooseLocalMode() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, "local");
+    }
+    setAuthChoiceOpen(false);
+    notify("Using local mode on this device.", "info");
+  }
+
+  function launchAccountFlow(mode: "sign-up" | "sign-in") {
+    setAuthChoiceOpen(false);
+    if (mode === "sign-up") {
+      openSignUp();
+      return;
+    }
+    openSignIn();
   }
 
   function openTemplateProject(template: { title: string; workType: string; notes: string }) {
@@ -407,6 +452,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
     <SettingsDesignPage settings={settings} setSettings={setSettings} onNewProject={openNewProject} notify={notify} />
   ) : page === "profile" ? (
     <ProfileDesignPage projects={projects} stats={stats} settings={settings} />
+  ) : page === "profile-edit" ? (
+    <ProfileEditPage settings={settings} setSettings={setSettings} />
   ) : (
     <OrganizationProfilePage projects={projects} settings={settings} stats={stats} />
   );
@@ -433,12 +480,18 @@ export function TrackerApp({ page }: { page: PageKey }) {
   if (page === "profile") {
     return (
       <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink }}>
-        <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
-        {projectDialog}
-        {deleteDialog}
-      </Box>
-    );
-  }
+      <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+      {projectDialog}
+      {deleteDialog}
+      <WelcomeChoiceDialog
+        open={authChoiceOpen}
+        onChooseLocal={chooseLocalMode}
+        onCreateAccount={() => launchAccountFlow("sign-up")}
+        onSignIn={() => launchAccountFlow("sign-in")}
+      />
+    </Box>
+  );
+}
 
   return (
     <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink, display: "flex" }}>
@@ -458,6 +511,12 @@ export function TrackerApp({ page }: { page: PageKey }) {
       <AppToast toast={toast} onClose={() => setToast(null)} />
       {projectDialog}
       {deleteDialog}
+      <WelcomeChoiceDialog
+        open={authChoiceOpen}
+        onChooseLocal={chooseLocalMode}
+        onCreateAccount={() => launchAccountFlow("sign-up")}
+        onSignIn={() => launchAccountFlow("sign-in")}
+      />
     </Box>
   );
 }
@@ -465,8 +524,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
 function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState }) {
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
   const profileMenuOpen = Boolean(profileMenuAnchor);
-  const { isSignedIn } = useUser();
-  const { openSignIn, signOut } = useClerk();
+  const { isAuthEnabled } = useData();
 
   return (
     <Box sx={{ display: { xs: "none", lg: "block" }, position: "fixed", inset: "0 auto 0 0", width: sidebarWidth, bgcolor: panel, borderRight: `1px solid ${border}`, px: 2.5, py: 3 }}>
@@ -499,10 +557,10 @@ function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState })
           }}
         >
           <Stack direction="row" alignItems="center" gap={1.1} sx={{ minWidth: 0 }}>
-            <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: avatarSurface, border: `1px solid ${border}`, display: "grid", placeItems: "center", color: ink, fontSize: 12, fontWeight: 760, flexShrink: 0 }}>{initials(settings.profileName)}</Box>
+            <ProfileAvatar settings={settings} size={34} fontSize={12} />
             <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{settings.profileName}</Typography>
-              <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.2 }}>{settings.teamRole}</Typography>
+              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{profileDisplayName(settings)}</Typography>
+              <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.2 }}>{displayUsername(settings) || settings.teamRole}</Typography>
             </Box>
           </Stack>
           <ExpandMoreIcon sx={{ color: muted, fontSize: 18, flexShrink: 0 }} />
@@ -527,35 +585,72 @@ function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState })
               <Typography sx={{ color: muted, fontSize: 12 }}>{settings.studioName}</Typography>
             </Box>
           </MenuItem>
+          <MenuItem component={Link} href="/profile/edit" selected={page === "profile-edit"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
+            <EditOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
+            <Box>
+              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Edit Profile</Typography>
+              <Typography sx={{ color: muted, fontSize: 12 }}>Customize your public profile</Typography>
+            </Box>
+          </MenuItem>
           <Divider sx={{ borderColor: border, my: 0.5 }} />
-          {isSignedIn ? (
-            <MenuItem
-              onClick={() => {
-                setProfileMenuAnchor(null);
-                signOut();
-              }}
-              sx={{ gap: 1.2, color: ink }}
-            >
-              <Button fullWidth variant="outlined" sx={{ borderColor: border, color: "#bd3f37", fontSize: 13, fontWeight: 720 }}>
-                Sign Out
-              </Button>
-            </MenuItem>
+          {isAuthEnabled ? (
+            <CloudProfileActions onClose={() => setProfileMenuAnchor(null)} />
           ) : (
-            <MenuItem
-              onClick={() => {
-                setProfileMenuAnchor(null);
-                openSignIn();
-              }}
-              sx={{ gap: 1.2, color: ink }}
-            >
-              <Button fullWidth variant="outlined" sx={{ borderColor: border, color: accent, fontSize: 13, fontWeight: 720 }}>
-                Sign In
-              </Button>
-            </MenuItem>
+            <Box sx={{ px: 1.5, py: 1 }}>
+              <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Local mode is active. Add Clerk and Convex environment variables to enable account sync.</Typography>
+            </Box>
           )}
         </Menu>
       </Box>
     </Box>
+  );
+}
+
+function CloudProfileActions({ onClose }: { onClose: () => void }) {
+  const { isSignedIn } = useUser();
+  const { openSignIn, openSignUp, signOut } = useClerk();
+
+  if (isSignedIn) {
+    return (
+      <MenuItem
+        onClick={() => {
+          onClose();
+          signOut();
+        }}
+        sx={{ gap: 1.2, color: ink }}
+      >
+        <Button fullWidth variant="outlined" sx={{ borderColor: border, color: "#bd3f37", fontSize: 13, fontWeight: 720 }}>
+          Sign Out
+        </Button>
+      </MenuItem>
+    );
+  }
+
+  return (
+    <Stack sx={{ px: 1, py: 0.75, gap: 0.8 }}>
+      <Button
+        fullWidth
+        variant="contained"
+        onClick={() => {
+          onClose();
+          openSignUp();
+        }}
+        sx={{ bgcolor: accent, color: "#fff", fontSize: 13, fontWeight: 720, "&:hover": { bgcolor: accent } }}
+      >
+        Create Account
+      </Button>
+      <Button
+        fullWidth
+        variant="outlined"
+        onClick={() => {
+          onClose();
+          openSignIn();
+        }}
+        sx={{ borderColor: border, color: accent, fontSize: 13, fontWeight: 720 }}
+      >
+        Sign In
+      </Button>
+    </Stack>
   );
 }
 
@@ -662,6 +757,61 @@ function NavButton({ active, href, icon, children }: { active: boolean; href: st
   );
 }
 
+function WelcomeChoiceDialog({
+  open,
+  onChooseLocal,
+  onCreateAccount,
+  onSignIn
+}: {
+  open: boolean;
+  onChooseLocal: () => void;
+  onCreateAccount: () => void;
+  onSignIn: () => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onClose={() => {}}
+      fullWidth
+      maxWidth="sm"
+      disableEscapeKeyDown
+      PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}
+    >
+      <DialogTitle sx={{ fontSize: 28, fontWeight: 760, pb: 1 }}>Choose how to start</DialogTitle>
+      <DialogContent>
+        <Stack gap={2} sx={{ pt: 1 }}>
+          <Typography sx={{ color: muted, fontSize: 14 }}>
+            Use CutLab locally on this device, or create an account to sync your data. Account setup currently supports username plus email or GitHub.
+          </Typography>
+          <Paper sx={{ ...panelSx, p: 2 }}>
+            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Continue without account</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>
+              Keep everything in this browser only. Good for personal use on one device.
+            </Typography>
+            <Button variant="outlined" onClick={onChooseLocal} sx={{ ...outlineButtonSx, mt: 2 }}>
+              Use Locally
+            </Button>
+          </Paper>
+          <Paper sx={{ ...panelSx, p: 2 }}>
+            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Create or use an account</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>
+              Sign up with username and email or continue with GitHub. GitHub sign-in will import your GitHub avatar and username into your profile defaults.
+            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1.2} sx={{ mt: 2 }}>
+              <Button variant="contained" onClick={onCreateAccount} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>
+                Create Account
+              </Button>
+              <Button variant="outlined" onClick={onSignIn} sx={outlineButtonSx}>
+                Sign In
+              </Button>
+            </Stack>
+          </Paper>
+        </Stack>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function DashboardPage(props: {
   stats: { total: number; active: number; unpaid: number; earned: number; salaryEdits: number; salaryBatchProgress: number };
   projects: WorkItem[];
@@ -684,6 +834,8 @@ function DashboardPage(props: {
   onEditProject: (item: WorkItem) => void;
   onDeleteProject: (id: string) => void;
 }) {
+  const settings = useTrackerSettings();
+
   function clearFilters() {
     props.setQuery("");
     props.setStatusFilter("All");
@@ -783,7 +935,7 @@ function DashboardPage(props: {
         <StatCard label="Deadlines This Week" value={String(props.projects.filter((project) => dueBucket(project) === "This Week").length)} helper={`${props.projects.filter((project) => dueBucket(project) === "Overdue").length} overdue`} icon={<CalendarMonthOutlinedIcon />} />
         <StatCard label="Awaiting Feedback" value={String(props.projects.filter((project) => project.status === "In Progress").length)} helper="Active review queue" icon={<ChatBubbleOutlineOutlinedIcon />} />
         <StatCard label="Salary Edits Done" value={String(props.stats.salaryEdits)} helper={`${props.stats.salaryBatchProgress}/${SALARY_BATCH_SIZE} toward next batch`} progress={(props.stats.salaryBatchProgress / SALARY_BATCH_SIZE) * 100} icon={<FileDownloadOutlinedIcon />} />
-        <StatCard label="Collected" value={money(props.stats.earned)} helper="Freelance plus salary batches" icon={<AccessTimeOutlinedIcon />} />
+        <StatCard label="Collected" value={money(props.stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" icon={<AccessTimeOutlinedIcon />} />
       </Box>
 
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 360px" }, gap: 2 }}>
@@ -1278,12 +1430,7 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
 
 function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { title: string; workType: string; notes: string }) => void }) {
   const settings = useTrackerSettings();
-  const templates = [
-    { title: "Brand film", body: "Storyboard, review, final export", workType: "Freelance", notes: "Template: storyboard, review pass, final export checklist." },
-    { title: "Social campaign", body: "Short-form package with approval steps", workType: "Freelance", notes: "Template: short-form package, captions, approvals, delivery specs." },
-    { title: "Product launch", body: "Commercial edit with assets and delivery checklist", workType: "Freelance", notes: "Template: asset intake, product cut, color pass, delivery checklist." },
-    { title: "Event recap", body: "Fast-turnaround cut with archive handoff", workType: "Job / Salary", notes: "Template: recap selects, fast edit, revision window, archive handoff." }
-  ];
+  const templates: { title: string; body: string; workType: string; notes: string }[] = [];
 
   return (
     <PageFrame title="Templates" subtitle="Reusable production structures for common editing work.">
@@ -1311,6 +1458,7 @@ function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { ti
 }
 
 function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: { active: number; delivered: number; earned: number; salaryEdits: number } }) {
+  const settings = useTrackerSettings();
   const deliveredRate = projects.length ? Math.round((stats.delivered / projects.length) * 100) : 0;
 
   return (
@@ -1319,7 +1467,7 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Active" value={String(stats.active)} helper="Projects in motion" /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Delivered" value={String(stats.delivered)} helper={`${deliveredRate}% completion rate`} /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Salary Edits" value={String(stats.salaryEdits)} helper={`${SALARY_BATCH_SIZE} edits per batch`} /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Collected" value={money(stats.earned)} helper="Freelance plus salary batches" /></Grid>
+        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Collected" value={money(stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" /></Grid>
       </Grid>
       <Paper sx={{ ...panelSx, p: 2 }}>
         <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
@@ -1469,36 +1617,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
         </Stack>
       }
     >
-      <Grid container spacing={settings.density === "Compact" ? 1 : 1.5}>
-        <Grid size={{ xs: 12, xl: 4 }}>
-          <SettingsPanel title="Profile Details" subtitle="Update the identity shown on your public profile.">
-            <TextField label="Profile Name" value={settings.profileName} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileName: event.target.value })} />
-            <TextField label="Profile Title" value={settings.profileTitle} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileTitle: event.target.value })} />
-            <TextField label="Profile Bio" value={settings.profileBio} size="small" fullWidth multiline minRows={2} onChange={(event) => setSettings({ ...settings, profileBio: event.target.value })} />
-            <TextField label="Profile Location" value={settings.profileLocation} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileLocation: event.target.value })} />
-            <Grid container spacing={1}>
-              <Grid size={6}>
-                <DialogSelect label="Time Zone" value={settings.timeZone} options={["Asia/Dubai", "Pacific Time", "Eastern Time", "UTC"]} onChange={(value) => setSettings({ ...settings, timeZone: value })} />
-              </Grid>
-              <Grid size={6}>
-                <DialogSelect label="Date Format" value={settings.dateFormat} options={["May 22, 2025", "22 May 2025", "2025-05-22"]} onChange={(value) => setSettings({ ...settings, dateFormat: value })} />
-              </Grid>
-            </Grid>
-            <Stack direction="row" gap={1}>
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
-                <Button
-                  key={day}
-                  onClick={() => setSettings({ ...settings, weekStart: day })}
-                  sx={{ flex: 1, py: 1.1, minWidth: 0, border: `1px solid ${border}`, bgcolor: settings.weekStart === day ? activeBg : panel, color: settings.weekStart === day ? accent : ink, borderRadius: "5px", fontSize: 12, fontWeight: 720 }}
-                >
-                  {day}
-                </Button>
-              ))}
-            </Stack>
-          </SettingsPanel>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 4 }}>
-          <SettingsPanel title="Project Stages" subtitle="Default workflow stages for new work.">
+      <Stack gap={settings.density === "Compact" ? 1 : 1.5}>
+        <SettingsPanel title="Project Stages" subtitle="Default workflow stages for new work.">
             {settings.projectStages.map((stage, index) => (
               <Stack key={`${stage}-${index}`} direction="row" alignItems="center" gap={1.2}>
                 <Box sx={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, bgcolor: stageColors[index % stageColors.length] }} />
@@ -1531,9 +1651,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               Add Stage
             </Button>
           </SettingsPanel>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 4 }}>
-          <SettingsPanel title="Notifications" subtitle="Choose when project and team events should surface.">
+        <SettingsPanel title="Notifications" subtitle="Choose when project and team events should surface.">
             {Object.keys(defaultSettings.notifications).map((item) => (
               <Stack key={item} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 1.05, borderBottom: `1px solid ${border}` }}>
                 <Box>
@@ -1545,9 +1663,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             ))}
             <SettingsLink label="Manage email preferences" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 4 }}>
-          <SettingsPanel title="Team Roles & Permissions" subtitle="Define roles and what team members can access.">
+        <SettingsPanel title="Team Roles & Permissions" subtitle="Define roles and what team members can access.">
             <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
               <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
                 {roleCounts.map(({ role, members }) => (
@@ -1569,9 +1685,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </Box>
             <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
           </SettingsPanel>
-        </Grid>
-        <Grid size={{ xs: 12, xl: 4 }}>
-          <SettingsPanel title="Integrations" subtitle="Connect your favorite tools and services.">
+        <SettingsPanel title="Integrations" subtitle="Connect your favorite tools and services.">
             {Object.keys(settings.integrations).map((name) => {
               const connected = Boolean(settings.integrations[name]);
               return (
@@ -1592,9 +1706,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             })}
             <SettingsLink label="Browse all integrations" onClick={() => openIntegration("Frame.io")} />
           </SettingsPanel>
-        </Grid>
-        <Grid size={12}>
-          <Paper sx={{ ...panelSx, p: 2.25 }}>
+        <Paper sx={{ ...panelSx, p: 2.25 }}>
             <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Appearance</Typography>
             <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>Customize how CutLab looks and feels for your tracker.</Typography>
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 2, alignItems: "end" }}>
@@ -1610,8 +1722,24 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               <SegmentedSetting label="Density" options={["Comfortable", "Compact"]} active={settings.density} onChange={(value) => setSettings({ ...settings, density: value })} />
             </Box>
           </Paper>
-        </Grid>
-      </Grid>
+        <Paper sx={{ ...panelSx, p: 2.25 }}>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Regional Preferences</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>Choose the currency used for earnings and payout totals.</Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
+              <DialogSelect
+                label="Currency"
+                value={currencyLabels[settings.currencyCode] ?? settings.currencyCode}
+                options={currencyOptions.map((code) => currencyLabels[code])}
+                onChange={(value) => {
+                  const nextCode = Object.entries(currencyLabels).find(([, label]) => label === value)?.[0] ?? settings.currencyCode;
+                  setSettings({ ...settings, currencyCode: nextCode });
+                  notify(`Currency changed to ${nextCode}.`, "info");
+                }}
+              />
+              <TextField label="Preview" value={money(12500, settings.currencyCode)} size="small" InputProps={{ readOnly: true }} />
+            </Box>
+          </Paper>
+      </Stack>
       <Dialog open={Boolean(integrationDialog)} onClose={() => setIntegrationDialog(null)} fullWidth maxWidth="sm">
         <DialogTitle>{integrationDialog?.name ? `Connect ${integrationDialog.name}` : "Connect integration"}</DialogTitle>
         <DialogContent>
@@ -1700,7 +1828,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Studio" value={settings.studioName} helper="Local tracker" /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Team Members" value={String(settings.teamMembers.length)} helper={`${Object.keys(membersByRole).length} active roles`} /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Active Work" value={String(stats.active)} helper={`${stats.delivered} delivered`} /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Tracked Value" value={money(stats.earned)} helper={`${stats.salaryEdits} salary edits`} /></Grid>
+        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Tracked Value" value={money(stats.earned, settings.currencyCode)} helper={`${stats.salaryEdits} salary edits`} /></Grid>
       </Grid>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1.2fr) 420px" }, gap: 2 }}>
         <Paper sx={{ ...panelSx, p: 2.25 }}>
@@ -1750,7 +1878,6 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
     .sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate))
     .slice(0, 5);
   const currentTurnaround = stats.avgTurnaroundDays ? `${Math.max(1, stats.avgTurnaroundDays - 1)}-${stats.avgTurnaroundDays + 1}` : "2-3";
-  const profileInitials = initials(settings.profileName);
   const [shareCopied, setShareCopied] = useState(false);
 
   async function shareProfile() {
@@ -1791,9 +1918,10 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
 
       <Paper sx={{ ...panelSx, mt: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "170px minmax(0, 1fr) 560px" }, gap: 4, p: { xs: 2.5, md: 4 }, alignItems: "center" }}>
-          <Box sx={{ width: 148, height: 148, borderRadius: "50%", bgcolor: avatarSurface, border: `1px solid ${border}`, display: "grid", placeItems: "center", color: ink, fontSize: 40, fontWeight: 760 }}>{profileInitials}</Box>
+          <ProfileAvatar settings={settings} size={148} fontSize={40} />
           <Box>
-            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, lineHeight: 1.1 }}>{settings.profileName}</Typography>
+            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, lineHeight: 1.1 }}>{profileDisplayName(settings)}</Typography>
+            {displayUsername(settings) ? <Typography sx={{ color: accent, fontSize: 14, fontWeight: 720, mt: 0.6 }}>{displayUsername(settings)}</Typography> : null}
             <Typography sx={{ color: ink, fontSize: 15, mt: 0.8 }}>{settings.profileTitle}</Typography>
             <Typography sx={{ color: muted, fontSize: 14, mt: 1.5, maxWidth: 420 }}>{settings.profileBio}</Typography>
             <Stack direction="row" gap={2} sx={{ mt: 2, flexWrap: "wrap", color: muted }}>
@@ -1843,6 +1971,82 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
         </Box>
       </Paper>
       <Typography sx={{ color: muted, fontSize: 13, textAlign: "center", mt: 2.5 }}>Shared from {settings.studioName} - Video Editing Tracker &nbsp; | &nbsp; Updated {formatDate(iso(todayDate()), settings.dateFormat)}, {todayDate().getFullYear()}</Typography>
+    </Box>
+  );
+}
+
+function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
+  async function uploadProfileImage(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setSettings({ ...settings, profileImageUrl: reader.result });
+      }
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
+  return (
+    <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: 3 }}>
+        <Box>
+          <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Edit Profile</Typography>
+          <Typography sx={{ fontSize: 15, color: muted, mt: 1 }}>Update the identity shown on your public profile.</Typography>
+        </Box>
+        <Stack direction="row" alignItems="center" gap={1.5} sx={{ flexShrink: 0 }}>
+          <Button component={Link} href="/profile" variant="outlined" sx={outlineButtonSx}>View Public Profile</Button>
+        </Stack>
+      </Stack>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px 1fr" }, gap: 3 }}>
+        <Box>
+          <Box sx={{ display: "grid", placeItems: "center" }}>
+            <ProfileAvatar settings={settings} size={160} fontSize={48} />
+          </Box>
+          <Stack direction="row" gap={1} justifyContent="center" sx={{ mt: 2 }}>
+            <Button component="label" variant="outlined" sx={outlineButtonSx}>
+              Upload Photo
+              <input hidden type="file" accept="image/*" onChange={uploadProfileImage} />
+            </Button>
+            <Button variant="outlined" disabled={!settings.profileImageUrl} onClick={() => setSettings({ ...settings, profileImageUrl: "" })} sx={outlineButtonSx}>Clear</Button>
+          </Stack>
+          <Typography sx={{ color: muted, fontSize: 13, textAlign: "center", mt: 2, maxWidth: 260, mx: "auto" }}>
+            Upload an image or paste an image URL below. The latest saved photo will appear anywhere your profile is shown.
+          </Typography>
+        </Box>
+        <Stack gap={2}>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+            <TextField label="Profile Name" value={settings.profileName} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileName: event.target.value })} />
+            <TextField label="Username" value={settings.profileUsername} size="small" fullWidth placeholder="@yourname" onChange={(event) => setSettings({ ...settings, profileUsername: sanitizeUsername(event.target.value) })} />
+          </Box>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+            <TextField label="Profile Title" value={settings.profileTitle} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileTitle: event.target.value })} />
+            <TextField label="Profile Image URL" value={settings.profileImageUrl} size="small" fullWidth placeholder="https://example.com/photo.jpg" onChange={(event) => setSettings({ ...settings, profileImageUrl: event.target.value.trim() })} />
+          </Box>
+          <TextField label="Profile Bio" value={settings.profileBio} size="small" fullWidth multiline minRows={3} onChange={(event) => setSettings({ ...settings, profileBio: event.target.value })} />
+          <TextField label="Profile Location" value={settings.profileLocation} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileLocation: event.target.value })} />
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+            <DialogSelect label="Time Zone" value={settings.timeZone} options={["Asia/Dubai", "Pacific Time", "Eastern Time", "UTC"]} onChange={(value) => setSettings({ ...settings, timeZone: value })} />
+            <DialogSelect label="Date Format" value={settings.dateFormat} options={["Month Day, Year", "Day Month Year", "YYYY-MM-DD"]} onChange={(value) => setSettings({ ...settings, dateFormat: value })} />
+          </Box>
+          <Box>
+            <Typography sx={{ color: muted, fontSize: 12, fontWeight: 680, mb: 1 }}>Week Start Day</Typography>
+            <Stack direction="row" gap={1}>
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
+                <Button
+                  key={day}
+                  onClick={() => setSettings({ ...settings, weekStart: day })}
+                  sx={{ flex: 1, py: 1.1, minWidth: 0, border: `1px solid ${border}`, bgcolor: settings.weekStart === day ? activeBg : panel, color: settings.weekStart === day ? accent : ink, borderRadius: "5px", fontSize: 12, fontWeight: 720 }}
+                >
+                  {day}
+                </Button>
+              ))}
+            </Stack>
+          </Box>
+        </Stack>
+      </Box>
     </Box>
   );
 }
@@ -1990,7 +2194,7 @@ function initials(value: string) {
     .map((part) => part[0])
     .join("")
     .slice(0, 2)
-    .toUpperCase() || "CL";
+    .toUpperCase() || "?";
 }
 
 function clientFeedbackStatus(projects: WorkItem[]): "Awaiting" | "Approved" {
@@ -2115,7 +2319,7 @@ function ProjectTableHeader() {
 
 function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: () => void; onDelete: () => void }) {
   const settings = useTrackerSettings();
-  const amount = project.workType === "Job / Salary" ? "Batch tracked" : money(project.earnings);
+  const amount = project.workType === "Job / Salary" ? "Batch tracked" : money(project.earnings, settings.currencyCode);
   const progress = projectProgress(project.status);
 
   return (
@@ -2214,7 +2418,7 @@ function DashboardAside({ projects, salaryEdits, salaryBatchProgress }: { projec
           <Typography sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>{salaryBatchProgress}/{SALARY_BATCH_SIZE}</Typography>
         </Stack>
         <LinearProgress variant="determinate" value={batchPercent} sx={{ mt: 1.5, height: 6, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
-        <Typography sx={{ color: muted, fontSize: 12, mt: 1.4 }}>{money(SALARY_BATCH_AMOUNT)} is added after each full batch.</Typography>
+        <Typography sx={{ color: muted, fontSize: 12, mt: 1.4 }}>{money(SALARY_BATCH_AMOUNT, settings.currencyCode)} is added after each full batch.</Typography>
       </Paper>
 
       <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" }}>
@@ -2561,15 +2765,58 @@ function isDoneStatus(status: string) {
 
 function formatDate(value: string, dateFormat = defaultSettings.dateFormat) {
   const date = new Date(`${value}T00:00:00`);
-  if (dateFormat === "22 May 2025") {
+  if (dateFormat === "Day Month Year") {
     return new Intl.DateTimeFormat("en", { day: "2-digit", month: "short", year: "numeric" }).format(date);
   }
-  if (dateFormat === "2025-05-22") return value;
+  if (dateFormat === "YYYY-MM-DD") return value;
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(date);
 }
 
-function money(value: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value || 0);
+function profileDisplayName(settings: SettingsState) {
+  return settings.profileName.trim() || "Your Profile";
+}
+
+function displayUsername(settings: SettingsState) {
+  if (!settings.profileUsername.trim()) return "";
+  return settings.profileUsername.startsWith("@") ? settings.profileUsername : `@${settings.profileUsername}`;
+}
+
+function sanitizeUsername(value: string) {
+  const cleaned = value.trim().toLowerCase().replace(/^@+/, "").replace(/\s+/g, "");
+  return cleaned.replace(/[^a-z0-9._-]/g, "");
+}
+
+function ProfileAvatar({ settings, size, fontSize }: { settings: SettingsState; size: number; fontSize: number }) {
+  const imageUrl = settings.profileImageUrl.trim();
+
+  return (
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        bgcolor: avatarSurface,
+        border: `1px solid ${border}`,
+        display: "grid",
+        placeItems: "center",
+        color: ink,
+        fontSize,
+        fontWeight: 760,
+        overflow: "hidden",
+        flexShrink: 0
+      }}
+    >
+      {imageUrl ? (
+        <Box component="img" src={imageUrl} alt={profileDisplayName(settings)} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        initials(settings.profileName)
+      )}
+    </Box>
+  );
+}
+
+function money(value: number, currencyCode = defaultSettings.currencyCode) {
+  return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode, maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value || 0);
 }
 
 function daysBetween(startDate: string, endDate: string) {
