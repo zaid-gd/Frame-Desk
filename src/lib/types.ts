@@ -73,6 +73,17 @@ export type TeamMember = {
   email: string;
 };
 
+export type IntegrationConfig = {
+  connected: boolean;
+  account: string;
+  folder: string;
+  channel: string;
+  workspace: string;
+  webhookUrl: string;
+  connectedAt: string;
+  lastSyncAt: string;
+};
+
 export type SettingsState = {
   studioName: string;
   profileName: string;
@@ -89,9 +100,11 @@ export type SettingsState = {
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;
   integrationAccounts: Record<string, string>;
+  integrationConfigs: Record<string, IntegrationConfig>;
   teamRole: string;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;
+  rolePermissions: Record<string, Record<string, boolean>>;
   theme: string;
   accentColor: string;
   density: string;

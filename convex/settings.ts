@@ -41,6 +41,20 @@ export const upsert = mutation({
     teamRole: v.string(),
     teamMembers: v.array(teamMemberSchema),
     editorPermissions: v.record(v.string(), v.boolean()),
+    rolePermissions: v.record(v.string(), v.record(v.string(), v.boolean())),
+    integrationConfigs: v.record(
+      v.string(),
+      v.object({
+        connected: v.boolean(),
+        account: v.string(),
+        folder: v.string(),
+        channel: v.string(),
+        workspace: v.string(),
+        webhookUrl: v.string(),
+        connectedAt: v.string(),
+        lastSyncAt: v.string(),
+      })
+    ),
     theme: v.string(),
     accentColor: v.string(),
     density: v.string(),

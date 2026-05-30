@@ -78,6 +78,56 @@ export const theme = createTheme({
         }
       }
     },
+    MuiInputBase: {
+      styleOverrides: {
+        root: {
+          color: "var(--app-ink, #19171f)"
+        }
+      }
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          color: "var(--app-ink, #19171f)",
+          "& .MuiOutlinedInput-notchedOutline": {
+            borderColor: "var(--app-border, #dedbe5)"
+          },
+          "&:hover .MuiOutlinedInput-notchedOutline": {
+            borderColor: "var(--app-accent, #5b3fa0)"
+          },
+          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+            borderColor: "var(--app-accent, #5b3fa0)"
+          }
+        }
+      }
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: "var(--app-muted, #6f6a78)",
+          "&.Mui-focused": {
+            color: "var(--app-accent, #5b3fa0)"
+          }
+        }
+      }
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          color: "var(--app-ink, #19171f)",
+          "&.Mui-selected": {
+            backgroundColor: "var(--app-active, #f0eafa)",
+            color: "var(--app-accent, #5b3fa0)",
+            "&:hover": {
+              backgroundColor: "var(--app-active, #f0eafa)"
+            }
+          },
+          "&:hover": {
+            backgroundColor: "var(--app-hover, #f7f4fc)"
+          }
+        }
+      }
+    },
     MuiPaper: {
       styleOverrides: {
         root: {

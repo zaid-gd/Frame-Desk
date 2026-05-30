@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useUser } from "@clerk/nextjs";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember } from "./types";
+import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig } from "./types";
 
 const STORAGE_KEY = "video-editing-work-tracker:v1";
 const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
@@ -22,6 +22,38 @@ const LEGACY_DEMO_SETTINGS = {
   profileLocation: "Los Angeles, CA",
 };
 
+const permissionKeys = [
+  "Create and edit projects",
+  "Upload media and assets",
+  "Manage project stages",
+  "Invite team members",
+  "Manage app settings",
+];
+
+const defaultRolePermissions: Record<string, Record<string, boolean>> = {
+  Owner: Object.fromEntries(permissionKeys.map((k) => [k, true])),
+  Editor: Object.fromEntries(permissionKeys.map((k) => [k, ["Create and edit projects", "Upload media and assets"].includes(k)])),
+  Reviewer: Object.fromEntries(permissionKeys.map((k) => [k, false])),
+  Client: Object.fromEntries(permissionKeys.map((k) => [k, false])),
+};
+
+const emptyIntegrationConfig: IntegrationConfig = {
+  connected: false,
+  account: "",
+  folder: "",
+  channel: "",
+  workspace: "",
+  webhookUrl: "",
+  connectedAt: "",
+  lastSyncAt: "",
+};
+
+const integrationNames = ["Google Drive", "Dropbox", "Slack", "Frame.io"];
+
+const defaultIntegrationConfigs: Record<string, IntegrationConfig> = Object.fromEntries(
+  integrationNames.map((name) => [name, { ...emptyIntegrationConfig }]),
+);
+
 const defaultSettings: SettingsState = {
   studioName: "",
   profileName: "",
@@ -34,7 +66,7 @@ const defaultSettings: SettingsState = {
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
   currencyCode: "USD",
-  projectStages: [],
+  projectStages: ["Planning", "Pre-Production", "Production", "Post-Production", "Delivery"],
   notifications: {
     "Project updates": false,
     "Feedback received": false,
@@ -54,6 +86,7 @@ const defaultSettings: SettingsState = {
     Slack: "",
     "Frame.io": "",
   },
+  integrationConfigs: { ...defaultIntegrationConfigs },
   teamRole: "",
   teamMembers: [],
   editorPermissions: {
@@ -63,6 +96,7 @@ const defaultSettings: SettingsState = {
     "Invite team members": false,
     "Manage app settings": false,
   },
+  rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
   theme: "Light",
   accentColor: "#5b3fa0",
   density: "Comfortable",
@@ -113,8 +147,10 @@ function freshDefaultSettings(): SettingsState {
     notifications: { ...defaultSettings.notifications },
     integrations: { ...defaultSettings.integrations },
     integrationAccounts: { ...defaultSettings.integrationAccounts },
+    integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
     teamMembers: defaultSettings.teamMembers.map((m: TeamMember) => ({ ...m })),
     editorPermissions: { ...defaultSettings.editorPermissions },
+    rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
   };
 }
 
@@ -193,6 +229,78 @@ function normalizeSalaryState(value: unknown): SalaryState {
   };
 }
 
+function normalizeIntegrationConfig(value: unknown): IntegrationConfig {
+  if (!isPlainRecord(value)) return { ...emptyIntegrationConfig };
+  return {
+    connected: typeof value.connected === "boolean" ? value.connected : false,
+    account: typeof value.account === "string" ? value.account.trim() : "",
+    folder: typeof value.folder === "string" ? value.folder.trim() : "",
+    channel: typeof value.channel === "string" ? value.channel.trim() : "",
+    workspace: typeof value.workspace === "string" ? value.workspace.trim() : "",
+    webhookUrl: typeof value.webhookUrl === "string" ? value.webhookUrl.trim() : "",
+    connectedAt: typeof value.connectedAt === "string" ? value.connectedAt : "",
+    lastSyncAt: typeof value.lastSyncAt === "string" ? value.lastSyncAt : "",
+  };
+}
+
+function normalizeIntegrationConfigs(value: unknown, legacyIntegrations?: unknown, legacyAccounts?: unknown): Record<string, IntegrationConfig> {
+  const configs: Record<string, IntegrationConfig> = {};
+  for (const name of integrationNames) {
+    configs[name] = { ...emptyIntegrationConfig };
+  }
+
+  // Merge from new integrationConfigs if present
+  if (isPlainRecord(value)) {
+    for (const name of integrationNames) {
+      if (isPlainRecord(value[name])) {
+        configs[name] = normalizeIntegrationConfig(value[name]);
+      }
+    }
+  }
+
+  // Migrate from legacy integrations + integrationAccounts if new configs are all empty
+  const allEmpty = Object.values(configs).every((c) => !c.connected && !c.account);
+  if (allEmpty && isPlainRecord(legacyIntegrations) && isPlainRecord(legacyAccounts)) {
+    for (const name of integrationNames) {
+      const wasConnected = legacyIntegrations[name] === true;
+      const account = typeof legacyAccounts[name] === "string" ? (legacyAccounts[name] as string).trim() : "";
+      if (wasConnected || account) {
+        configs[name] = { ...emptyIntegrationConfig, connected: wasConnected, account, connectedAt: wasConnected ? new Date().toISOString() : "" };
+      }
+    }
+  }
+
+  return configs;
+}
+
+function normalizeRolePermissions(value: unknown, legacyEditorPerms?: unknown): Record<string, Record<string, boolean>> {
+  const result: Record<string, Record<string, boolean>> = JSON.parse(JSON.stringify(defaultRolePermissions));
+
+  if (isPlainRecord(value)) {
+    for (const role of teamRoleOptions) {
+      if (isPlainRecord(value[role])) {
+        const rolePerms: Record<string, boolean> = {};
+        for (const perm of permissionKeys) {
+          rolePerms[perm] = typeof (value[role] as Record<string, unknown>)[perm] === "boolean" ? (value[role] as Record<string, unknown>)[perm] as boolean : defaultRolePermissions[role]?.[perm] ?? false;
+        }
+        result[role] = rolePerms;
+      }
+    }
+    return result;
+  }
+
+  // Migrate from legacy flat editorPermissions → apply them as Editor role
+  if (isPlainRecord(legacyEditorPerms)) {
+    const editorPerms: Record<string, boolean> = {};
+    for (const perm of permissionKeys) {
+      editorPerms[perm] = typeof legacyEditorPerms[perm] === "boolean" ? legacyEditorPerms[perm] as boolean : defaultRolePermissions.Editor?.[perm] ?? false;
+    }
+    result.Editor = editorPerms;
+  }
+
+  return result;
+}
+
 function mergeSettings(stored: Partial<SettingsState>): SettingsState {
   const r = isPlainRecord(stored) ? stored : {};
   return {
@@ -229,7 +337,9 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     notifications: booleanRecordSetting(r.notifications, defaultSettings.notifications),
     integrations: booleanRecordSetting(r.integrations, defaultSettings.integrations),
     integrationAccounts: stringRecordSetting(r.integrationAccounts, defaultSettings.integrationAccounts),
+    integrationConfigs: normalizeIntegrationConfigs(r.integrationConfigs, r.integrations, r.integrationAccounts),
     editorPermissions: booleanRecordSetting(r.editorPermissions, defaultSettings.editorPermissions),
+    rolePermissions: normalizeRolePermissions(r.rolePermissions, r.editorPermissions),
   };
 }
 
@@ -462,7 +572,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     }
 
     setItemsState(convexItems);
-    setSettingsState(convexSettings ?? readInitialSettings());
+    setSettingsState(convexSettings ? mergeSettings(convexSettings) : readInitialSettings());
     setSalaryBatches(convexBatches);
     setReady(true);
   }, [clerkLoaded, isSignedIn, convexItems, convexSettings, convexBatches, replaceAllItems, replaceAllBatches, upsertSettings]);

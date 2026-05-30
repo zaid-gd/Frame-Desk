@@ -7,6 +7,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
@@ -57,7 +58,7 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
-import type { WorkItem, WorkTypeConfig } from "@/lib/types";
+import type { WorkItem, WorkTypeConfig, IntegrationConfig } from "@/lib/types";
 
 const SALARY_BATCH_SIZE = 20;
 const SALARY_BATCH_AMOUNT = 10000;
@@ -121,9 +122,11 @@ type SettingsState = {
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;
   integrationAccounts: Record<string, string>;
+  integrationConfigs: Record<string, IntegrationConfig>;
   teamRole: string;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;
+  rolePermissions: Record<string, Record<string, boolean>>;
   theme: string;
   accentColor: string;
   density: string;
@@ -156,6 +159,59 @@ const sortLabels: Record<SortKey, string> = {
   dueDate_asc: "Due soon",
   earnings_desc: "High earn",
   earnings_asc: "Low earn"
+};
+
+const permissionKeys = [
+  "Create and edit projects",
+  "Upload media and assets",
+  "Manage project stages",
+  "Invite team members",
+  "Manage app settings"
+];
+
+const defaultRolePermissions: Record<string, Record<string, boolean>> = {
+  Owner: Object.fromEntries(permissionKeys.map((k) => [k, true])),
+  Editor: Object.fromEntries(permissionKeys.map((k) => [k, ["Create and edit projects", "Upload media and assets"].includes(k)])),
+  Reviewer: Object.fromEntries(permissionKeys.map((k) => [k, false])),
+  Client: Object.fromEntries(permissionKeys.map((k) => [k, false]))
+};
+
+const emptyIntegrationConfig: IntegrationConfig = {
+  connected: false,
+  account: "",
+  folder: "",
+  channel: "",
+  workspace: "",
+  webhookUrl: "",
+  connectedAt: "",
+  lastSyncAt: ""
+};
+
+const integrationNames = ["Google Drive", "Dropbox", "Slack", "Frame.io"];
+
+const defaultIntegrationConfigs: Record<string, IntegrationConfig> = Object.fromEntries(
+  integrationNames.map((name) => [name, { ...emptyIntegrationConfig }])
+);
+
+const integrationDescriptions: Record<string, string> = {
+  "Google Drive": "Sync project files and assets to a Google Drive folder.",
+  Dropbox: "Store deliverables and raw footage in Dropbox.",
+  Slack: "Send project notifications and updates to a Slack channel.",
+  "Frame.io": "Connect video review and approval workflows."
+};
+
+const integrationIcons: Record<string, string> = {
+  "Google Drive": "G",
+  Dropbox: "D",
+  Slack: "S",
+  "Frame.io": "F"
+};
+
+const integrationColors: Record<string, string> = {
+  "Google Drive": "#4285f4",
+  Dropbox: "#0061ff",
+  Slack: "#4a154b",
+  "Frame.io": "#8b5cf6"
 };
 
 const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: React.ReactNode }> = [
@@ -204,6 +260,7 @@ const defaultSettings: SettingsState = {
     Slack: "",
     "Frame.io": ""
   },
+  integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
   teamRole: "",
   teamMembers: [],
   editorPermissions: {
@@ -213,6 +270,7 @@ const defaultSettings: SettingsState = {
     "Invite team members": false,
     "Manage app settings": false
   },
+  rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
   theme: "Light",
   accentColor: defaultAccent,
   density: "Comfortable"
@@ -407,6 +465,24 @@ export function TrackerApp({ page }: { page: PageKey }) {
     notify(editingId ? "Project updated." : "Project created.");
   }
 
+  function handleAddClientProject(clientName: string, projectTitle: string, workType: string) {
+    const payload: WorkItem = {
+      id: createId(),
+      profileId: profile.id,
+      createdAt: new Date().toISOString(),
+      title: projectTitle.trim() || "Onboarding & Planning",
+      client: clientName.trim(),
+      status: "Planned",
+      workType: workType,
+      startDate: iso(todayDate()),
+      dueDate: iso(todayDate()),
+      earnings: 0,
+      notes: "Auto-generated project for new client onboarding."
+    };
+    setItems((current) => [payload, ...current]);
+    notify(`Client "${clientName}" added.`);
+  }
+
   const pageContent = page === "dashboard" ? (
     <DashboardPage
       stats={stats}
@@ -433,7 +509,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   ) : page === "projects" ? (
     <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} />
   ) : page === "clients" ? (
-    <ClientsDesignPage projects={projects} onNewProject={openNewProject} />
+    <ClientsDesignPage projects={projects} onNewProject={openNewProject} onAddClientProject={handleAddClientProject} />
   ) : page === "timeline" ? (
     <TimelineDesignPage projects={projects} />
   ) : page === "calendar" ? (
@@ -938,7 +1014,7 @@ function DashboardPage(props: {
         <StatCard label="Collected" value={money(props.stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" icon={<AccessTimeOutlinedIcon />} />
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 360px" }, gap: 2 }}>
+      <Box sx={{ width: "100%" }}>
         {props.projects.length ? (
           <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
@@ -955,7 +1031,6 @@ function DashboardPage(props: {
         ) : (
           <Typography sx={{ color: muted, fontSize: 14 }}>No projects found. Add a project or clear filters.</Typography>
         )}
-        <DashboardAside projects={props.projects} salaryEdits={props.stats.salaryEdits} salaryBatchProgress={props.stats.salaryBatchProgress} />
       </Box>
     </Box>
   );
@@ -986,7 +1061,15 @@ function ProjectDirectoryPage({ projects, onNewProject, onEditProject, onDeleteP
   );
 }
 
-function ClientsDesignPage({ projects, onNewProject }: { projects: WorkItem[]; onNewProject: () => void }) {
+function ClientsDesignPage({
+  projects,
+  onNewProject,
+  onAddClientProject
+}: {
+  projects: WorkItem[];
+  onNewProject: () => void;
+  onAddClientProject?: (clientName: string, projectTitle: string, workType: string) => void;
+}) {
   const settings = useTrackerSettings();
   const clients = buildClientSummaries(projects);
   const [clientQuery, setClientQuery] = useState("");
@@ -995,6 +1078,12 @@ function ClientsDesignPage({ projects, onNewProject }: { projects: WorkItem[]; o
   const [clientFeedbackFilter, setClientFeedbackFilter] = useState<"ALL" | "Awaiting" | "Approved">("ALL");
   const [selectedClientName, setSelectedClientName] = useState("");
   const [selectedClientTab, setSelectedClientTab] = useState("Overview");
+
+  const [addClientOpen, setAddClientOpen] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientProject, setNewClientProject] = useState("Onboarding & Planning");
+  const [newClientWorkType, setNewClientWorkType] = useState("Freelance");
+  const [addClientError, setAddClientError] = useState("");
 
   const filteredClients = clients.filter((client) => {
     const clientProjects = projects.filter((project) => project.client?.trim() === client.name);
@@ -1018,6 +1107,26 @@ function ClientsDesignPage({ projects, onNewProject }: { projects: WorkItem[]; o
   const selectedFeedbackStatus = selectedProjects.length ? clientFeedbackStatus(selectedProjects) : "Approved";
   const pendingRevisions = selectedProjects.filter((project) => project.status === "In Progress" || project.status === "Planned");
 
+  function handleSaveClient() {
+    if (!newClientName.trim()) {
+      setAddClientError("Client name is required.");
+      return;
+    }
+    if (projects.some((p) => p.client?.trim().toLowerCase() === newClientName.trim().toLowerCase())) {
+      setAddClientError("A client with this name already exists.");
+      return;
+    }
+    if (onAddClientProject) {
+      onAddClientProject(newClientName, newClientProject, newClientWorkType);
+    }
+    setNewClientName("");
+    setNewClientProject("Onboarding & Planning");
+    setNewClientWorkType("Freelance");
+    setAddClientError("");
+    setAddClientOpen(false);
+    setSelectedClientName(newClientName.trim());
+  }
+
   function clearClientFilters() {
     setClientQuery("");
     setClientStatusFilter("ALL");
@@ -1029,7 +1138,12 @@ function ClientsDesignPage({ projects, onNewProject }: { projects: WorkItem[]; o
     <PageFrame
       title="Clients"
       subtitle="Manage client relationships from the client names attached to projects."
-      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} sx={outlineButtonSx}>New Project</Button>}
+      action={
+        <Stack direction="row" spacing={1.2}>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddClientOpen(true)} sx={outlineButtonSx}>Add Client</Button>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onNewProject} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>New Project</Button>
+        </Stack>
+      }
     >
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Tracked Projects" value={String(projects.length)} helper="Real local project records" /></Grid>
@@ -1224,6 +1338,21 @@ function ClientsDesignPage({ projects, onNewProject }: { projects: WorkItem[]; o
           )}
         </Paper>
       </Box>
+      <Dialog open={addClientOpen} onClose={() => setAddClientOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Add New Client</DialogTitle>
+        <DialogContent>
+          <Stack gap={2} sx={{ mt: 1.5 }}>
+            <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} fullWidth />
+            <TextField label="Initial Project Title" placeholder="e.g. Onboarding & Planning" value={newClientProject} onChange={(e) => setNewClientProject(e.target.value)} fullWidth />
+            <DialogSelect label="Project Type" value={newClientWorkType} options={profile.typeOptions.map((t) => t.label)} onChange={setNewClientWorkType} />
+            {addClientError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{addClientError}</Typography> : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setAddClientOpen(false)} sx={{ color: muted }}>Cancel</Button>
+          <Button onClick={handleSaveClient} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Add Client</Button>
+        </DialogActions>
+      </Dialog>
     </PageFrame>
   );
 }
@@ -1535,11 +1664,28 @@ function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkIte
         </Stack>
         <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
           {settings.teamMembers.length ? settings.teamMembers.map((member) => (
-            <Box key={member.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 92px" }, gap: 1, px: 2, py: 1.4, alignItems: "center" }}>
-              <TextField value={member.name} size="small" onChange={(event) => updateMember(member.id, { name: event.target.value })} />
-              <DialogSelect label="Role" value={member.role} options={teamRoleOptions} onChange={(value) => updateMember(member.id, { role: value })} />
-              <TextField value={member.email} placeholder="email optional" size="small" onChange={(event) => updateMember(member.id, { email: event.target.value })} />
-              <Button size="small" onClick={() => removeMember(member.id)} sx={{ color: "#bd3f37" }}>Remove</Button>
+            <Box key={member.id} sx={{ py: 1 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 92px" }, gap: 1, px: 2, py: 0.6, alignItems: "center" }}>
+                <TextField value={member.name} size="small" onChange={(event) => updateMember(member.id, { name: event.target.value })} />
+                <DialogSelect label="Role" value={member.role} options={teamRoleOptions} onChange={(value) => updateMember(member.id, { role: value })} />
+                <TextField value={member.email} placeholder="email optional" size="small" onChange={(event) => updateMember(member.id, { email: event.target.value })} />
+                <Button size="small" onClick={() => removeMember(member.id)} sx={{ color: "#bd3f37" }}>Remove</Button>
+              </Box>
+              <Box sx={{ px: 2.2, pb: 0.6, pt: 0.3 }}>
+                <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ gap: 0.6, alignItems: "center" }}>
+                  <Typography sx={{ fontSize: 11, color: muted, fontWeight: 700, mr: 0.5 }}>Active permissions:</Typography>
+                  {(() => {
+                    const rolePerms = settings.rolePermissions[member.role] || {};
+                    const activePerms = Object.entries(rolePerms).filter(([_, enabled]) => enabled);
+                    if (activePerms.length === 0) {
+                      return <Chip label="No permissions" size="small" sx={{ height: 18, fontSize: 10, bgcolor: softPanel, color: muted, borderRadius: "4px" }} />;
+                    }
+                    return activePerms.map(([perm]) => (
+                      <Chip key={perm} label={perm} size="small" sx={{ height: 18, fontSize: 10, bgcolor: activeBg, color: accent, borderRadius: "4px", fontWeight: 500 }} />
+                    ));
+                  })()}
+                </Stack>
+              </Box>
             </Box>
           )) : <EmptyPanel title="No team members yet" body="Add a person above to start building the team list." />}
         </Stack>
@@ -1550,7 +1696,39 @@ function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkIte
 
 function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; onNewProject: () => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
   const stageColors = ["#6c4db3", "#7eadea", "#d39a27", "#9a75d1", "#6dab55", "#d65f59"];
-  const [integrationDialog, setIntegrationDialog] = useState<{ name: string; account: string } | null>(null);
+  const [integrationDialog, setIntegrationDialog] = useState<{ name: string; config: IntegrationConfig } | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
+  const [testingConnection, setTestingConnection] = useState(false);
+
+  const [googleLoginOpen, setGoogleLoginOpen] = useState(false);
+  const [googleCustomEmail, setGoogleCustomEmail] = useState("");
+  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+
+  function selectGoogleAccount(email: string) {
+    let finalEmail = email.trim();
+    if (!finalEmail.includes("@")) {
+      finalEmail = `${finalEmail}@gmail.com`;
+    }
+    setIntegrationDialog((current) =>
+      current
+        ? {
+            ...current,
+            config: {
+              ...current.config,
+              connected: true,
+              account: finalEmail,
+              connectedAt: new Date().toISOString()
+            }
+          }
+        : current
+    );
+    setGoogleLoginOpen(false);
+    setShowCustomEmailInput(false);
+    setGoogleCustomEmail("");
+    notify(`Authenticated as ${finalEmail} via Google.`);
+  }
+  const activeRole = settings.teamRole || "Owner";
+  const activePerms = settings.rolePermissions[activeRole] ?? {};
   const roleCounts = ["Owner", "Editor", "Reviewer", "Client"].map((role) => ({
     role,
     members: settings.teamMembers.filter((member) => member.role === role).length
@@ -1562,33 +1740,66 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   function openIntegration(name: string) {
-    setIntegrationDialog({ name, account: settings.integrationAccounts[name] || "" });
+    const existing = settings.integrationConfigs[name] ?? { ...emptyIntegrationConfig };
+    setIntegrationDialog({ name, config: { ...existing } });
   }
 
   function saveIntegration() {
     if (!integrationDialog) return;
-    const account = integrationDialog.account.trim();
+    const config = integrationDialog.config;
+    const hasAccount = config.account.trim();
+    const now = new Date().toISOString();
+    const updatedConfig: IntegrationConfig = {
+      ...config,
+      connected: Boolean(hasAccount),
+      account: config.account.trim(),
+      connectedAt: hasAccount ? (config.connectedAt || now) : "",
+      lastSyncAt: hasAccount ? now : ""
+    };
     setSettings({
       ...settings,
-      integrations: { ...settings.integrations, [integrationDialog.name]: Boolean(account) },
-      integrationAccounts: { ...settings.integrationAccounts, [integrationDialog.name]: account }
+      integrations: { ...settings.integrations, [integrationDialog.name]: updatedConfig.connected },
+      integrationAccounts: { ...settings.integrationAccounts, [integrationDialog.name]: updatedConfig.account },
+      integrationConfigs: { ...settings.integrationConfigs, [integrationDialog.name]: updatedConfig }
     });
-    notify(`${integrationDialog.name} connected locally.`);
+    notify(`${integrationDialog.name} ${updatedConfig.connected ? "connected" : "updated"} successfully.`);
     setIntegrationDialog(null);
   }
 
-  function disconnectIntegration(name: string) {
+  function confirmDisconnect() {
+    if (!disconnectTarget) return;
+    const cleared: IntegrationConfig = { ...emptyIntegrationConfig };
     setSettings({
       ...settings,
-      integrations: { ...settings.integrations, [name]: false },
-      integrationAccounts: { ...settings.integrationAccounts, [name]: "" }
+      integrations: { ...settings.integrations, [disconnectTarget]: false },
+      integrationAccounts: { ...settings.integrationAccounts, [disconnectTarget]: "" },
+      integrationConfigs: { ...settings.integrationConfigs, [disconnectTarget]: cleared }
     });
-    notify(`${name} disconnected.`, "warning");
+    notify(`${disconnectTarget} disconnected.`, "warning");
+    setDisconnectTarget(null);
   }
 
-  function updatePermission(name: string, enabled: boolean) {
-    setSettings({ ...settings, editorPermissions: { ...settings.editorPermissions, [name]: enabled } });
-    notify(`${name} permission ${enabled ? "enabled" : "disabled"}.`, "info");
+  function testConnection() {
+    setTestingConnection(true);
+    setTimeout(() => {
+      setTestingConnection(false);
+      if (integrationDialog) {
+        const now = new Date().toISOString();
+        setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, lastSyncAt: now } } : current);
+      }
+      notify("Connection test successful!", "success");
+    }, 1500);
+  }
+
+  function selectRole(role: string) {
+    setSettings({ ...settings, teamRole: role });
+  }
+
+  function updateRolePermission(perm: string, enabled: boolean) {
+    const updated = { ...settings.rolePermissions };
+    updated[activeRole] = { ...(updated[activeRole] ?? {}), [perm]: enabled };
+    setSettings({ ...settings, rolePermissions: updated });
+    notify(`${perm} ${enabled ? "enabled" : "disabled"} for ${activeRole}.`, "info");
   }
 
   function updateStage(index: number, value: string) {
@@ -1602,14 +1813,22 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   function resetSettings() {
-    setSettings({ ...defaultSettings, projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions } });
+    setSettings({ ...defaultSettings, projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
     notify("Settings reset to defaults.", "warning");
+  }
+
+  function formatTimestamp(iso: string) {
+    if (!iso) return "";
+    try {
+      const date = new Date(iso);
+      return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+    } catch { return ""; }
   }
 
   return (
     <PageFrame
       title="Settings"
-      subtitle="Manage profile, workflow, notifications, integrations, and display preferences."
+      subtitle="Manage profile, workflow, notifications, and display preferences."
       action={
         <Stack direction="row" gap={1} flexWrap="wrap" justifyContent="flex-end">
           <Button variant="outlined" onClick={resetSettings} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>Reset</Button>
@@ -1663,48 +1882,36 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             ))}
             <SettingsLink label="Manage email preferences" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
-        <SettingsPanel title="Team Roles & Permissions" subtitle="Define roles and what team members can access.">
-            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+        <SettingsPanel title="Team Roles & Permissions" subtitle="Select a role to configure what team members with that role can access.">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
               <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
                 {roleCounts.map(({ role, members }) => (
-                  <Stack key={role} component="button" type="button" direction="row" justifyContent="space-between" aria-label={`Select ${role} role permissions`} onClick={() => setSettings({ ...settings, teamRole: role })} sx={{ width: "100%", border: 0, font: "inherit", textAlign: "left", px: 1, py: 1, borderRadius: "5px", cursor: "pointer", color: "inherit", bgcolor: settings.teamRole === role ? activeBg : "transparent" }}>
-                    <Typography sx={{ color: settings.teamRole === role ? accent : ink, fontSize: 13, fontWeight: 720 }}>{role}</Typography>
+                  <Stack key={role} component="button" type="button" direction="row" justifyContent="space-between" aria-label={`Select ${role} role permissions`} onClick={() => selectRole(role)} sx={{ width: "100%", border: 0, font: "inherit", textAlign: "left", px: 1, py: 1, borderRadius: "5px", cursor: "pointer", color: "inherit", bgcolor: activeRole === role ? activeBg : "transparent", transition: "background-color 150ms ease" }}>
+                    <Stack direction="row" alignItems="center" gap={0.8}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: activeRole === role ? accent : "#c7c3cc" }} />
+                      <Typography sx={{ color: activeRole === role ? accent : ink, fontSize: 13, fontWeight: 720 }}>{role}</Typography>
+                    </Stack>
                     <Typography sx={{ color: muted, fontSize: 12 }}>{members} {members === 1 ? "member" : "members"}</Typography>
                   </Stack>
                 ))}
               </Stack>
               <Stack gap={0.8}>
-                <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{settings.teamRole} Permissions</Typography>
-                {Object.keys(settings.editorPermissions).map((item) => (
-                  <Stack key={item} component="button" type="button" direction="row" alignItems="center" gap={0.8} aria-label={`${settings.editorPermissions[item] ? "Disable" : "Enable"} ${item} permission`} onClick={() => updatePermission(item, !settings.editorPermissions[item])} sx={{ border: 0, font: "inherit", textAlign: "left", color: "inherit", bgcolor: "transparent", p: 0, cursor: "pointer" }}>
-                    <CheckCircleOutlineIcon sx={{ color: settings.editorPermissions[item] ? accent : "#c7c3cc", fontSize: 17 }} />
-                    <Typography sx={{ color: muted, fontSize: 12 }}>{item}</Typography>
-                  </Stack>
-                ))}
+                <Stack direction="row" alignItems="center" gap={0.8}>
+                  <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{activeRole} Permissions</Typography>
+                  <Chip label={activeRole} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontSize: 11, height: 20 }} />
+                </Stack>
+                {permissionKeys.map((perm) => {
+                  const enabled = activePerms[perm] ?? false;
+                  return (
+                    <Stack key={perm} component="button" type="button" direction="row" alignItems="center" gap={0.8} aria-label={`${enabled ? "Disable" : "Enable"} ${perm} permission for ${activeRole}`} onClick={() => updateRolePermission(perm, !enabled)} sx={{ border: 0, font: "inherit", textAlign: "left", color: "inherit", bgcolor: "transparent", p: 0.4, cursor: "pointer", borderRadius: "4px", "&:hover": { bgcolor: hoverBg } }}>
+                      <CheckCircleOutlineIcon sx={{ color: enabled ? accent : "#c7c3cc", fontSize: 17, transition: "color 150ms ease" }} />
+                      <Typography sx={{ color: enabled ? ink : muted, fontSize: 12 }}>{perm}</Typography>
+                    </Stack>
+                  );
+                })}
               </Stack>
             </Box>
             <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
-          </SettingsPanel>
-        <SettingsPanel title="Integrations" subtitle="Connect your favorite tools and services.">
-            {Object.keys(settings.integrations).map((name) => {
-              const connected = Boolean(settings.integrations[name]);
-              return (
-                <Stack key={name} direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 1.2, py: 1, border: `1px solid ${border}`, borderRadius: "6px" }}>
-                  <Stack direction="row" alignItems="center" gap={1}>
-                    <Box sx={{ width: 22, height: 22, borderRadius: "5px", bgcolor: activeBg, color: accent, display: "grid", placeItems: "center", fontSize: 11, fontWeight: 760 }}>{name[0]}</Box>
-                    <Box>
-                      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{name}</Typography>
-                      <Typography sx={{ color: muted, fontSize: 11, mt: 0.2 }}>{connected ? settings.integrationAccounts[name] || "Connected locally" : "Not connected"}</Typography>
-                    </Box>
-                  </Stack>
-                  <Stack direction="row" gap={0.7}>
-                    {connected ? <Button size="small" aria-label={`Disconnect ${name}`} onClick={() => disconnectIntegration(name)} sx={{ color: "#bd3f37", border: `1px solid ${border}`, borderRadius: "5px", fontSize: 12 }}>Disconnect</Button> : null}
-                    <Button size="small" aria-label={`${connected ? "Manage" : "Connect"} ${name}`} onClick={() => openIntegration(name)} sx={{ color: connected ? "#3c8c4b" : accent, border: `1px solid ${border}`, borderRadius: "5px", fontSize: 12 }}>{connected ? "Manage" : "Connect"}</Button>
-                  </Stack>
-                </Stack>
-              );
-            })}
-            <SettingsLink label="Browse all integrations" onClick={() => openIntegration("Frame.io")} />
           </SettingsPanel>
         <Paper sx={{ ...panelSx, p: 2.25 }}>
             <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Appearance</Typography>
@@ -1740,25 +1947,277 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </Box>
           </Paper>
       </Stack>
-      <Dialog open={Boolean(integrationDialog)} onClose={() => setIntegrationDialog(null)} fullWidth maxWidth="sm">
-        <DialogTitle>{integrationDialog?.name ? `Connect ${integrationDialog.name}` : "Connect integration"}</DialogTitle>
+
+      {/* Integration Config Dialog */}
+      <Dialog open={Boolean(integrationDialog)} onClose={() => setIntegrationDialog(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>
+          <Stack direction="row" alignItems="center" gap={1.2}>
+            <Box sx={{ width: 32, height: 32, borderRadius: "6px", bgcolor: integrationDialog ? integrationColors[integrationDialog.name] : accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 760 }}>{integrationDialog ? integrationIcons[integrationDialog.name] : "?"}</Box>
+            {integrationDialog?.name ? `${integrationDialog.config.connected ? "Manage" : "Connect"} ${integrationDialog.name}` : "Connect integration"}
+          </Stack>
+        </DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ pt: 1 }}>
             <Typography sx={{ color: muted, fontSize: 13 }}>
-              This app stores integration connection details locally. Add the account, team, or folder name you use so the tracker can show which service is connected.
+              {integrationDialog ? integrationDescriptions[integrationDialog.name] : "Configure your integration connection details."}
             </Typography>
-            <TextField
-              label="Account, team, or folder"
-              value={integrationDialog?.account || ""}
-              onChange={(event) => setIntegrationDialog((current) => current ? { ...current, account: event.target.value } : current)}
-              fullWidth
-              autoFocus
-            />
+            {integrationDialog?.name === "Google Drive" ? (
+              <Stack gap={1.5}>
+                {integrationDialog.config.connected && integrationDialog.config.account ? (
+                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, bgcolor: softPanel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 11, color: muted, fontWeight: 700 }}>SIGNED IN AS</Typography>
+                      <Typography noWrap sx={{ fontSize: 13.5, color: ink, fontWeight: 760, mt: 0.3 }}>{integrationDialog.config.account}</Typography>
+                    </Box>
+                    <Button variant="outlined" onClick={() => setGoogleLoginOpen(true)} sx={{ ...outlineButtonSx, fontSize: 12, height: 32, py: 0 }}>Change</Button>
+                  </Paper>
+                ) : (
+                  <Box sx={{ py: 0.5 }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={
+                        <svg width="18" height="18" viewBox="0 0 18 18">
+                          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4" />
+                          <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
+                          <path d="M3.964 10.707a5.416 5.416 0 01-.282-1.707c0-.596.102-1.174.282-1.707V4.961H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05" />
+                          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.961l3.007 2.332C4.672 5.164 6.656 3.58 9 3.58z" fill="#EA4335" />
+                        </svg>
+                      }
+                      onClick={() => setGoogleLoginOpen(true)}
+                      sx={{
+                        color: "#19171f",
+                        borderColor: "#dedbe5",
+                        bgcolor: "#ffffff",
+                        borderRadius: "6px",
+                        textTransform: "none",
+                        fontWeight: 720,
+                        py: 1.2,
+                        fontSize: 14,
+                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                        "&:hover": { bgcolor: "#f7f4fc", borderColor: accent }
+                      }}
+                      fullWidth
+                    >
+                      Sign in with Google
+                    </Button>
+                  </Box>
+                )}
+              </Stack>
+            ) : (
+              <TextField
+                label="Account email or name"
+                value={integrationDialog?.config.account || ""}
+                onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, account: event.target.value } } : current)}
+                fullWidth
+                autoFocus
+                placeholder="you@example.com"
+              />
+            )}
+            {integrationDialog?.name === "Google Drive" || integrationDialog?.name === "Dropbox" ? (
+              <TextField
+                label="Folder path"
+                value={integrationDialog?.config.folder || ""}
+                onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, folder: event.target.value } } : current)}
+                fullWidth
+                placeholder={integrationDialog?.name === "Google Drive" ? "/Projects/Video Edits" : "/Deliverables"}
+              />
+            ) : null}
+            {integrationDialog?.name === "Slack" ? (
+              <>
+                <TextField
+                  label="Workspace name"
+                  value={integrationDialog?.config.workspace || ""}
+                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, workspace: event.target.value } } : current)}
+                  fullWidth
+                  placeholder="My Studio Workspace"
+                />
+                <TextField
+                  label="Channel"
+                  value={integrationDialog?.config.channel || ""}
+                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, channel: event.target.value } } : current)}
+                  fullWidth
+                  placeholder="#project-updates"
+                />
+                <TextField
+                  label="Webhook URL (optional)"
+                  value={integrationDialog?.config.webhookUrl || ""}
+                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, webhookUrl: event.target.value } } : current)}
+                  fullWidth
+                  placeholder="https://hooks.slack.com/services/..."
+                />
+              </>
+            ) : null}
+            {integrationDialog?.name === "Frame.io" ? (
+              <>
+                <TextField
+                  label="Workspace"
+                  value={integrationDialog?.config.workspace || ""}
+                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, workspace: event.target.value } } : current)}
+                  fullWidth
+                  placeholder="Studio Workspace"
+                />
+                <TextField
+                  label="Project folder"
+                  value={integrationDialog?.config.folder || ""}
+                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, folder: event.target.value } } : current)}
+                  fullWidth
+                  placeholder="/Reviews/Active"
+                />
+              </>
+            ) : null}
+            {integrationDialog?.config.lastSyncAt ? (
+              <Typography sx={{ color: muted, fontSize: 12 }}>Last synced: {formatTimestamp(integrationDialog.config.lastSyncAt)}</Typography>
+            ) : null}
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
           <Button onClick={() => setIntegrationDialog(null)} sx={{ color: muted }}>Cancel</Button>
-          <Button onClick={saveIntegration} variant="contained" disabled={!integrationDialog?.account.trim()} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>Save Connection</Button>
+          <Button
+            onClick={testConnection}
+            disabled={testingConnection || !integrationDialog?.config.account.trim()}
+            variant="outlined"
+            sx={{ borderColor: border, color: accent, borderRadius: "5px", fontSize: 13, "&:hover": { borderColor: accent } }}
+          >
+            {testingConnection ? <CircularProgress size={16} sx={{ color: accent, mr: 1 }} /> : null}
+            {testingConnection ? "Testing..." : "Test Connection"}
+          </Button>
+          <Button onClick={saveIntegration} variant="contained" disabled={!integrationDialog?.config.account.trim()} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Connection</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Google Login Dialog */}
+      <Dialog
+        open={googleLoginOpen}
+        onClose={() => setGoogleLoginOpen(false)}
+        fullWidth
+        maxWidth="xs"
+        PaperProps={{
+          sx: {
+            bgcolor: "#ffffff",
+            color: "#1f2024",
+            borderRadius: "12px",
+            border: "1px solid #e0e0e0",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+            p: 2.5
+          }
+        }}
+      >
+        <Stack alignItems="center" spacing={2} sx={{ pt: 1, pb: 2 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24">
+            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
+            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+          </svg>
+          <Typography sx={{ fontSize: 20, fontWeight: 500, color: "#202124", fontFamily: "'Google Sans', Roboto, Arial" }}>
+            Sign in with Google
+          </Typography>
+          <Typography sx={{ fontSize: 13, color: "#5f6368", textAlign: "center" }}>
+            to continue to <strong style={{ color: "#202124" }}>CutLab Studio</strong>
+          </Typography>
+        </Stack>
+
+        <DialogContent sx={{ p: 0 }}>
+          <Stack gap={1.2} sx={{ mt: 1 }}>
+            {!showCustomEmailInput ? (
+              <>
+                <Box
+                  component="button"
+                  onClick={() => selectGoogleAccount("jordan.lee@gmail.com")}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    p: 1.5,
+                    width: "100%",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "8px",
+                    bgcolor: "transparent",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "background-color 150ms",
+                    "&:hover": { bgcolor: "#f8f9fa" }
+                  }}
+                >
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#e8f0fe", color: "#1a73e8", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>JL</Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: "#3c4043" }}>Jordan Lee</Typography>
+                    <Typography sx={{ fontSize: 12, color: "#5f6368" }}>jordan.lee@gmail.com</Typography>
+                  </Box>
+                </Box>
+
+                <Box
+                  component="button"
+                  onClick={() => setShowCustomEmailInput(true)}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                    p: 1.5,
+                    width: "100%",
+                    border: "1px solid #e0e0e0",
+                    borderRadius: "8px",
+                    bgcolor: "transparent",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    transition: "background-color 150ms",
+                    "&:hover": { bgcolor: "#f8f9fa" }
+                  }}
+                >
+                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#f1f3f4", color: "#5f6368", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14 }}>+</Box>
+                  <Typography sx={{ fontSize: 13.5, color: "#1a73e8", fontWeight: 600 }}>Use another account</Typography>
+                </Box>
+              </>
+            ) : (
+              <Stack gap={1.5}>
+                <TextField
+                  label="Email or phone"
+                  value={googleCustomEmail}
+                  onChange={(e) => setGoogleCustomEmail(e.target.value)}
+                  fullWidth
+                  autoFocus
+                  placeholder="name@gmail.com"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: "#fff",
+                      color: "#202124",
+                      "& fieldset": { borderColor: "#dadce0" }
+                    },
+                    "& label": { color: "#5f6368" }
+                  }}
+                />
+                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
+                  <Button onClick={() => setShowCustomEmailInput(false)} sx={{ color: "#5f6368", textTransform: "none" }}>Back</Button>
+                  <Button
+                    variant="contained"
+                    disabled={!googleCustomEmail.trim()}
+                    onClick={() => selectGoogleAccount(googleCustomEmail)}
+                    sx={{ bgcolor: "#1a73e8", color: "#fff", textTransform: "none", "&:hover": { bgcolor: "#1557b0" } }}
+                  >
+                    Next
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+
+            <Typography sx={{ fontSize: 11, color: "#5f6368", mt: 2, lineHeight: 1.4 }}>
+              To continue, Google will share your name, email address, and profile picture with CutLab Studio. Before using this app, you can review its privacy policy and terms of service.
+            </Typography>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disconnect Confirmation Dialog */}
+      <Dialog open={Boolean(disconnectTarget)} onClose={() => setDisconnectTarget(null)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Disconnect {disconnectTarget}?</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: muted, fontSize: 14 }}>
+            This will remove all saved connection details for {disconnectTarget}. You can reconnect it anytime from the Integrations panel.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDisconnectTarget(null)} sx={{ color: muted }}>Cancel</Button>
+          <Button onClick={confirmDisconnect} variant="contained" sx={{ bgcolor: "#bd3f37", color: "#fff", "&:hover": { bgcolor: "#a9342d" } }}>Disconnect</Button>
         </DialogActions>
       </Dialog>
     </PageFrame>
@@ -2379,67 +2838,7 @@ function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: 
   );
 }
 
-function DashboardAside({ projects, salaryEdits, salaryBatchProgress }: { projects: WorkItem[]; salaryEdits: number; salaryBatchProgress: number }) {
-  const settings = useTrackerSettings();
-  const upcoming = [...projects]
-    .filter((project) => project.dueDate && !isDoneStatus(project.status))
-    .sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate))
-    .slice(0, 4);
-  const delivered = projects.filter((project) => isDoneStatus(project.status)).slice(0, 3);
-  const batchPercent = (salaryBatchProgress / SALARY_BATCH_SIZE) * 100;
 
-  return (
-    <Stack gap={2}>
-      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Upcoming Deadlines</Typography>
-          <CalendarTodayOutlinedIcon sx={{ color: muted, fontSize: 19 }} />
-        </Stack>
-        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-          {upcoming.length ? upcoming.map((project) => (
-            <Box key={project.id} sx={{ px: 2, py: 1.4, borderLeft: `3px solid ${deadlineColor(project.status)}` }}>
-              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{project.title}</Typography>
-              <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>{formatDate(project.dueDate, settings.dateFormat)} · {project.status}</Typography>
-            </Box>
-          )) : (
-            <Typography sx={{ color: muted, fontSize: 13, px: 2, py: 2 }}>No upcoming active deadlines.</Typography>
-          )}
-        </Stack>
-      </Paper>
-
-      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", p: 2 }}>
-        <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Salary Batch</Typography>
-        <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>Delivered salary edits count toward a batch payout.</Typography>
-        <Stack direction="row" alignItems="end" justifyContent="space-between" sx={{ mt: 2 }}>
-          <Box>
-            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 620, lineHeight: 1 }}>{salaryEdits}</Typography>
-            <Typography sx={{ color: muted, fontSize: 12, mt: 0.5 }}>salary edits done</Typography>
-          </Box>
-          <Typography sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>{salaryBatchProgress}/{SALARY_BATCH_SIZE}</Typography>
-        </Stack>
-        <LinearProgress variant="determinate" value={batchPercent} sx={{ mt: 1.5, height: 6, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
-        <Typography sx={{ color: muted, fontSize: 12, mt: 1.4 }}>{money(SALARY_BATCH_AMOUNT, settings.currencyCode)} is added after each full batch.</Typography>
-      </Paper>
-
-      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Recently Delivered</Typography>
-          <Chip label={delivered.length} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
-        </Stack>
-        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-          {delivered.length ? delivered.map((project) => (
-            <Box key={project.id} sx={{ px: 2, py: 1.35 }}>
-              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{project.title}</Typography>
-              <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>{project.workType} · {formatDate(project.dueDate, settings.dateFormat)}</Typography>
-            </Box>
-          )) : (
-            <Typography sx={{ color: muted, fontSize: 13, px: 2, py: 2 }}>No delivered projects yet.</Typography>
-          )}
-        </Stack>
-      </Paper>
-    </Stack>
-  );
-}
 
 function deadlineColor(status: string) {
   if (status === "In Progress") return "#d39a27";
