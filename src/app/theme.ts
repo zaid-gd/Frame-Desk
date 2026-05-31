@@ -114,6 +114,7 @@ export const theme = createTheme({
     MuiMenuItem: {
       styleOverrides: {
         root: {
+          backgroundColor: "var(--app-panel, #ffffff)",
           color: "var(--app-ink, #19171f)",
           "&.Mui-selected": {
             backgroundColor: "var(--app-active, #f0eafa)",
@@ -131,6 +132,33 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
+          backgroundColor: "var(--app-panel, #ffffff)",
+          color: "var(--app-ink, #19171f)",
+          borderColor: "var(--app-border, #dedbe5)",
+          backgroundImage: "none"
+        }
+      }
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: "var(--app-panel, #ffffff)",
+          color: "var(--app-ink, #19171f)",
+          border: "1px solid var(--app-border, #dedbe5)",
+          backgroundImage: "none"
+        },
+        list: {
+          backgroundColor: "var(--app-panel, #ffffff)",
+          color: "var(--app-ink, #19171f)"
+        }
+      }
+    },
+    MuiPopover: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: "var(--app-panel, #ffffff)",
+          color: "var(--app-ink, #19171f)",
+          borderColor: "var(--app-border, #dedbe5)",
           backgroundImage: "none"
         }
       }

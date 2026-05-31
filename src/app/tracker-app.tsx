@@ -100,6 +100,7 @@ type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = "ALL" | "Job / Salary" | "Freelance" | "Personal Channel";
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
 type SortKey = "createdAt_desc" | "createdAt_asc" | "dueDate_asc" | "earnings_desc" | "earnings_asc";
+type ClientDetailTab = "Overview" | "Projects" | "Files" | "Activity";
 type TeamMember = {
   id: string;
   name: string;
@@ -289,8 +290,8 @@ const emptyForm = (): WorkItem => ({
   client: "",
   status: "Planned",
   workType: "Freelance",
-  startDate: "",
-  dueDate: "",
+  startDate: iso(todayDate()),
+  dueDate: iso(todayDate()),
   earnings: 0,
   notes: ""
 });
@@ -452,10 +453,12 @@ export function TrackerApp({ page }: { page: PageKey }) {
     }
     const payload: WorkItem = {
       ...form,
+      title: form.title.trim(),
       id: editingId || createId(),
       createdAt: form.createdAt || new Date().toISOString(),
       profileId: profile.id,
       client: form.client?.trim() || "",
+      notes: form.notes.trim(),
       earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(form.earnings)
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
@@ -539,7 +542,10 @@ export function TrackerApp({ page }: { page: PageKey }) {
       open={dialogOpen}
       editing={Boolean(editingId)}
       form={form}
-      setForm={setForm}
+      setForm={(next) => {
+        setForm(next);
+        if (formError) setFormError("");
+      }}
       formError={formError}
       onClose={() => setDialogOpen(false)}
       onSave={saveProject}
@@ -552,6 +558,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       onConfirm={confirmDeleteProject}
     />
   );
+  const loadingStatus = !isAuthLoaded ? <AppLoadingStatus /> : null;
 
   if (page === "profile") {
     return (
@@ -559,6 +566,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
       {projectDialog}
       {deleteDialog}
+      {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
         onChooseLocal={chooseLocalMode}
@@ -587,6 +595,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       <AppToast toast={toast} onClose={() => setToast(null)} />
       {projectDialog}
       {deleteDialog}
+      {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
         onChooseLocal={chooseLocalMode}
@@ -830,6 +839,32 @@ function NavButton({ active, href, icon, children }: { active: boolean; href: st
     >
       {children}
     </Button>
+  );
+}
+
+function AppLoadingStatus() {
+  return (
+    <Paper
+      aria-live="polite"
+      sx={{
+        position: "fixed",
+        right: { xs: 16, md: 24 },
+        bottom: { xs: 16, md: 24 },
+        zIndex: 1450,
+        bgcolor: panel,
+        color: ink,
+        border: `1px solid ${border}`,
+        borderRadius: "6px",
+        px: 1.4,
+        py: 1,
+        boxShadow: "0 12px 32px rgba(0,0,0,0.14)"
+      }}
+    >
+      <Stack direction="row" alignItems="center" gap={1}>
+        <CircularProgress size={15} sx={{ color: accent }} />
+        <Typography sx={{ color: ink, fontSize: 12, fontWeight: 720 }}>Loading workspace</Typography>
+      </Stack>
+    </Paper>
   );
 }
 
@@ -1077,7 +1112,7 @@ function ClientsDesignPage({
   const [clientWorkFilter, setClientWorkFilter] = useState<ProjectKind>("ALL");
   const [clientFeedbackFilter, setClientFeedbackFilter] = useState<"ALL" | "Awaiting" | "Approved">("ALL");
   const [selectedClientName, setSelectedClientName] = useState("");
-  const [selectedClientTab, setSelectedClientTab] = useState("Overview");
+  const [selectedClientTab, setSelectedClientTab] = useState<ClientDetailTab>("Overview");
 
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [newClientName, setNewClientName] = useState("");
@@ -1106,25 +1141,41 @@ function ClientsDesignPage({
   const deliveredProjects = projects.length - activeProjects;
   const selectedFeedbackStatus = selectedProjects.length ? clientFeedbackStatus(selectedProjects) : "Approved";
   const pendingRevisions = selectedProjects.filter((project) => project.status === "In Progress" || project.status === "Planned");
+  const clientTabs: { key: ClientDetailTab; label: string }[] = [
+    { key: "Overview", label: "Overview" },
+    { key: "Projects", label: `Projects (${selectedProjects.length})` },
+    { key: "Files", label: "Files" },
+    { key: "Activity", label: "Activity" }
+  ];
 
   function handleSaveClient() {
-    if (!newClientName.trim()) {
+    const clientName = newClientName.trim();
+    const projectTitle = newClientProject.trim();
+    if (!clientName) {
       setAddClientError("Client name is required.");
       return;
     }
-    if (projects.some((p) => p.client?.trim().toLowerCase() === newClientName.trim().toLowerCase())) {
+    if (projects.some((p) => p.client?.trim().toLowerCase() === clientName.toLowerCase())) {
       setAddClientError("A client with this name already exists.");
       return;
     }
+    if (!projectTitle) {
+      setAddClientError("Initial project title is required.");
+      return;
+    }
+    if (!profile.typeOptions.some((type) => type.label === newClientWorkType)) {
+      setAddClientError("Choose a valid project type.");
+      return;
+    }
     if (onAddClientProject) {
-      onAddClientProject(newClientName, newClientProject, newClientWorkType);
+      onAddClientProject(clientName, projectTitle, newClientWorkType);
     }
     setNewClientName("");
     setNewClientProject("Onboarding & Planning");
     setNewClientWorkType("Freelance");
     setAddClientError("");
     setAddClientOpen(false);
-    setSelectedClientName(newClientName.trim());
+    setSelectedClientName(clientName);
   }
 
   function clearClientFilters() {
@@ -1140,7 +1191,7 @@ function ClientsDesignPage({
       subtitle="Manage client relationships from the client names attached to projects."
       action={
         <Stack direction="row" spacing={1.2}>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddClientOpen(true)} sx={outlineButtonSx}>Add Client</Button>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setAddClientError(""); setAddClientOpen(true); }} sx={outlineButtonSx}>Add Client</Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={onNewProject} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>New Project</Button>
         </Stack>
       }
@@ -1256,79 +1307,23 @@ function ClientsDesignPage({
                 </Button>
               </Stack>
               <Stack gap={1.1} sx={{ mt: 2.3, pb: 2, borderBottom: `1px solid ${border}` }}>
-                <ClientInfoRow icon={<MailOutlineIcon />} text="Email not saved" />
+                <ClientInfoRow icon={<MailOutlineIcon />} text="Contact email not set" />
                 <ClientInfoRow icon={<PublicOutlinedIcon />} text="Project-level client record" />
-                <ClientInfoRow icon={<PlaceOutlinedIcon />} text="Stored locally in project data" />
+                <ClientInfoRow icon={<PlaceOutlinedIcon />} text="Saved with project records" />
               </Stack>
               <Stack direction="row" gap={1} sx={{ mt: 2, mb: 2, overflowX: "auto", scrollbarWidth: "none" }}>
-                {["Overview", `Projects (${selectedProjects.length})`, "Files", "Activity"].map((tab) => (
-                  <Button key={tab} size="small" onClick={() => setSelectedClientTab(tab)} sx={{ flexShrink: 0, color: selectedClientTab === tab ? accent : muted, borderBottom: selectedClientTab === tab ? `2px solid ${accent}` : "2px solid transparent", borderRadius: 0, px: 0.8, fontSize: 13, fontWeight: 720 }}>{tab}</Button>
+                {clientTabs.map((tab) => (
+                  <Button key={tab.key} size="small" onClick={() => setSelectedClientTab(tab.key)} sx={{ flexShrink: 0, color: selectedClientTab === tab.key ? accent : muted, borderBottom: selectedClientTab === tab.key ? `2px solid ${accent}` : "2px solid transparent", borderRadius: 0, px: 0.8, fontSize: 13, fontWeight: 720 }}>{tab.label}</Button>
                 ))}
               </Stack>
-              <Grid container spacing={1.2}>
-                <Grid size={12}>
-                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
-                      <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Current Projects</Typography>
-                      <Typography sx={{ color: accent, fontSize: 12, fontWeight: 720 }}>{selectedClient.activeCount} active</Typography>
-                    </Stack>
-                    <Stack gap={1.1}>
-                      {selectedProjects.slice(0, 3).map((project) => (
-                        <Box key={project.id}>
-                          <Stack direction="row" justifyContent="space-between" gap={1} sx={{ mb: 0.5 }}>
-                            <Typography noWrap sx={{ color: ink, fontSize: 12, fontWeight: 700 }}>{project.title}</Typography>
-                            <Typography sx={{ color: muted, fontSize: 12 }}>{projectProgress(project.status)}%</Typography>
-                          </Stack>
-                          <LinearProgress variant="determinate" value={projectProgress(project.status)} sx={{ height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6, xl: 12 }}>
-                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel, minHeight: 146 }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
-                      <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Pending Revisions</Typography>
-                      <Chip label={pendingRevisions.length} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", height: 22 }} />
-                    </Stack>
-                    <Stack gap={1.1}>
-                      {pendingRevisions.slice(0, 3).map((project) => (
-                        <Box key={project.id} sx={{ pl: 1.2, borderLeft: `2px solid ${deadlineColor(project.status)}` }}>
-                          <Typography noWrap sx={{ color: ink, fontSize: 12, fontWeight: 700 }}>{project.title}</Typography>
-                          <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{project.notes || project.status}</Typography>
-                        </Box>
-                      ))}
-                      {!pendingRevisions.length ? <Typography sx={{ color: muted, fontSize: 12 }}>No open revisions.</Typography> : null}
-                    </Stack>
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6, xl: 12 }}>
-                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel, minHeight: 146 }}>
-                    <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Deliverables</Typography>
-                    <Grid container spacing={1} sx={{ mt: 1 }}>
-                      <Grid size={6}><MiniMetric label="Delivered" value={String(selectedProjects.filter((project) => isDoneStatus(project.status)).length)} /></Grid>
-                      <Grid size={6}><MiniMetric label="Packages" value={String(selectedProjects.length)} /></Grid>
-                      <Grid size={6}><MiniMetric label="Revisions" value={String(pendingRevisions.length)} /></Grid>
-                      <Grid size={6}><MiniMetric label="Feedback" value={selectedFeedbackStatus} /></Grid>
-                    </Grid>
-                  </Paper>
-                </Grid>
-                <Grid size={12}>
-                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.8 }}>
-                      <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Relationship Notes</Typography>
-                      <Button size="small" component={Link} href="/projects" sx={{ color: accent, minWidth: 0, px: 1 }}>View Projects</Button>
-                    </Stack>
-                    <Typography sx={{ color: muted, fontSize: 13, lineHeight: 1.55 }}>
-                      {selectedClientTab === "Files"
-                        ? `${selectedProjects.length} project package${selectedProjects.length === 1 ? "" : "s"} tracked from current project records.`
-                        : selectedClientTab === "Activity"
-                          ? `${selectedProjects.length} saved project${selectedProjects.length === 1 ? "" : "s"} for this client; ${pendingRevisions.length} still needs review or delivery.`
-                          : selectedProjects.find((project) => project.notes)?.notes || "Project notes attached to this client will appear here."}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
+              <ClientTabPanel
+                tab={selectedClientTab}
+                projects={selectedProjects}
+                activeCount={selectedClient.activeCount}
+                pendingRevisions={pendingRevisions}
+                feedbackStatus={selectedFeedbackStatus}
+                settings={settings}
+              />
             </>
           ) : (
             <Box sx={{ py: 5, textAlign: "center" }}>
@@ -1342,8 +1337,8 @@ function ClientsDesignPage({
         <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Add New Client</DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ mt: 1.5 }}>
-            <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => setNewClientName(e.target.value)} fullWidth />
-            <TextField label="Initial Project Title" placeholder="e.g. Onboarding & Planning" value={newClientProject} onChange={(e) => setNewClientProject(e.target.value)} fullWidth />
+            <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => { setNewClientName(e.target.value); setAddClientError(""); }} fullWidth />
+            <TextField label="Initial Project Title" placeholder="e.g. Onboarding & Planning" value={newClientProject} onChange={(e) => { setNewClientProject(e.target.value); setAddClientError(""); }} fullWidth />
             <DialogSelect label="Project Type" value={newClientWorkType} options={profile.typeOptions.map((t) => t.label)} onChange={setNewClientWorkType} />
             {addClientError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{addClientError}</Typography> : null}
           </Stack>
@@ -1354,6 +1349,160 @@ function ClientsDesignPage({
         </DialogActions>
       </Dialog>
     </PageFrame>
+  );
+}
+
+function ClientTabPanel({
+  tab,
+  projects,
+  activeCount,
+  pendingRevisions,
+  feedbackStatus,
+  settings
+}: {
+  tab: ClientDetailTab;
+  projects: WorkItem[];
+  activeCount: number;
+  pendingRevisions: WorkItem[];
+  feedbackStatus: string;
+  settings: SettingsState;
+}) {
+  const sortedProjects = [...projects].sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate));
+  const recentActivity = [...projects].sort((a, b) => {
+    const aTime = Date.parse(a.createdAt || `${a.startDate}T00:00:00`);
+    const bTime = Date.parse(b.createdAt || `${b.startDate}T00:00:00`);
+    return bTime - aTime;
+  });
+
+  if (tab === "Projects") {
+    return (
+      <Stack gap={1.1}>
+        {sortedProjects.length ? sortedProjects.map((project) => (
+          <Paper key={project.id} sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={1.2}>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{project.title}</Typography>
+                <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{project.workType} · Due {formatDate(project.dueDate, settings.dateFormat)}</Typography>
+              </Box>
+              <StatusChip status={project.status} />
+            </Stack>
+            {project.notes ? <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45, mt: 1 }}>{project.notes}</Typography> : null}
+          </Paper>
+        )) : (
+          <EmptyPanel title="No projects for this client" body="Assign this client name to a project to fill this list." />
+        )}
+      </Stack>
+    );
+  }
+
+  if (tab === "Files") {
+    return (
+      <Stack gap={1.1}>
+        {sortedProjects.length ? sortedProjects.map((project) => (
+          <Paper key={project.id} sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+              <Stack direction="row" alignItems="center" gap={1} sx={{ minWidth: 0 }}>
+                <InsertDriveFileOutlinedIcon sx={{ color: muted, fontSize: 19, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{project.title}</Typography>
+                  <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{project.workType} package</Typography>
+                </Box>
+              </Stack>
+              <Typography sx={{ color: muted, fontSize: 12, flexShrink: 0 }}>{projectProgress(project.status)}%</Typography>
+            </Stack>
+            <LinearProgress variant="determinate" value={projectProgress(project.status)} sx={{ height: 5, borderRadius: 99, bgcolor: progressTrack, mt: 1.1, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
+          </Paper>
+        )) : (
+          <EmptyPanel title="No project packages yet" body="Project file packages are summarized from saved client projects." />
+        )}
+      </Stack>
+    );
+  }
+
+  if (tab === "Activity") {
+    return (
+      <Stack gap={1.1}>
+        {recentActivity.length ? recentActivity.map((project) => (
+          <Paper key={project.id} sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+            <Stack direction="row" alignItems="flex-start" gap={1.1}>
+              <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: deadlineColor(project.status), mt: 0.65, flexShrink: 0 }} />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{project.status}: {project.title}</Typography>
+                <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>
+                  {isDoneStatus(project.status) ? "Delivered" : "Scheduled"} for {formatDate(project.dueDate, settings.dateFormat)}
+                </Typography>
+              </Box>
+            </Stack>
+          </Paper>
+        )) : (
+          <EmptyPanel title="No client activity yet" body="Saved projects for this client will create an activity trail." />
+        )}
+      </Stack>
+    );
+  }
+
+  return (
+    <Grid container spacing={1.2}>
+      <Grid size={12}>
+        <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
+            <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Current Projects</Typography>
+            <Typography sx={{ color: accent, fontSize: 12, fontWeight: 720 }}>{activeCount} active</Typography>
+          </Stack>
+          <Stack gap={1.1}>
+            {projects.slice(0, 3).map((project) => (
+              <Box key={project.id}>
+                <Stack direction="row" justifyContent="space-between" gap={1} sx={{ mb: 0.5 }}>
+                  <Typography noWrap sx={{ color: ink, fontSize: 12, fontWeight: 700 }}>{project.title}</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12 }}>{projectProgress(project.status)}%</Typography>
+                </Stack>
+                <LinearProgress variant="determinate" value={projectProgress(project.status)} sx={{ height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
+              </Box>
+            ))}
+            {!projects.length ? <Typography sx={{ color: muted, fontSize: 12 }}>No current projects.</Typography> : null}
+          </Stack>
+        </Paper>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6, xl: 12 }}>
+        <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel, minHeight: 146 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
+            <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Pending Revisions</Typography>
+            <Chip label={pendingRevisions.length} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", height: 22 }} />
+          </Stack>
+          <Stack gap={1.1}>
+            {pendingRevisions.slice(0, 3).map((project) => (
+              <Box key={project.id} sx={{ pl: 1.2, borderLeft: `2px solid ${deadlineColor(project.status)}` }}>
+                <Typography noWrap sx={{ color: ink, fontSize: 12, fontWeight: 700 }}>{project.title}</Typography>
+                <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{project.notes || project.status}</Typography>
+              </Box>
+            ))}
+            {!pendingRevisions.length ? <Typography sx={{ color: muted, fontSize: 12 }}>No open revisions.</Typography> : null}
+          </Stack>
+        </Paper>
+      </Grid>
+      <Grid size={{ xs: 12, md: 6, xl: 12 }}>
+        <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel, minHeight: 146 }}>
+          <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Deliverables</Typography>
+          <Grid container spacing={1} sx={{ mt: 1 }}>
+            <Grid size={6}><MiniMetric label="Delivered" value={String(projects.filter((project) => isDoneStatus(project.status)).length)} /></Grid>
+            <Grid size={6}><MiniMetric label="Packages" value={String(projects.length)} /></Grid>
+            <Grid size={6}><MiniMetric label="Revisions" value={String(pendingRevisions.length)} /></Grid>
+            <Grid size={6}><MiniMetric label="Feedback" value={feedbackStatus} /></Grid>
+          </Grid>
+        </Paper>
+      </Grid>
+      <Grid size={12}>
+        <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.8 }}>
+            <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Relationship Notes</Typography>
+            <Button size="small" component={Link} href="/projects" sx={{ color: accent, minWidth: 0, px: 1 }}>View Projects</Button>
+          </Stack>
+          <Typography sx={{ color: muted, fontSize: 13, lineHeight: 1.55 }}>
+            {projects.find((project) => project.notes)?.notes || "Project notes attached to this client will appear here."}
+          </Typography>
+        </Paper>
+      </Grid>
+    </Grid>
   );
 }
 
@@ -1559,7 +1708,32 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
 
 function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { title: string; workType: string; notes: string }) => void }) {
   const settings = useTrackerSettings();
-  const templates: { title: string; body: string; workType: string; notes: string }[] = [];
+  const templates: { title: string; body: string; workType: string; notes: string }[] = [
+    {
+      title: "Client Campaign Edit",
+      body: "A standard freelance client cut with review notes and delivery checkpoints.",
+      workType: "Freelance",
+      notes: "Scope: assemble cut, sound pass, color pass, client review, final export.\nAssets needed: brief, footage, brand files, delivery specs."
+    },
+    {
+      title: "Salary Batch Edit",
+      body: "A job/salary project template that counts toward the batch payout tracker.",
+      workType: "Job / Salary",
+      notes: "Batch workflow: rough cut, revision pass, thumbnail handoff, publish-ready export.\nTrack completion when delivered."
+    },
+    {
+      title: "Channel Upload",
+      body: "A personal channel edit with publishing, thumbnail, and description reminders.",
+      workType: "Personal Channel",
+      notes: "Publishing checklist: edit lock, thumbnail, title options, description, chapters, upload, post-publish review."
+    },
+    {
+      title: "Revision Sprint",
+      body: "A short turnaround project for client changes, fixes, and final delivery.",
+      workType: "Freelance",
+      notes: "Revision notes: collect feedback, confirm scope, apply changes, export review copy, deliver final files."
+    }
+  ];
 
   return (
     <PageFrame title="Templates" subtitle="Reusable production structures for common editing work.">
@@ -1623,17 +1797,30 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
 function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
   const clients = buildClientSummaries(projects);
   const [memberForm, setMemberForm] = useState({ name: "", role: "Editor", email: "" });
+  const [memberError, setMemberError] = useState("");
 
   function addMember() {
-    if (!memberForm.name.trim()) return;
+    if (!memberForm.name.trim()) {
+      setMemberError("Team member name is required.");
+      return;
+    }
+    if (memberForm.email.trim() && !isValidEmail(memberForm.email)) {
+      setMemberError("Enter a valid email address or leave it blank.");
+      return;
+    }
+    if (!teamRoleOptions.includes(memberForm.role)) {
+      setMemberError("Choose a valid team role.");
+      return;
+    }
     const member: TeamMember = {
       id: createId(),
       name: memberForm.name.trim(),
-      role: memberForm.role.trim() || "Editor",
+      role: memberForm.role,
       email: memberForm.email.trim()
     };
     setSettings({ ...settings, teamMembers: [...settings.teamMembers, member] });
     setMemberForm({ name: "", role: "Editor", email: "" });
+    setMemberError("");
   }
 
   function updateMember(id: string, next: Partial<TeamMember>) {
@@ -1656,11 +1843,12 @@ function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkIte
           <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Team Members</Typography>
           <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>Add, edit, and remove the people who should appear in this local team list.</Typography>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 120px" }, gap: 1, mt: 2 }}>
-            <TextField label="Name" value={memberForm.name} size="small" onChange={(event) => setMemberForm({ ...memberForm, name: event.target.value })} />
+            <TextField label="Name" value={memberForm.name} size="small" error={Boolean(memberError && !memberForm.name.trim())} onChange={(event) => { setMemberForm({ ...memberForm, name: event.target.value }); setMemberError(""); }} />
             <DialogSelect label="Role" value={memberForm.role} options={teamRoleOptions} onChange={(value) => setMemberForm({ ...memberForm, role: value })} />
-            <TextField label="Email" value={memberForm.email} size="small" onChange={(event) => setMemberForm({ ...memberForm, email: event.target.value })} />
+            <TextField label="Email" value={memberForm.email} size="small" error={Boolean(memberForm.email.trim() && !isValidEmail(memberForm.email))} onChange={(event) => { setMemberForm({ ...memberForm, email: event.target.value }); setMemberError(""); }} />
             <Button variant="outlined" startIcon={<AddIcon />} onClick={addMember} sx={outlineButtonSx}>Add</Button>
           </Box>
+          {memberError ? <Typography sx={{ color: "#bd3f37", fontSize: 13, mt: 1 }}>{memberError}</Typography> : null}
         </Stack>
         <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
           {settings.teamMembers.length ? settings.teamMembers.map((member) => (
@@ -1668,7 +1856,7 @@ function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkIte
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 92px" }, gap: 1, px: 2, py: 0.6, alignItems: "center" }}>
                 <TextField value={member.name} size="small" onChange={(event) => updateMember(member.id, { name: event.target.value })} />
                 <DialogSelect label="Role" value={member.role} options={teamRoleOptions} onChange={(value) => updateMember(member.id, { role: value })} />
-                <TextField value={member.email} placeholder="email optional" size="small" onChange={(event) => updateMember(member.id, { email: event.target.value })} />
+                <TextField value={member.email} placeholder="email optional" size="small" error={Boolean(member.email.trim() && !isValidEmail(member.email))} onChange={(event) => updateMember(member.id, { email: event.target.value.trim() })} />
                 <Button size="small" onClick={() => removeMember(member.id)} sx={{ color: "#bd3f37" }}>Remove</Button>
               </Box>
               <Box sx={{ px: 2.2, pb: 0.6, pt: 0.3 }}>
@@ -1703,6 +1891,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   const [googleLoginOpen, setGoogleLoginOpen] = useState(false);
   const [googleCustomEmail, setGoogleCustomEmail] = useState("");
   const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+  const stageIssues = projectStageIssues(settings.projectStages);
+  const integrationValidationError = integrationDialog ? validateIntegrationConfig(integrationDialog.name, integrationDialog.config) : "";
 
   function selectGoogleAccount(email: string) {
     let finalEmail = email.trim();
@@ -1747,6 +1937,11 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   function saveIntegration() {
     if (!integrationDialog) return;
     const config = integrationDialog.config;
+    const error = validateIntegrationConfig(integrationDialog.name, config);
+    if (error) {
+      notify(error, "warning");
+      return;
+    }
     const hasAccount = config.account.trim();
     const now = new Date().toISOString();
     const updatedConfig: IntegrationConfig = {
@@ -1784,6 +1979,12 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   function testConnection() {
+    if (!integrationDialog) return;
+    const error = validateIntegrationConfig(integrationDialog.name, integrationDialog.config);
+    if (error) {
+      notify(error, "warning");
+      return;
+    }
     setTestingConnection(true);
     setTimeout(() => {
       setTestingConnection(false);
@@ -1791,7 +1992,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
         const now = new Date().toISOString();
         setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, lastSyncAt: now } } : current);
       }
-      notify("Connection test successful!", "success");
+      notify("Connection details validated.", "success");
     }, 1500);
   }
 
@@ -1868,11 +2069,12 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             <Button
               variant="outlined"
               startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-              onClick={() => setSettings({ ...settings, projectStages: [...settings.projectStages, "New Stage"] })}
+              onClick={() => setSettings({ ...settings, projectStages: [...settings.projectStages, nextStageName(settings.projectStages)] })}
               sx={outlineButtonSx}
             >
               Add Stage
             </Button>
+            {stageIssues ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{stageIssues}</Typography> : null}
           </SettingsPanel>
         <SettingsPanel title="Notifications" subtitle="Choose when project and team events should surface.">
             {Object.keys(defaultSettings.notifications).map((item) => (
@@ -1884,7 +2086,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                 <Switch checked={Boolean(settings.notifications[item])} onChange={(event) => updateNotification(item, event.target.checked)} color="primary" />
               </Stack>
             ))}
-            <SettingsLink label="Manage email preferences" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
+            <SettingsLink label="Toggle weekly summary" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
         <SettingsPanel title="Team Roles & Permissions" subtitle="Select a role to configure what team members with that role can access.">
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
@@ -2063,6 +2265,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                 fullWidth
                 autoFocus
                 placeholder="you@example.com"
+                error={Boolean(integrationDialog && requiresAccountEmail(integrationDialog.name) && integrationDialog.config.account.trim() && !isValidEmail(integrationDialog.config.account))}
               />
             )}
             {integrationDialog?.name === "Google Drive" || integrationDialog?.name === "Dropbox" ? (
@@ -2096,6 +2299,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                   onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, webhookUrl: event.target.value } } : current)}
                   fullWidth
                   placeholder="https://hooks.slack.com/services/..."
+                  error={Boolean(integrationDialog?.config.webhookUrl.trim() && !isValidUrl(integrationDialog.config.webhookUrl))}
                 />
               </>
             ) : null}
@@ -2120,20 +2324,21 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             {integrationDialog?.config.lastSyncAt ? (
               <Typography sx={{ color: muted, fontSize: 12 }}>Last synced: {formatTimestamp(integrationDialog.config.lastSyncAt)}</Typography>
             ) : null}
+            {integrationValidationError ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{integrationValidationError}</Typography> : null}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
           <Button onClick={() => setIntegrationDialog(null)} sx={{ color: muted }}>Cancel</Button>
           <Button
             onClick={testConnection}
-            disabled={testingConnection || !integrationDialog?.config.account.trim()}
+            disabled={testingConnection || Boolean(integrationValidationError)}
             variant="outlined"
             sx={{ borderColor: border, color: accent, borderRadius: "5px", fontSize: 13, "&:hover": { borderColor: accent } }}
           >
             {testingConnection ? <CircularProgress size={16} sx={{ color: accent, mr: 1 }} /> : null}
             {testingConnection ? "Testing..." : "Test Connection"}
           </Button>
-          <Button onClick={saveIntegration} variant="contained" disabled={!integrationDialog?.config.account.trim()} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Connection</Button>
+          <Button onClick={saveIntegration} variant="contained" disabled={Boolean(integrationValidationError)} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Connection</Button>
         </DialogActions>
       </Dialog>
 
@@ -2346,7 +2551,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
           <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Team access</Typography>
           <Typography sx={{ color: muted, fontSize: 13, mt: 0.6 }}>Members and permissions are stored locally for this team.</Typography>
           <Stack gap={1.1} sx={{ mt: 2 }}>
-            {settings.teamMembers.map((member) => (
+            {settings.teamMembers.length ? settings.teamMembers.map((member) => (
               <Box key={member.id} sx={{ display: "grid", gridTemplateColumns: "38px minmax(0, 1fr) auto", gap: 1.1, alignItems: "center", p: 1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
                 <Box sx={{ width: 34, height: 34, borderRadius: "50%", bgcolor: activeBg, color: accent, display: "grid", placeItems: "center", fontWeight: 760 }}>{initials(member.name)}</Box>
                 <Box sx={{ minWidth: 0 }}>
@@ -2355,7 +2560,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
                 </Box>
                 <Chip label={member.role} size="small" sx={{ bgcolor: panel, border: `1px solid ${border}`, color: ink, borderRadius: "5px" }} />
               </Box>
-            ))}
+            )) : <EmptyPanel title="No team members yet" body="Add team members from the Team page to populate this organization view." />}
           </Stack>
         </Paper>
         <Paper sx={{ ...panelSx, p: 2.25, gridColumn: { xl: "1 / -1" } }}>
@@ -2534,7 +2739,16 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
           </Box>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
             <TextField label="Profile Title" value={settings.profileTitle} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileTitle: event.target.value })} />
-            <TextField label="Profile Image URL" value={settings.profileImageUrl} size="small" fullWidth placeholder="https://example.com/photo.jpg" onChange={(event) => setSettings({ ...settings, profileImageUrl: event.target.value.trim() })} />
+            <TextField
+              label="Profile Image URL"
+              value={settings.profileImageUrl}
+              size="small"
+              fullWidth
+              placeholder="https://example.com/photo.jpg"
+              error={Boolean(settings.profileImageUrl.trim() && !isValidProfileImageSource(settings.profileImageUrl))}
+              helperText={settings.profileImageUrl.trim() && !isValidProfileImageSource(settings.profileImageUrl) ? "Use an http(s) image URL or upload an image file." : ""}
+              onChange={(event) => setSettings({ ...settings, profileImageUrl: event.target.value.trim() })}
+            />
           </Box>
           <TextField label="Profile Bio" value={settings.profileBio} size="small" fullWidth multiline minRows={3} onChange={(event) => setSettings({ ...settings, profileBio: event.target.value })} />
           <TextField label="Profile Location" value={settings.profileLocation} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileLocation: event.target.value })} />
@@ -3007,7 +3221,7 @@ function DeleteProjectDialog({ project, onCancel, onConfirm }: { project: WorkIt
       <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Delete project?</DialogTitle>
       <DialogContent>
         <Typography sx={{ color: muted, fontSize: 14 }}>
-          {project ? `"${project.title}" will be removed from this browser's local tracker.` : "This project will be removed from this browser's local tracker."}
+          {project ? `"${project.title}" will be removed from your tracker.` : "This project will be removed from your tracker."}
         </Typography>
       </DialogContent>
       <DialogActions>
@@ -3031,11 +3245,60 @@ function DialogSelect({ label, value, options, onChange }: { label: string; valu
 
 function validateProject(item: WorkItem, type: WorkTypeConfig) {
   if (!item.title.trim()) return "Project name is required.";
+  if (!statusOptions.includes(item.status as ProjectStatus)) return "Choose a valid project status.";
+  if (!profile.typeOptions.some((option) => option.label === item.workType)) return "Choose a valid project type.";
   if (!item.startDate || !item.dueDate) return "Start and due dates are required.";
   if (!isIsoDate(item.startDate) || !isIsoDate(item.dueDate)) return "Use valid start and due dates.";
   if (dateTime(item.startDate) > dateTime(item.dueDate)) return "Due date must be on or after start date.";
   if (type.earningsMode !== "batch" && safeMoneyValue(item.earnings) < 0) return "Earnings must be zero or higher.";
   return "";
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+function isValidUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function isValidProfileImageSource(value: string) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("data:image/") || isValidUrl(trimmed);
+}
+
+function validateIntegrationConfig(name: string, config: IntegrationConfig) {
+  if (!config.account.trim()) return "Account email or name is required.";
+  if (requiresAccountEmail(name) && !isValidEmail(config.account)) {
+    return "Enter a valid account email address.";
+  }
+  if (name === "Slack" && config.webhookUrl.trim() && !isValidUrl(config.webhookUrl)) {
+    return "Enter a valid webhook URL or leave it blank.";
+  }
+  return "";
+}
+
+function requiresAccountEmail(name: string) {
+  return name === "Google Drive";
+}
+
+function projectStageIssues(stages: string[]) {
+  if (stages.some((stage) => !stage.trim())) return "Workflow stages cannot be blank.";
+  const normalized = stages.map((stage) => stage.trim().toLowerCase());
+  if (new Set(normalized).size !== normalized.length) return "Workflow stages must be unique.";
+  return "";
+}
+
+function nextStageName(stages: string[]) {
+  const names = new Set(stages.map((stage) => stage.trim().toLowerCase()));
+  let index = 1;
+  while (names.has(`new stage ${index}`)) index += 1;
+  return `New Stage ${index}`;
 }
 
 

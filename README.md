@@ -1,97 +1,178 @@
 # CutLab Studio
 
-CutLab Studio is a local-first work tracker for video editors who need one place to manage client edits, salary batches, delivery dates, revisions, and project progress.
+![CI](https://github.com/zaid-gd/Work-Tracker/actions/workflows/ci.yml/badge.svg)
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript&logoColor=white)
+![Convex](https://img.shields.io/badge/Convex-optional%20cloud%20sync-ee342f)
+![Clerk](https://img.shields.io/badge/Clerk-auth-6c47ff)
+![Status](https://img.shields.io/badge/status-V1%20polished-2f7d32)
+![License](https://img.shields.io/badge/license-private-lightgrey)
 
-It is designed as a focused production dashboard rather than a generic task app. The interface is built around the real day-to-day flow of editing work: planned cuts, in-progress revisions, delivered projects, freelance payments, and salary edits that count toward a batch payout.
+CutLab Studio is a local-first production tracker for video editors. It brings projects, client work, delivery dates, revision queues, salary edit batches, reports, team settings, and profile pages into one focused workspace.
+
+The app is built for the real operating rhythm of editing work: planned cuts, in-progress revisions, delivered projects, freelance payments, personal channel uploads, and salary edits that count toward batch payouts.
+
+## V1 Snapshot
+
+| Area | Current state |
+| --- | --- |
+| Product status | Polished V1 application |
+| Data model | Local-first browser storage with optional Convex cloud sync |
+| Auth | Optional Clerk sign-in flow |
+| Main users | Video editors, freelance editors, content teams, creator operators |
+| Core workflow | Track edit projects from planning to delivery |
+| Verification | TypeScript, production build, route/link/source verification |
+| UI modes | Light mode, dark mode, accent colors, density settings |
 
 ## Preview
 
 ![CutLab Studio product overview](assets/readme-hero.png)
 
-## What It Does
+## What Works In V1
 
-- Tracks video editing projects from planning through delivery.
-- Separates freelance, salary, and personal channel work.
-- Counts completed salary edits toward a configurable batch target.
-- Shows project volume, earned revenue, pending work, and delivery status.
-- Organizes clients from the project records already in the tracker.
-- Provides calendar, timeline, media, feedback, reports, team, settings, public profile, and organization profile views.
-- Stores tracker data locally in the browser, with optional account-backed sync when Clerk and Convex are configured.
+- Dashboard for active projects, earnings, delivery status, pending work, and salary batch progress.
+- Project library with create, edit, delete, filtering, sorting, progress, status, type, due date, client, notes, and earnings.
+- Client view generated from real project records, with working tabs for overview, projects, file packages, activity, and relationship notes.
+- Timeline and calendar views connected to saved project dates.
+- Media and feedback pages driven by project data instead of placeholder content.
+- Reusable project templates for client campaigns, salary edits, channel uploads, and revision sprints.
+- Reports for workload, delivery rate, salary edits, earnings, and work mix.
+- Team page with member validation, roles, permissions, and organization profile visibility.
+- Settings for profile details, time zone, date format, week start, workflow stages, notifications, integrations, theme, accent color, and density.
+- Public profile and organization profile pages connected to current settings and project stats.
+- Local-first data handling with optional Clerk + Convex account-backed sync.
+- Loading, error, empty, and validation states across the main workflows.
+- Dark-mode-safe dropdowns, menus, dialogs, and app surfaces.
 
-## Product Screens
+## Product Tour
 
 ### Dashboard
 
-The dashboard gives a fast overview of the editing pipeline: active projects, deadlines, feedback queue, salary edit progress, and collected earnings. It also includes filters for status, client, date, priority, and project type.
+The dashboard gives an editor a fast production readout: active work, delivery pressure, revision load, salary batch completion, earnings, and recent project movement.
 
 ### Projects
 
-The project library is the main working list. Each row shows the project title, client notes, work type, due date, delivery status, amount, and progress, with quick edit and delete actions.
+The project library is the main source of truth. Each project stores title, client, status, type, start date, due date, earnings, and notes. The table supports filtering, sorting, editing, and delete confirmation.
 
 ### Clients
 
-The clients view is generated from project client names. It helps review client activity, related projects, pending revisions, delivery history, and relationship notes without maintaining a separate CRM.
+Clients are derived from project client names, so there is no second CRM database to maintain. The client detail panel now shows real project lists, file package progress, activity history, and notes from saved projects.
 
-### Timeline
+### Timeline And Calendar
 
-The timeline presents work as a dated production rail, making it easier to see what has shipped, what is due next, and how each project is progressing.
+Timeline and calendar views help show what is due, what shipped, and where each project sits in the delivery flow.
 
-### Calendar
+### Media And Feedback
 
-The calendar shows delivery dates across the month and respects the selected week-start setting.
+Media summarizes production packages by work type and status. Feedback highlights planned and in-progress work that may need review attention.
 
-### Feedback
+### Templates
 
-The feedback page highlights planned and in-progress projects that may need review attention, plus a quick revision summary.
+Templates create useful starter projects for common editor workflows:
+
+- Client Campaign Edit
+- Salary Batch Edit
+- Channel Upload
+- Revision Sprint
 
 ### Reports
 
-Reports summarize workload, delivery rate, salary edits, earnings, and work mix.
+Reports summarize the current workload, completed work, salary edit count, earnings, and work type mix.
 
-### Profiles
+### Profile And Organization
 
-The app includes two profile surfaces:
-
-- Public profile: a client-facing summary of the editor, work stats, and recent project timeline.
-- Organization profile: a studio/team view focused on members, active organization work, and team context.
-
-Profile switching happens from the bottom identity menu in the sidebar.
-
-## Settings And Customization
-
-CutLab Studio includes local settings for:
-
-- Profile details
-- Time zone, date format, and week start
-- Project stages
-- Notification preferences
-- Team roles and permissions
-- Local integration connection records
-- Theme, accent color, and density
-
-The app supports light and dark themes, with a neutral dark mode built for long editing sessions.
-
-## Design Direction
-
-The UI is intentionally quiet and utilitarian. It takes inspiration from production tools and editing dashboards rather than marketing software:
-
-- Dense but readable project rows
-- Strong sidebar navigation
-- Clear status and progress indicators
-- Minimal decoration
-- Local-first data model
-- Optional account sync
-- Fast access to common editor workflows
+CutLab Studio includes public profile and organization profile surfaces, both connected to the same project and settings data used inside the app.
 
 ## Tech Stack
 
-- Next.js
-- React
-- TypeScript
-- Material UI
-- Local browser storage
-- Clerk and Convex for optional sync
+| Layer | Tooling |
+| --- | --- |
+| App framework | Next.js App Router |
+| UI | React, Material UI |
+| Language | TypeScript |
+| Auth | Clerk |
+| Backend sync | Convex |
+| Local persistence | Browser storage |
+| Verification | TypeScript, Next production build, custom route verifier |
 
-## Current Build
+## Getting Started
 
-CutLab Studio is currently packaged as a polished local-first tracker with production build checks, route verification, local persistence, optional account sync, and a GitHub-ready product showcase.
+Requires Node.js `22` or newer.
+
+```bash
+npm install
+npm run dev
+```
+
+The default dev command starts Convex and Next together:
+
+```bash
+npm run dev
+```
+
+For only the Next.js app:
+
+```bash
+npm run dev:next
+```
+
+For only Convex:
+
+```bash
+npm run convex:dev
+```
+
+## Environment
+
+The app works local-first without cloud sync. To enable account-backed sync, configure Clerk and Convex in `.env.local`.
+
+Common values include:
+
+```bash
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CONVEX_URL=
+CLERK_JWT_ISSUER_DOMAIN=
+CLERK_FRONTEND_API_URL=
+```
+
+## Verification
+
+```bash
+npm run lint
+npm run build
+npm run verify
+```
+
+Available checks:
+
+| Command | Purpose |
+| --- | --- |
+| `npm run lint` | TypeScript check with `tsc --noEmit` |
+| `npm run build` | Next.js production build |
+| `npm run verify` | Route, link, asset, and source invariant verification |
+| `npm run verify:prod` | Production server verification |
+| `npm run check:full` | Full CI-style verification path |
+
+Recent local verification covered 15 routes, 306 rendered internal links, 280 Next assets, 4 PNG assets, and 104 source invariants.
+
+## Why This Exists
+
+Most task apps are too generic for editing work. CutLab Studio is intentionally narrower: it treats a video editor's work as deliverables, revisions, clients, batches, and publishing deadlines instead of abstract tasks.
+
+The goal for V1 is not to be a huge project-management platform. It is to be a complete, stable, editor-specific workspace that feels useful on day one.
+
+## Launch Copy
+
+Short version:
+
+> I built CutLab Studio, a local-first production tracker for video editors. It tracks client edits, salary batches, delivery dates, revisions, reports, profiles, and optional Convex cloud sync in one focused V1 app.
+
+Longer version:
+
+> CutLab Studio is my V1 production tracker for video editors. It is built around real editing workflows: planned cuts, in-progress revisions, delivered projects, salary edit batches, freelance work, personal channel uploads, calendar deadlines, client records, and reports. It works local-first, with optional Clerk + Convex sync when signed in.
+
+## Current Status
+
+CutLab Studio is in a polished V1 state. The main routes, forms, settings, data-backed pages, local persistence, optional cloud sync path, loading states, empty states, validation states, dark mode surfaces, and verification scripts are all wired and passing production checks.
