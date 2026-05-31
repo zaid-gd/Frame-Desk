@@ -388,6 +388,23 @@ function readObjectString(value: unknown, key: string) {
   return typeof candidate === "string" ? candidate : "";
 }
 
+function readFirstObjectString(value: unknown, keys: string[]) {
+  for (const key of keys) {
+    const candidate = readObjectString(value, key).trim();
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function isGitHubExternalAccount(value: unknown) {
+  const providerText = [
+    readObjectString(value, "provider"),
+    readObjectString(value, "providerId"),
+    readObjectString(value, "strategy"),
+  ].join(" ").toLowerCase();
+  return providerText.includes("github");
+}
+
 function deriveAuthProfile(user: ReturnType<typeof useUser>["user"]) {
   if (!user) {
     return { profileName: "", profileUsername: "", profileImageUrl: "" };
@@ -395,25 +412,34 @@ function deriveAuthProfile(user: ReturnType<typeof useUser>["user"]) {
 
   const externalAccountsRaw = (user as unknown as { externalAccounts?: unknown[] }).externalAccounts;
   const externalAccounts = Array.isArray(externalAccountsRaw) ? externalAccountsRaw : [];
-  const githubAccount =
-    externalAccounts.find((account) => readObjectString(account, "provider") === "oauth_github") ??
-    externalAccounts.find((account) => readObjectString(account, "provider") === "github");
+  const githubAccount = externalAccounts.find(isGitHubExternalAccount);
 
   const profileName =
+    readFirstObjectString(githubAccount, ["name", "fullName", "displayName"]) ||
     user.fullName?.trim() ||
     [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
     user.username?.trim() ||
     "";
   const profileUsername =
-    readObjectString(githubAccount, "username").trim() ||
+    readFirstObjectString(githubAccount, ["username", "login", "screenName", "externalId", "providerUserId"]) ||
     user.username?.trim() ||
     "";
   const profileImageUrl =
-    readObjectString(githubAccount, "imageUrl").trim() ||
+    readFirstObjectString(githubAccount, ["imageUrl", "avatarUrl", "picture", "profileImageUrl"]) ||
     user.imageUrl?.trim() ||
     "";
 
   return { profileName, profileUsername, profileImageUrl };
+}
+
+function shouldUseAuthProfileValue(field: keyof Pick<SettingsState, "profileName" | "profileUsername" | "profileImageUrl">, current: string, authValue: string) {
+  const trimmed = current.trim();
+  const legacyValue = field === "profileImageUrl" ? "" : LEGACY_DEMO_SETTINGS[field];
+  if (!authValue.trim()) return false;
+  if (!trimmed) return true;
+  if (trimmed === defaultSettings[field]) return true;
+  if (legacyValue && trimmed === legacyValue) return true;
+  return false;
 }
 
 interface DataContextValue {
@@ -519,7 +545,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
-  const migrationDone = useRef(false);
+  const initializationToken = useRef(0);
 
   // Always call hooks — Convex handles unauthenticated state gracefully
   const convexItems = useQuery(api.workItems.list, {});
@@ -547,35 +573,79 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn) return;
     if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined) return;
-    if (migrationDone.current) return;
-    migrationDone.current = true;
+    if (ready) return;
 
-    const hasConvexData = convexItems.length > 0 || convexSettings !== null;
-    if (!hasConvexData) {
+    const loadedItems = convexItems;
+    const loadedSettings = convexSettings;
+    const loadedBatches = convexBatches;
+    let cancelled = false;
+    const token = initializationToken.current + 1;
+    initializationToken.current = token;
+
+    async function initializeCloudData() {
       const localItems = readInitialItems();
       const localSettings = readJson<Partial<SettingsState>>(SETTINGS_STORAGE_KEY, {});
       const localBatches = normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] }));
+      const mergedLocalSettings = Object.keys(localSettings).length > 0 ? mergeSettings(localSettings) : readInitialSettings();
+      let nextItems: WorkItem[] = loadedItems;
+      let nextSettings = loadedSettings ? mergeSettings(loadedSettings) : mergedLocalSettings;
+      let nextBatches: SalaryBatch[] = loadedBatches;
+      let syncFailed = false;
 
-      if (localItems.length > 0) {
-        replaceAllItems({ items: localItems });
-        removeKey(STORAGE_KEY);
+      if (loadedItems.length === 0 && localItems.length > 0) {
+        try {
+          await replaceAllItems({ items: localItems });
+          removeKey(STORAGE_KEY);
+          nextItems = localItems;
+        } catch {
+          syncFailed = true;
+          nextItems = localItems;
+        }
       }
-      if (localBatches.batches.length > 0) {
-        replaceAllBatches({ batches: localBatches.batches });
-        removeKey(SALARY_STORAGE_KEY);
+
+      if (loadedBatches.length === 0 && localBatches.batches.length > 0) {
+        try {
+          await replaceAllBatches({ batches: localBatches.batches });
+          removeKey(SALARY_STORAGE_KEY);
+          nextBatches = localBatches.batches;
+        } catch {
+          syncFailed = true;
+          nextBatches = localBatches.batches;
+        }
       }
-      if (Object.keys(localSettings).length > 0) {
-        const merged = mergeSettings(localSettings);
-        upsertSettings(merged);
-        removeKey(SETTINGS_STORAGE_KEY);
+
+      if (!loadedSettings && Object.keys(localSettings).length > 0) {
+        try {
+          await upsertSettings(mergedLocalSettings);
+          removeKey(SETTINGS_STORAGE_KEY);
+          nextSettings = mergedLocalSettings;
+        } catch {
+          syncFailed = true;
+          nextSettings = mergedLocalSettings;
+        }
       }
+
+      if (syncFailed) {
+        if (!cancelled) {
+          setToast({
+            tone: "warning",
+            message: "Cloud sync is not available. Your data is still saved on this device.",
+          });
+        }
+      }
+
+      if (cancelled || initializationToken.current !== token) return;
+      setItemsState(nextItems);
+      setSettingsState(nextSettings);
+      setSalaryBatches(nextBatches);
+      setReady(true);
     }
 
-    setItemsState(convexItems);
-    setSettingsState(convexSettings ? mergeSettings(convexSettings) : readInitialSettings());
-    setSalaryBatches(convexBatches);
-    setReady(true);
-  }, [clerkLoaded, isSignedIn, convexItems, convexSettings, convexBatches, replaceAllItems, replaceAllBatches, upsertSettings]);
+    void initializeCloudData();
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkLoaded, isSignedIn, ready, convexItems, convexSettings, convexBatches, replaceAllItems, replaceAllBatches, upsertSettings]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;
@@ -586,9 +656,15 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     setSettingsState((current) => {
       const next: SettingsState = {
         ...current,
-        profileName: current.profileName.trim() || authProfile.profileName,
-        profileUsername: current.profileUsername.trim() || authProfile.profileUsername,
-        profileImageUrl: current.profileImageUrl.trim() || authProfile.profileImageUrl,
+        profileName: shouldUseAuthProfileValue("profileName", current.profileName, authProfile.profileName)
+          ? authProfile.profileName
+          : current.profileName,
+        profileUsername: shouldUseAuthProfileValue("profileUsername", current.profileUsername, authProfile.profileUsername)
+          ? authProfile.profileUsername
+          : current.profileUsername,
+        profileImageUrl: shouldUseAuthProfileValue("profileImageUrl", current.profileImageUrl, authProfile.profileImageUrl)
+          ? authProfile.profileImageUrl
+          : current.profileImageUrl,
       };
 
       const changed =
@@ -597,7 +673,9 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         next.profileImageUrl !== current.profileImageUrl;
 
       if (changed) {
-        upsertSettings(next).catch(() => {});
+        upsertSettings(next).catch(() => {
+          writeJson(SETTINGS_STORAGE_KEY, next);
+        });
       }
 
       return changed ? next : current;
@@ -617,7 +695,13 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setItemsState((prev: WorkItem[]) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
         if (isSignedIn) {
-          replaceAllItems({ items: next }).catch(() => {});
+          replaceAllItems({ items: next }).catch(() => {
+            writeJson(STORAGE_KEY, next);
+            setToast({
+              tone: "warning",
+              message: "Cloud sync failed. Projects are saved locally for now.",
+            });
+          });
         } else {
           writeJson(STORAGE_KEY, next);
         }
@@ -633,7 +717,13 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setSettingsState((prev: SettingsState) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
         if (isSignedIn) {
-          upsertSettings(next).catch(() => {});
+          upsertSettings(next).catch(() => {
+            writeJson(SETTINGS_STORAGE_KEY, next);
+            setToast({
+              tone: "warning",
+              message: "Cloud sync failed. Settings are saved locally for now.",
+            });
+          });
         } else {
           writeJson(SETTINGS_STORAGE_KEY, next);
         }
@@ -662,7 +752,13 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
           });
         }
         if (isSignedIn) {
-          replaceAllBatches({ batches: next }).catch(() => {});
+          replaceAllBatches({ batches: next }).catch(() => {
+            writeJson(SALARY_STORAGE_KEY, { batches: next });
+            setToast({
+              tone: "warning",
+              message: "Cloud sync failed. Salary batches are saved locally for now.",
+            });
+          });
         } else {
           writeJson(SALARY_STORAGE_KEY, { batches: next });
         }

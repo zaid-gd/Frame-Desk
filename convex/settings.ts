@@ -16,8 +16,8 @@ export const get = query({
     const settings = await ctx.db
       .query("settings")
       .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
-      .unique();
-    return settings ?? null;
+      .take(1);
+    return settings[0] ?? null;
   },
 });
 
@@ -66,9 +66,11 @@ export const upsert = mutation({
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .unique();
-    if (existing) {
-      await ctx.db.patch(existing._id, args);
+      .take(10);
+    const [primary, ...duplicates] = existing;
+    if (primary) {
+      await ctx.db.patch(primary._id, args);
+      await Promise.all(duplicates.map((row) => ctx.db.delete(row._id)));
     } else {
       await ctx.db.insert("settings", { ...args, userId });
     }
