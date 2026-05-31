@@ -8,10 +8,6 @@ It is designed as a focused production dashboard rather than a generic task app.
 
 ![CutLab Studio product overview](assets/readme-hero.png)
 
-![CutLab Studio workflow overview](assets/readme-workflow.png)
-
-![CutLab Studio settings and integrations](assets/readme-features.png)
-
 ## What It Does
 
 - Tracks video editing projects from planning through delivery.
