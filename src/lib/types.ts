@@ -96,6 +96,10 @@ export type SettingsState = {
   dateFormat: string;
   weekStart: string;
   currencyCode: string;
+  projectTags: string[];
+  salaryWorkType: string;
+  salaryBatchSize: number;
+  salaryBatchAmount: number;
   projectStages: string[];
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;

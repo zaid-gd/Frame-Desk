@@ -9,6 +9,10 @@ import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, Int
 const STORAGE_KEY = "video-editing-work-tracker:v1";
 const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
 const SETTINGS_STORAGE_KEY = "video-editing-work-tracker:settings:v1";
+const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
+const defaultSalaryWorkType = "Job / Salary";
+const defaultSalaryBatchSize = 20;
+const defaultSalaryBatchAmount = 10000;
 
 type ToastState = { message: string; tone: "success" | "info" | "warning" };
 type ClerkGetToken = ReturnType<typeof useAuth>["getToken"];
@@ -67,6 +71,10 @@ const defaultSettings: SettingsState = {
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
   currencyCode: "INR",
+  projectTags: [...defaultProjectTags],
+  salaryWorkType: defaultSalaryWorkType,
+  salaryBatchSize: defaultSalaryBatchSize,
+  salaryBatchAmount: defaultSalaryBatchAmount,
   projectStages: ["Planned", "In Progress", "Client Review", "Delivered"],
   notifications: {
     "Project updates": false,
@@ -144,6 +152,7 @@ function removeKey(key: string) {
 function freshDefaultSettings(): SettingsState {
   return {
     ...defaultSettings,
+    projectTags: [...defaultSettings.projectTags],
     projectStages: [...defaultSettings.projectStages],
     notifications: { ...defaultSettings.notifications },
     integrations: { ...defaultSettings.integrations },
@@ -169,6 +178,31 @@ function optionSetting(value: unknown, options: string[], fallback: string) {
 
 function colorSetting(value: unknown, fallback: string) {
   return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
+function positiveIntegerSetting(value: unknown, fallback: number) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+}
+
+function positiveMoneySetting(value: unknown, fallback: number) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function stringListSetting(value: unknown, fallback: string[]) {
+  const source = Array.isArray(value) ? value : fallback;
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of source) {
+    if (typeof item !== "string") continue;
+    const trimmed = item.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result.length ? result : [...fallback];
 }
 
 function booleanRecordSetting(value: unknown, fallback: Record<string, boolean>) {
@@ -304,6 +338,9 @@ function normalizeRolePermissions(value: unknown, legacyEditorPerms?: unknown): 
 
 function mergeSettings(stored: Partial<SettingsState>): SettingsState {
   const r = isPlainRecord(stored) ? stored : {};
+  const projectTags = stringListSetting(r.projectTags, defaultSettings.projectTags);
+  const storedSalaryWorkType = typeof r.salaryWorkType === "string" ? r.salaryWorkType.trim() : "";
+  const salaryWorkType = projectTags.find((tag) => tag.toLowerCase() === storedSalaryWorkType.toLowerCase()) ?? projectTags.find((tag) => tag.toLowerCase() === defaultSalaryWorkType.toLowerCase()) ?? projectTags[0];
   return {
     ...defaultSettings,
     studioName: stringSetting(r.studioName, defaultSettings.studioName),
@@ -317,6 +354,10 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     dateFormat: optionSetting(r.dateFormat, ["Month Day, Year", "Day Month Year", "YYYY-MM-DD"], defaultSettings.dateFormat),
     weekStart: optionSetting(r.weekStart, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], defaultSettings.weekStart),
     currencyCode: optionSetting(r.currencyCode, ["USD", "EUR", "GBP", "INR", "AED", "SAR"], defaultSettings.currencyCode),
+    projectTags,
+    salaryWorkType,
+    salaryBatchSize: positiveIntegerSetting(r.salaryBatchSize, defaultSettings.salaryBatchSize),
+    salaryBatchAmount: positiveMoneySetting(r.salaryBatchAmount, defaultSettings.salaryBatchAmount),
     teamRole: optionSetting(r.teamRole, teamRoleOptions, defaultSettings.teamRole),
     theme: optionSetting(r.theme, ["Light", "Dark", "System"], defaultSettings.theme),
     accentColor: colorSetting(r.accentColor, defaultSettings.accentColor),
@@ -366,6 +407,14 @@ function normalizeWorkItems(items: unknown[]): WorkItem[] {
     const normalized = normalizeStoredItem(item);
     return normalized ? [normalized] : [];
   });
+}
+
+function isSalaryWorkType(value: string, settings: SettingsState) {
+  return value.trim().toLowerCase() === settings.salaryWorkType.trim().toLowerCase();
+}
+
+function normalizedSalaryBatchSize(value: unknown) {
+  return positiveIntegerSetting(value, defaultSalaryBatchSize);
 }
 
 function todayDate() {
@@ -544,7 +593,7 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
   const reconcileSalaryBatches = useCallback((workItems: WorkItem[]) => {
     const completedBatchCount = Math.floor(
-      workItems.filter((w) => w.workType === "Job / Salary" && isDoneStatus(w.status)).length / 20,
+      workItems.filter((w) => isSalaryWorkType(w.workType, settings) && isDoneStatus(w.status)).length / normalizedSalaryBatchSize(settings.salaryBatchSize),
     );
     setSalaryBatches((prev: SalaryBatch[]) => {
       if (prev.length >= completedBatchCount) return prev;
@@ -562,7 +611,7 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
       writeJson(SALARY_STORAGE_KEY, { batches: next });
       return next;
     });
-  }, []);
+  }, [settings]);
 
   const value: DataContextValue = {
     items,
@@ -822,7 +871,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const reconcileSalaryBatches = useCallback(
     (workItems: WorkItem[]) => {
       const completedBatchCount = Math.floor(
-        workItems.filter((w) => w.workType === "Job / Salary" && isDoneStatus(w.status)).length / 20,
+        workItems.filter((w) => isSalaryWorkType(w.workType, settings) && isDoneStatus(w.status)).length / normalizedSalaryBatchSize(settings.salaryBatchSize),
       );
       setSalaryBatches((prev: SalaryBatch[]) => {
         if (prev.length >= completedBatchCount) return prev;
@@ -852,7 +901,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         return normalizedNext;
       });
     },
-    [convexAuthenticated, isSignedIn, replaceAllBatches],
+    [convexAuthenticated, isSignedIn, replaceAllBatches, settings],
   );
 
   const value: DataContextValue = {

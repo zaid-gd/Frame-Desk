@@ -25,7 +25,8 @@ import {
   Switch,
   TextField,
   Tooltip,
-  Typography
+  Typography,
+  Autocomplete
 } from "@mui/material";
 import type { SelectChangeEvent } from "@mui/material/Select";
 import AddIcon from "@mui/icons-material/Add";
@@ -60,8 +61,10 @@ import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
 import type { WorkItem, WorkTypeConfig, IntegrationConfig } from "@/lib/types";
 
-const SALARY_BATCH_SIZE = 20;
-const SALARY_BATCH_AMOUNT = 10000;
+const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
+const defaultSalaryWorkType = "Job / Salary";
+const defaultSalaryBatchSize = 20;
+const defaultSalaryBatchAmount = 10000;
 const AUTH_MODE_STORAGE_KEY = "cutlab-studio:auth-mode:v1";
 const sidebarWidth = 264;
 const headingFont = "Georgia, 'Times New Roman', serif";
@@ -97,7 +100,7 @@ const outlineButtonSx = {
 
 type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
-type ProjectKind = "ALL" | "Job / Salary" | "Freelance" | "Personal Channel";
+type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
 type SortKey = "createdAt_desc" | "createdAt_asc" | "dueDate_asc" | "earnings_desc" | "earnings_asc";
 type ClientDetailTab = "Overview" | "Projects" | "Files" | "Activity";
@@ -119,6 +122,10 @@ type SettingsState = {
   dateFormat: string;
   weekStart: string;
   currencyCode: string;
+  projectTags: string[];
+  salaryWorkType: string;
+  salaryBatchSize: number;
+  salaryBatchAmount: number;
   projectStages: string[];
   notifications: Record<string, boolean>;
   integrations: Record<string, boolean>;
@@ -140,7 +147,6 @@ type ToastState = {
 const profile = getProfile(DEFAULT_PROFILE_ID);
 
 const statusOptions: ProjectStatus[] = ["Planned", "In Progress", "Delivered", "Cancelled"];
-const kindOptions: ProjectKind[] = ["ALL", "Job / Salary", "Freelance", "Personal Channel"];
 const billingOptions = ["ALL", "Paid", "Unpaid"];
 const dueOptions: DueFilter[] = ["ALL", "This Week", "Overdue", "Delivered"];
 const sortOptions: SortKey[] = ["createdAt_desc", "createdAt_asc", "dueDate_asc", "earnings_desc", "earnings_asc"];
@@ -241,6 +247,10 @@ const defaultSettings: SettingsState = {
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
   currencyCode: "INR",
+  projectTags: [...defaultProjectTags],
+  salaryWorkType: defaultSalaryWorkType,
+  salaryBatchSize: defaultSalaryBatchSize,
+  salaryBatchAmount: defaultSalaryBatchAmount,
   projectStages: ["Planned", "In Progress", "Client Review", "Delivered"],
   notifications: {
     "Project updates": false,
@@ -334,14 +344,17 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [isAuthLoaded, isSignedIn]);
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
-  const clientOptions = useMemo(() => ["ALL", ...Array.from(new Set(projects.map((item) => item.client?.trim()).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b))], [projects]);
+  const projectTagOptions = useMemo(() => projectWorkTypeOptions(settings, projects), [projects, settings]);
+  const filterProjectTagOptions = useMemo(() => ["ALL", ...projectTagOptions], [projectTagOptions]);
+  const clientOptions = useMemo(() => buildClientOptions(projects), [projects]);
+  const clientFilterOptions = useMemo(() => ["ALL", ...clientOptions], [clientOptions]);
   const filteredProjects = useMemo(() => {
     const searched = projects.filter((item) => {
       const haystack = `${item.title} ${item.client || ""} ${item.notes} ${item.workType}`.toLowerCase();
       const matchesSearch = !query.trim() || haystack.includes(query.trim().toLowerCase());
       const matchesStatus = statusFilter === "All" || item.status === statusFilter;
-      const matchesKind = kindFilter === "ALL" || item.workType === kindFilter;
-      const matchesClient = clientFilter === "ALL" || item.client?.trim() === clientFilter;
+      const matchesKind = kindFilter === "ALL" || item.workType.trim().toLowerCase() === kindFilter.toLowerCase();
+      const matchesClient = clientFilter === "ALL" || item.client?.trim().toLowerCase() === clientFilter.toLowerCase();
       const matchesDue = dueFilter === "ALL" || dueBucket(item) === dueFilter;
       const isPaid = isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0;
       const isUnpaid = !isPaid;
@@ -365,8 +378,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
     const earned = projects.filter((item) => isDoneStatus(item.status)).reduce((total, item) => total + safeMoneyValue(item.earnings), 0);
     const unpaid = projects.filter((item) => !isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0).length;
     const active = projects.filter((item) => !isDoneStatus(item.status)).length;
-    const salaryEdits = projects.filter((item) => item.workType === "Job / Salary" && isDoneStatus(item.status)).length;
-    const salaryBatches = Math.floor(salaryEdits / SALARY_BATCH_SIZE);
+    const salaryBatchSize = normalizedSalaryBatchSize(settings.salaryBatchSize);
+    const salaryEdits = projects.filter((item) => isSalaryWorkType(item.workType, settings) && isDoneStatus(item.status)).length;
+    const salaryBatches = Math.floor(salaryEdits / salaryBatchSize);
     const delivered = projects.filter((item) => isDoneStatus(item.status));
     const avgTurnaroundDays = delivered.length
       ? Math.round(delivered.reduce((total, item) => total + daysBetween(item.startDate, item.dueDate), 0) / delivered.length)
@@ -375,13 +389,13 @@ export function TrackerApp({ page }: { page: PageKey }) {
       total: projects.length,
       active,
       unpaid,
-      earned: earned + salaryBatches * SALARY_BATCH_AMOUNT,
+      earned: earned + salaryBatches * normalizedSalaryBatchAmount(settings.salaryBatchAmount),
       salaryEdits,
-      salaryBatchProgress: salaryEdits % SALARY_BATCH_SIZE,
+      salaryBatchProgress: salaryEdits % salaryBatchSize,
       delivered: delivered.length,
       avgTurnaroundDays
     };
-  }, [projects]);
+  }, [projects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
 
   function openNewProject() {
     setEditingId("");
@@ -445,21 +459,24 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }
 
   function saveProject() {
-    const typeConfig = getTypeConfig(form.workType);
-    const error = validateProject(form, typeConfig);
+    const canonicalClient = canonicalClientName(form.client || "", clientOptions);
+    const normalizedWorkType = canonicalWorkType(form.workType, projectTagOptions);
+    const normalizedForm = { ...form, client: canonicalClient, workType: normalizedWorkType };
+    const typeConfig = getTypeConfig(normalizedForm.workType, settings);
+    const error = validateProject(normalizedForm, typeConfig, projectTagOptions);
     if (error) {
       setFormError(error);
       return;
     }
     const payload: WorkItem = {
-      ...form,
-      title: form.title.trim(),
+      ...normalizedForm,
+      title: normalizedForm.title.trim(),
       id: editingId || createId(),
       createdAt: form.createdAt || new Date().toISOString(),
       profileId: profile.id,
-      client: form.client?.trim() || "",
-      notes: form.notes.trim(),
-      earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(form.earnings)
+      client: normalizedForm.client?.trim() || "",
+      notes: normalizedForm.notes.trim(),
+      earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(normalizedForm.earnings)
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
     setDialogOpen(false);
@@ -476,7 +493,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       title: projectTitle.trim() || "Onboarding & Planning",
       client: clientName.trim(),
       status: "Planned",
-      workType: workType,
+      workType: canonicalWorkType(workType, projectTagOptions),
       startDate: iso(todayDate()),
       dueDate: iso(todayDate()),
       earnings: 0,
@@ -499,6 +516,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       clientFilter={clientFilter}
       setClientFilter={setClientFilter}
       clientOptions={clientOptions}
+      projectTagOptions={filterProjectTagOptions}
       dueFilter={dueFilter}
       setDueFilter={setDueFilter}
       billingFilter={billingFilter}
@@ -512,7 +530,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   ) : page === "projects" ? (
     <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} />
   ) : page === "clients" ? (
-    <ClientsDesignPage projects={projects} onNewProject={openNewProject} onAddClientProject={handleAddClientProject} />
+    <ClientsDesignPage projects={projects} projectTagOptions={projectTagOptions} onNewProject={openNewProject} onAddClientProject={handleAddClientProject} />
   ) : page === "timeline" ? (
     <TimelineDesignPage projects={projects} />
   ) : page === "calendar" ? (
@@ -546,6 +564,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
         setForm(next);
         if (formError) setFormError("");
       }}
+      clientOptions={clientOptions}
+      workTypeOptions={projectTagOptions}
+      settings={settings}
       formError={formError}
       onClose={() => setDialogOpen(false)}
       onSave={saveProject}
@@ -935,6 +956,7 @@ function DashboardPage(props: {
   clientFilter: string;
   setClientFilter: (value: string) => void;
   clientOptions: string[];
+  projectTagOptions: string[];
   dueFilter: DueFilter;
   setDueFilter: (value: DueFilter) => void;
   billingFilter: "ALL" | "Paid" | "Unpaid";
@@ -1020,8 +1042,8 @@ function DashboardPage(props: {
           <LabeledControl label="Project status">
             <CompactSelect value={props.statusFilter} options={["All", ...statusOptions]} onChange={(value) => props.setStatusFilter(value as ProjectStatus | "All")} width="100%" />
           </LabeledControl>
-          <LabeledControl label="Editor">
-            <CompactSelect value={props.kindFilter} options={kindOptions} labels={{ ALL: "All Editors", "Job / Salary": "Salary Queue", Freelance: "Freelance", "Personal Channel": "Channel" }} onChange={(value) => props.setKindFilter(value as ProjectKind)} width="100%" />
+          <LabeledControl label="Tag">
+            <CompactSelect value={props.kindFilter} options={props.projectTagOptions} labels={{ ALL: "All Tags", [settings.salaryWorkType]: "Salary Queue" }} onChange={(value) => props.setKindFilter(value as ProjectKind)} width="100%" />
           </LabeledControl>
           <LabeledControl label="Client">
             <CompactSelect value={props.clientFilter} options={props.clientOptions} labels={{ ALL: "All Clients" }} onChange={props.setClientFilter} width="100%" />
@@ -1045,7 +1067,7 @@ function DashboardPage(props: {
         <StatCard label="Active Projects" value={String(props.stats.active)} helper={`${props.stats.total} projects stored`} tone="purple" icon={<PlayArrowRoundedIcon />} />
         <StatCard label="Deadlines This Week" value={String(props.projects.filter((project) => dueBucket(project) === "This Week").length)} helper={`${props.projects.filter((project) => dueBucket(project) === "Overdue").length} overdue`} icon={<CalendarMonthOutlinedIcon />} />
         <StatCard label="Awaiting Feedback" value={String(props.projects.filter((project) => project.status === "In Progress").length)} helper="Active review queue" icon={<ChatBubbleOutlineOutlinedIcon />} />
-        <StatCard label="Salary Edits Done" value={String(props.stats.salaryEdits)} helper={`${props.stats.salaryBatchProgress}/${SALARY_BATCH_SIZE} toward next batch`} progress={(props.stats.salaryBatchProgress / SALARY_BATCH_SIZE) * 100} icon={<FileDownloadOutlinedIcon />} />
+        <StatCard label="Salary Edits Done" value={String(props.stats.salaryEdits)} helper={`${props.stats.salaryBatchProgress}/${normalizedSalaryBatchSize(settings.salaryBatchSize)} toward next batch`} progress={(props.stats.salaryBatchProgress / normalizedSalaryBatchSize(settings.salaryBatchSize)) * 100} icon={<FileDownloadOutlinedIcon />} />
         <StatCard label="Collected" value={money(props.stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" icon={<AccessTimeOutlinedIcon />} />
       </Box>
 
@@ -1098,10 +1120,12 @@ function ProjectDirectoryPage({ projects, onNewProject, onEditProject, onDeleteP
 
 function ClientsDesignPage({
   projects,
+  projectTagOptions,
   onNewProject,
   onAddClientProject
 }: {
   projects: WorkItem[];
+  projectTagOptions: string[];
   onNewProject: () => void;
   onAddClientProject?: (clientName: string, projectTitle: string, workType: string) => void;
 }) {
@@ -1121,7 +1145,7 @@ function ClientsDesignPage({
   const [addClientError, setAddClientError] = useState("");
 
   const filteredClients = clients.filter((client) => {
-    const clientProjects = projects.filter((project) => project.client?.trim() === client.name);
+    const clientProjects = projects.filter((project) => isSameClient(project.client, client.name));
     const searchText = `${client.name} ${client.latestProject} ${clientProjects.map((project) => `${project.title} ${project.notes} ${project.workType}`).join(" ")}`.toLowerCase();
     const query = clientQuery.trim().toLowerCase();
     const feedback = clientFeedbackStatus(clientProjects);
@@ -1136,11 +1160,14 @@ function ClientsDesignPage({
   });
 
   const selectedClient = filteredClients.find((client) => client.name === selectedClientName) ?? filteredClients[0] ?? clients[0];
-  const selectedProjects = selectedClient ? projects.filter((project) => project.client?.trim() === selectedClient.name) : [];
+  const selectedProjects = selectedClient ? projects.filter((project) => isSameClient(project.client, selectedClient.name)) : [];
   const activeProjects = projects.filter((project) => !isDoneStatus(project.status)).length;
   const deliveredProjects = projects.length - activeProjects;
   const selectedFeedbackStatus = selectedProjects.length ? clientFeedbackStatus(selectedProjects) : "Approved";
   const pendingRevisions = selectedProjects.filter((project) => project.status === "In Progress" || project.status === "Planned");
+  const selectedNewClientWorkType = projectTagOptions.some((type) => type.toLowerCase() === newClientWorkType.toLowerCase())
+    ? canonicalWorkType(newClientWorkType, projectTagOptions)
+    : projectTagOptions[0];
   const clientTabs: { key: ClientDetailTab; label: string }[] = [
     { key: "Overview", label: "Overview" },
     { key: "Projects", label: `Projects (${selectedProjects.length})` },
@@ -1155,20 +1182,22 @@ function ClientsDesignPage({
       setAddClientError("Client name is required.");
       return;
     }
-    if (projects.some((p) => p.client?.trim().toLowerCase() === clientName.toLowerCase())) {
-      setAddClientError("A client with this name already exists.");
+    const existingClient = findExistingClientName(clientName, buildClientOptions(projects));
+    if (existingClient) {
+      setAddClientError(`Client already exists as "${existingClient}". Select it from the project client dropdown instead.`);
+      setSelectedClientName(existingClient);
       return;
     }
     if (!projectTitle) {
       setAddClientError("Initial project title is required.");
       return;
     }
-    if (!profile.typeOptions.some((type) => type.label === newClientWorkType)) {
+    if (!projectTagOptions.some((type) => type.toLowerCase() === newClientWorkType.toLowerCase())) {
       setAddClientError("Choose a valid project type.");
       return;
     }
     if (onAddClientProject) {
-      onAddClientProject(clientName, projectTitle, newClientWorkType);
+      onAddClientProject(clientName, projectTitle, canonicalWorkType(newClientWorkType, projectTagOptions));
     }
     setNewClientName("");
     setNewClientProject("Onboarding & Planning");
@@ -1213,7 +1242,7 @@ function ClientsDesignPage({
               sx={{ width: { xs: "100%", md: 300 }, "& .MuiInputBase-root": { height: 42, borderRadius: "6px", bgcolor: panel } }}
             />
             <CompactSelect value={clientStatusFilter} options={["ALL", "Active", "Inactive"]} labels={{ ALL: "All Clients" }} onChange={(value) => setClientStatusFilter(value as "ALL" | "Active" | "Inactive")} width={{ xs: "100%", md: 150 }} />
-            <CompactSelect value={clientWorkFilter} options={kindOptions} labels={{ ALL: "All Work" }} onChange={(value) => setClientWorkFilter(value as ProjectKind)} width={{ xs: "100%", md: 150 }} />
+            <CompactSelect value={clientWorkFilter} options={["ALL", ...projectTagOptions]} labels={{ ALL: "All Work" }} onChange={(value) => setClientWorkFilter(value as ProjectKind)} width={{ xs: "100%", md: 150 }} />
             <CompactSelect value={clientFeedbackFilter} options={["ALL", "Awaiting", "Approved"]} labels={{ ALL: "Any Feedback" }} onChange={(value) => setClientFeedbackFilter(value as "ALL" | "Awaiting" | "Approved")} width={{ xs: "100%", md: 150 }} />
             <Button size="small" onClick={clearClientFilters} sx={{ color: muted, height: 42, px: 1.2, whiteSpace: "nowrap" }}>Clear Filters</Button>
             <Typography sx={{ color: muted, fontSize: 13, ml: { md: "auto" }, whiteSpace: "nowrap" }}>{filteredClients.length} shown</Typography>
@@ -1223,7 +1252,7 @@ function ClientsDesignPage({
           </Box>
           <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
             {filteredClients.length ? filteredClients.map((client, index) => {
-              const clientProjects = projects.filter((project) => project.client?.trim() === client.name);
+              const clientProjects = projects.filter((project) => isSameClient(project.client, client.name));
               const feedback = clientFeedbackStatus(clientProjects);
               return (
                 <Box
@@ -1339,7 +1368,7 @@ function ClientsDesignPage({
           <Stack gap={2} sx={{ mt: 1.5 }}>
             <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => { setNewClientName(e.target.value); setAddClientError(""); }} fullWidth />
             <TextField label="Initial Project Title" placeholder="e.g. Onboarding & Planning" value={newClientProject} onChange={(e) => { setNewClientProject(e.target.value); setAddClientError(""); }} fullWidth />
-            <DialogSelect label="Project Type" value={newClientWorkType} options={profile.typeOptions.map((t) => t.label)} onChange={setNewClientWorkType} />
+            <DialogSelect label="Project Type" value={selectedNewClientWorkType} options={projectTagOptions} onChange={setNewClientWorkType} />
             {addClientError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{addClientError}</Typography> : null}
           </Stack>
         </DialogContent>
@@ -1708,29 +1737,31 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
 
 function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { title: string; workType: string; notes: string }) => void }) {
   const settings = useTrackerSettings();
+  const freelanceTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("freelance")) ?? settings.projectTags.find((tag) => !isSalaryWorkType(tag, settings)) ?? settings.projectTags[0];
+  const channelTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("channel")) ?? freelanceTag;
   const templates: { title: string; body: string; workType: string; notes: string }[] = [
     {
       title: "Client Campaign Edit",
       body: "A standard freelance client cut with review notes and delivery checkpoints.",
-      workType: "Freelance",
+      workType: freelanceTag,
       notes: "Scope: assemble cut, sound pass, color pass, client review, final export.\nAssets needed: brief, footage, brand files, delivery specs."
     },
     {
       title: "Salary Batch Edit",
       body: "A job/salary project template that counts toward the batch payout tracker.",
-      workType: "Job / Salary",
+      workType: settings.salaryWorkType,
       notes: "Batch workflow: rough cut, revision pass, thumbnail handoff, publish-ready export.\nTrack completion when delivered."
     },
     {
       title: "Channel Upload",
       body: "A personal channel edit with publishing, thumbnail, and description reminders.",
-      workType: "Personal Channel",
+      workType: channelTag,
       notes: "Publishing checklist: edit lock, thumbnail, title options, description, chapters, upload, post-publish review."
     },
     {
       title: "Revision Sprint",
       body: "A short turnaround project for client changes, fixes, and final delivery.",
-      workType: "Freelance",
+      workType: freelanceTag,
       notes: "Revision notes: collect feedback, confirm scope, apply changes, export review copy, deliver final files."
     }
   ];
@@ -1763,20 +1794,21 @@ function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { ti
 function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: { active: number; delivered: number; earned: number; salaryEdits: number } }) {
   const settings = useTrackerSettings();
   const deliveredRate = projects.length ? Math.round((stats.delivered / projects.length) * 100) : 0;
+  const workTypeOptions = projectWorkTypeOptions(settings, projects);
 
   return (
     <PageFrame title="Reports" subtitle="A compact view of production volume, delivery, and earnings.">
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Active" value={String(stats.active)} helper="Projects in motion" /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Delivered" value={String(stats.delivered)} helper={`${deliveredRate}% completion rate`} /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Salary Edits" value={String(stats.salaryEdits)} helper={`${SALARY_BATCH_SIZE} edits per batch`} /></Grid>
+        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Salary Edits" value={String(stats.salaryEdits)} helper={`${normalizedSalaryBatchSize(settings.salaryBatchSize)} edits per batch`} /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Collected" value={money(stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" /></Grid>
       </Grid>
       <Paper sx={{ ...panelSx, p: 2 }}>
         <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
         <Stack gap={1.2} sx={{ mt: 2 }}>
-          {kindOptions.filter((kind) => kind !== "ALL").map((kind) => {
-            const count = projects.filter((project) => project.workType === kind).length;
+          {workTypeOptions.map((kind) => {
+            const count = projects.filter((project) => project.workType.trim().toLowerCase() === kind.toLowerCase()).length;
             const percent = projects.length ? (count / projects.length) * 100 : 0;
             return (
               <Box key={kind}>
@@ -1892,6 +1924,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   const [googleCustomEmail, setGoogleCustomEmail] = useState("");
   const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
   const stageIssues = projectStageIssues(settings.projectStages);
+  const tagIssues = projectTagIssues(settings.projectTags);
   const integrationValidationError = integrationDialog ? validateIntegrationConfig(integrationDialog.name, integrationDialog.config) : "";
 
   function selectGoogleAccount(email: string) {
@@ -2017,8 +2050,35 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
     setSettings({ ...settings, projectStages: settings.projectStages.filter((_, stageIndex) => stageIndex !== index) });
   }
 
+  function updateProjectTag(index: number, value: string) {
+    const projectTags = [...settings.projectTags];
+    const previous = projectTags[index];
+    projectTags[index] = value;
+    const nextSalaryWorkType = previous && previous === settings.salaryWorkType ? value : settings.salaryWorkType;
+    setSettings({ ...settings, projectTags, salaryWorkType: nextSalaryWorkType });
+  }
+
+  function addProjectTag() {
+    setSettings({ ...settings, projectTags: [...settings.projectTags, nextProjectTagName(settings.projectTags)] });
+  }
+
+  function removeProjectTag(index: number) {
+    const removed = settings.projectTags[index];
+    const projectTags = settings.projectTags.filter((_, tagIndex) => tagIndex !== index);
+    const salaryWorkType = removed === settings.salaryWorkType ? projectTags[0] : settings.salaryWorkType;
+    setSettings({ ...settings, projectTags, salaryWorkType });
+  }
+
+  function updateSalaryBatchSize(value: string) {
+    setSettings({ ...settings, salaryBatchSize: normalizedSalaryBatchSize(Number(value || defaultSalaryBatchSize)) });
+  }
+
+  function updateSalaryBatchAmount(value: string) {
+    setSettings({ ...settings, salaryBatchAmount: normalizedSalaryBatchAmount(Number(value || defaultSalaryBatchAmount)) });
+  }
+
   function resetSettings() {
-    setSettings({ ...defaultSettings, projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
+    setSettings({ ...defaultSettings, projectTags: [...defaultSettings.projectTags], projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
     notify("Settings reset to defaults.", "warning");
   }
 
@@ -2042,6 +2102,65 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
       }
     >
       <Stack gap={settings.density === "Compact" ? 1 : 1.5}>
+        <SettingsPanel title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
+            <Stack gap={1.1}>
+              {settings.projectTags.map((tag, index) => (
+                <Stack key={`${tag}-${index}`} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} gap={1.2}>
+                  <TextField
+                    label={`Tag ${index + 1}`}
+                    value={tag}
+                    size="small"
+                    fullWidth
+                    error={Boolean(tagIssues && !tag.trim())}
+                    onChange={(event) => updateProjectTag(index, event.target.value)}
+                    inputProps={{ "aria-label": `Project tag ${index + 1}` }}
+                  />
+                  <Tooltip title="Remove tag">
+                    <Button
+                      size="small"
+                      aria-label={`Remove project tag ${index + 1}`}
+                      disabled={settings.projectTags.length <= 1}
+                      onClick={() => removeProjectTag(index)}
+                      sx={{ minWidth: 34, width: { xs: "100%", sm: 34 }, height: 34, color: "#bd3f37", p: 0 }}
+                    >
+                      <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                    </Button>
+                  </Tooltip>
+                </Stack>
+              ))}
+              <Button variant="outlined" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={addProjectTag} sx={outlineButtonSx}>
+                Add Tag
+              </Button>
+              {tagIssues ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{tagIssues}</Typography> : null}
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.2, pt: 0.8 }}>
+                <DialogSelect
+                  label="Salary Tag"
+                  value={canonicalWorkType(settings.salaryWorkType, settings.projectTags)}
+                  options={settings.projectTags}
+                  onChange={(value) => setSettings({ ...settings, salaryWorkType: value })}
+                />
+                <TextField
+                  label="Videos per salary batch"
+                  type="number"
+                  size="small"
+                  value={normalizedSalaryBatchSize(settings.salaryBatchSize)}
+                  onChange={(event) => updateSalaryBatchSize(event.target.value)}
+                  inputProps={{ min: 1, step: 1 }}
+                />
+                <TextField
+                  label="Salary per batch"
+                  type="number"
+                  size="small"
+                  value={normalizedSalaryBatchAmount(settings.salaryBatchAmount)}
+                  onChange={(event) => updateSalaryBatchAmount(event.target.value)}
+                  inputProps={{ min: 1, step: 1 }}
+                />
+              </Box>
+              <Typography sx={{ color: muted, fontSize: 12 }}>
+                Completed projects tagged "{canonicalWorkType(settings.salaryWorkType, settings.projectTags)}" count toward {normalizedSalaryBatchSize(settings.salaryBatchSize)} videos per salary batch worth {money(normalizedSalaryBatchAmount(settings.salaryBatchAmount), settings.currencyCode)}.
+              </Typography>
+            </Stack>
+          </SettingsPanel>
         <SettingsPanel title="Project Stages" subtitle="Default workflow stages for new work.">
             {settings.projectStages.map((stage, index) => (
               <Stack key={`${stage}-${index}`} direction="row" alignItems="center" gap={1.2}>
@@ -2890,15 +3009,21 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
 }
 
 function buildClientSummaries(projects: WorkItem[]) {
-  const groups = new Map<string, WorkItem[]>();
+  const groups = new Map<string, { name: string; projects: WorkItem[] }>();
   for (const project of projects) {
     const clientName = project.client?.trim();
     if (!clientName) continue;
-    groups.set(clientName, [...(groups.get(clientName) || []), project]);
+    const key = clientName.toLowerCase();
+    const existing = groups.get(key);
+    if (existing) {
+      existing.projects.push(project);
+    } else {
+      groups.set(key, { name: clientName, projects: [project] });
+    }
   }
 
-  return [...groups.entries()]
-    .map(([name, clientProjects]) => {
+  return [...groups.values()]
+    .map(({ name, projects: clientProjects }) => {
       const active = clientProjects.filter((project) => !isDoneStatus(project.status));
       const nextProject = [...active].sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate))[0];
       const latestProject = [...clientProjects].sort((a, b) => createdTime(b) - createdTime(a))[0];
@@ -3044,7 +3169,7 @@ function ProjectTableHeader() {
 
 function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: () => void; onDelete: () => void }) {
   const settings = useTrackerSettings();
-  const amount = project.workType === "Job / Salary" ? "Batch tracked" : money(project.earnings, settings.currencyCode);
+  const amount = isSalaryWorkType(project.workType, settings) ? "Batch tracked" : money(project.earnings, settings.currencyCode);
   const progress = projectProgress(project.status);
 
   return (
@@ -3185,24 +3310,63 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function ProjectDialog({ open, editing, form, setForm, formError, onClose, onSave }: { open: boolean; editing: boolean; form: WorkItem; setForm: (form: WorkItem) => void; formError: string; onClose: () => void; onSave: () => void }) {
-  const typeConfig = getTypeConfig(form.workType);
+function ProjectDialog({
+  open,
+  editing,
+  form,
+  setForm,
+  formError,
+  clientOptions,
+  workTypeOptions,
+  settings,
+  onClose,
+  onSave
+}: {
+  open: boolean;
+  editing: boolean;
+  form: WorkItem;
+  setForm: (form: WorkItem) => void;
+  formError: string;
+  clientOptions: string[];
+  workTypeOptions: string[];
+  settings: SettingsState;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const selectedWorkType = workTypeOptions.some((option) => option.toLowerCase() === form.workType.toLowerCase()) ? canonicalWorkType(form.workType, workTypeOptions) : workTypeOptions[0];
+  const typeConfig = getTypeConfig(selectedWorkType, settings);
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
       <DialogTitle sx={{ fontSize: 24, fontWeight: 760 }}>{editing ? "Edit Project" : "New Project"}</DialogTitle>
       <DialogContent>
         <Stack gap={2} sx={{ mt: 1 }}>
           <TextField label="Project name" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} fullWidth />
-          <TextField label="Client" value={form.client || ""} placeholder="Optional client or account name" onChange={(event) => setForm({ ...form, client: event.target.value })} fullWidth />
+          <Autocomplete
+            freeSolo
+            options={clientOptions}
+            value={form.client || ""}
+            inputValue={form.client || ""}
+            onInputChange={(_, value) => setForm({ ...form, client: canonicalClientName(value, clientOptions, false) })}
+            onChange={(_, value) => setForm({ ...form, client: canonicalClientName(typeof value === "string" ? value : "", clientOptions) })}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Client"
+                placeholder={clientOptions.length ? "Select a client or type a new one" : "Type a client name"}
+                helperText={clientSuggestionText(form.client || "", clientOptions)}
+                fullWidth
+              />
+            )}
+          />
           <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
             <DialogSelect label="Status" value={form.status} options={statusOptions} onChange={(value) => setForm({ ...form, status: value })} />
-            <DialogSelect label="Type" value={form.workType} options={profile.typeOptions.map((type) => type.label)} onChange={(value) => setForm({ ...form, workType: value, earnings: 0 })} />
+            <DialogSelect label="Tag" value={selectedWorkType} options={workTypeOptions} onChange={(value) => setForm({ ...form, workType: value, earnings: 0 })} />
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
             <TextField label="Start date" type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} />
             <TextField label="Due date" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} />
           </Stack>
-          <TextField label="Earnings" type="number" value={form.earnings} disabled={typeConfig.earningsMode === "batch"} helperText={typeConfig.earningsMode === "batch" ? "Job / Salary earnings are batch tracked." : ""} onChange={(event) => setForm({ ...form, earnings: Number(event.target.value || 0) })} fullWidth />
+          <TextField label="Earnings" type="number" value={form.earnings} disabled={typeConfig.earningsMode === "batch"} helperText={typeConfig.earningsMode === "batch" ? `${settings.salaryWorkType} earnings are batch tracked in settings.` : ""} onChange={(event) => setForm({ ...form, earnings: Number(event.target.value || 0) })} fullWidth />
           <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
           {formError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{formError}</Typography> : null}
         </Stack>
@@ -3243,10 +3407,10 @@ function DialogSelect({ label, value, options, onChange }: { label: string; valu
   );
 }
 
-function validateProject(item: WorkItem, type: WorkTypeConfig) {
+function validateProject(item: WorkItem, type: WorkTypeConfig, workTypeOptions: string[]) {
   if (!item.title.trim()) return "Project name is required.";
   if (!statusOptions.includes(item.status as ProjectStatus)) return "Choose a valid project status.";
-  if (!profile.typeOptions.some((option) => option.label === item.workType)) return "Choose a valid project type.";
+  if (!workTypeOptions.some((option) => option.toLowerCase() === item.workType.trim().toLowerCase())) return "Choose a valid project tag.";
   if (!item.startDate || !item.dueDate) return "Start and due dates are required.";
   if (!isIsoDate(item.startDate) || !isIsoDate(item.dueDate)) return "Use valid start and due dates.";
   if (dateTime(item.startDate) > dateTime(item.dueDate)) return "Due date must be on or after start date.";
@@ -3294,11 +3458,26 @@ function projectStageIssues(stages: string[]) {
   return "";
 }
 
+function projectTagIssues(tags: string[]) {
+  if (!tags.length) return "At least one project tag is required.";
+  if (tags.some((tag) => !tag.trim())) return "Project tags cannot be blank.";
+  const normalized = tags.map((tag) => tag.trim().toLowerCase());
+  if (new Set(normalized).size !== normalized.length) return "Project tags must be unique.";
+  return "";
+}
+
 function nextStageName(stages: string[]) {
   const names = new Set(stages.map((stage) => stage.trim().toLowerCase()));
   let index = 1;
   while (names.has(`new stage ${index}`)) index += 1;
   return `New Stage ${index}`;
+}
+
+function nextProjectTagName(tags: string[]) {
+  const names = new Set(tags.map((tag) => tag.trim().toLowerCase()));
+  let index = 1;
+  while (names.has(`custom tag ${index}`)) index += 1;
+  return `Custom Tag ${index}`;
 }
 
 
@@ -3317,8 +3496,9 @@ async function copyText(value: string) {
 
 
 
-function getTypeConfig(label: string) {
-  return profile.typeOptions.find((type) => type.label === label) ?? profile.typeOptions[0];
+function getTypeConfig(label: string, settings: SettingsState) {
+  if (isSalaryWorkType(label, settings)) return { label, earningsMode: "batch" as const };
+  return profile.typeOptions.find((type) => type.label.toLowerCase() === label.toLowerCase()) ?? { label, earningsMode: "manual" as const };
 }
 
 function appSurfaceSx(settings: SettingsState) {
@@ -3416,6 +3596,76 @@ function defaultProjectNotes(settings: SettingsState) {
   const stages = settings.projectStages.filter((stage) => stage.trim()).join(" -> ");
   const stageLine = stages ? `Production checklist: ${stages}.` : "";
   return stageLine;
+}
+
+function normalizedSalaryBatchSize(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : defaultSalaryBatchSize;
+}
+
+function normalizedSalaryBatchAmount(value: unknown) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number > 0 ? number : defaultSalaryBatchAmount;
+}
+
+function projectWorkTypeOptions(settings: SettingsState, projects: WorkItem[] = []) {
+  const values = [...settings.projectTags, settings.salaryWorkType, ...projects.map((project) => project.workType)];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result.length ? result : [...defaultProjectTags];
+}
+
+function isSalaryWorkType(value: string, settings: SettingsState) {
+  return value.trim().toLowerCase() === settings.salaryWorkType.trim().toLowerCase();
+}
+
+function canonicalWorkType(value: string, options: string[]) {
+  const trimmed = value.trim();
+  return options.find((option) => option.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
+}
+
+function buildClientOptions(projects: WorkItem[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const project of projects) {
+    const client = project.client?.trim();
+    const key = client?.toLowerCase();
+    if (!client || !key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(client);
+  }
+  return result.sort((a, b) => a.localeCompare(b));
+}
+
+function findExistingClientName(value: string, clientOptions: string[]) {
+  const key = value.trim().toLowerCase();
+  if (!key) return "";
+  return clientOptions.find((client) => client.toLowerCase() === key) ?? "";
+}
+
+function canonicalClientName(value: string, clientOptions: string[], forceExistingCapitalization = true) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const existing = findExistingClientName(trimmed, clientOptions);
+  return existing && forceExistingCapitalization ? existing : trimmed;
+}
+
+function isSameClient(a: string | undefined, b: string) {
+  return (a || "").trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+function clientSuggestionText(value: string, clientOptions: string[]) {
+  const trimmed = value.trim();
+  const existing = findExistingClientName(trimmed, clientOptions);
+  if (existing && existing !== trimmed) return `Will use existing client "${existing}" instead of creating a duplicate.`;
+  return clientOptions.length ? "Select an existing client or type a new client name." : "Typing a client name creates it when the project is saved.";
 }
 
 function createId() {
