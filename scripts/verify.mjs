@@ -72,6 +72,8 @@ const sourceChecks = [
   ["src/lib/data-context.tsx", "normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY", "salary storage malformed-data guard"],
   ["src/lib/data-context.tsx", "function isGitHubExternalAccount", "GitHub auth account detection"],
   ["src/lib/data-context.tsx", "function shouldUseAuthProfileValue", "auth profile placeholder replacement"],
+  ["src/lib/data-context.tsx", "useConvexAuth", "Convex auth readiness gate"],
+  ["src/lib/data-context.tsx", "previousAuthMode", "auth mode transition reset"],
   ["src/lib/data-context.tsx", "await replaceAllItems({ items: localItems })", "awaited cloud project migration"],
   ["src/lib/data-context.tsx", "Cloud sync failed. Projects are saved locally for now.", "cloud project sync local fallback"],
   ["src/lib/data-context.tsx", "function stringSetting", "stored settings scalar normalization"],

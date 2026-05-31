@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useQuery, useMutation } from "convex/react";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig } from "./types";
 
@@ -540,12 +540,15 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
 function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn, user, isLoaded: clerkLoaded } = useUser();
+  const { isLoading: convexAuthLoading, isAuthenticated: convexAuthenticated } = useConvexAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const initializationToken = useRef(0);
+  const authMode = isSignedIn ? "signed-in" : "guest";
+  const previousAuthMode = useRef(authMode);
 
   // Always call hooks — Convex handles unauthenticated state gracefully
   const convexItems = useQuery(api.workItems.list, {});
@@ -554,6 +557,14 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const replaceAllItems = useMutation(api.workItems.replaceAll);
   const upsertSettings = useMutation(api.settings.upsert);
   const replaceAllBatches = useMutation(api.salaryBatches.replaceAll);
+
+  useEffect(() => {
+    if (!clerkLoaded) return;
+    if (previousAuthMode.current === authMode) return;
+    previousAuthMode.current = authMode;
+    initializationToken.current += 1;
+    setReady(false);
+  }, [authMode, clerkLoaded]);
 
   // Guest mode: load from localStorage
   useEffect(() => {
@@ -572,6 +583,21 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // Signed-in mode: initialise from Convex, migrate if needed
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn) return;
+    if (convexAuthLoading) return;
+
+    if (!convexAuthenticated) {
+      if (ready) return;
+      setItemsState(readInitialItems());
+      setSettingsState(readInitialSettings());
+      setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
+      setToast({
+        tone: "warning",
+        message: "Cloud auth is not connected. Data is saved on this device until Convex auth is fixed.",
+      });
+      setReady(true);
+      return;
+    }
+
     if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined) return;
     if (ready) return;
 
@@ -645,7 +671,19 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clerkLoaded, isSignedIn, ready, convexItems, convexSettings, convexBatches, replaceAllItems, replaceAllBatches, upsertSettings]);
+  }, [
+    clerkLoaded,
+    isSignedIn,
+    convexAuthLoading,
+    convexAuthenticated,
+    ready,
+    convexItems,
+    convexSettings,
+    convexBatches,
+    replaceAllItems,
+    replaceAllBatches,
+    upsertSettings,
+  ]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;
@@ -673,14 +711,18 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         next.profileImageUrl !== current.profileImageUrl;
 
       if (changed) {
-        upsertSettings(next).catch(() => {
+        if (convexAuthenticated) {
+          upsertSettings(next).catch(() => {
+            writeJson(SETTINGS_STORAGE_KEY, next);
+          });
+        } else {
           writeJson(SETTINGS_STORAGE_KEY, next);
-        });
+        }
       }
 
       return changed ? next : current;
     });
-  }, [clerkLoaded, isSignedIn, ready, upsertSettings, user]);
+  }, [clerkLoaded, convexAuthenticated, isSignedIn, ready, upsertSettings, user]);
 
   // Toast auto-dismiss
   useEffect(() => {
@@ -694,7 +736,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     (updater: React.SetStateAction<WorkItem[]>) => {
       setItemsState((prev: WorkItem[]) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
-        if (isSignedIn) {
+        if (isSignedIn && convexAuthenticated) {
           replaceAllItems({ items: next }).catch(() => {
             writeJson(STORAGE_KEY, next);
             setToast({
@@ -708,7 +750,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [isSignedIn, replaceAllItems],
+    [convexAuthenticated, isSignedIn, replaceAllItems],
   );
 
   // Unified settings setter
@@ -716,7 +758,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     (updater: React.SetStateAction<SettingsState>) => {
       setSettingsState((prev: SettingsState) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
-        if (isSignedIn) {
+        if (isSignedIn && convexAuthenticated) {
           upsertSettings(next).catch(() => {
             writeJson(SETTINGS_STORAGE_KEY, next);
             setToast({
@@ -730,7 +772,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [isSignedIn, upsertSettings],
+    [convexAuthenticated, isSignedIn, upsertSettings],
   );
 
   const reconcileSalaryBatches = useCallback(
@@ -751,7 +793,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
             archivedDate: "",
           });
         }
-        if (isSignedIn) {
+        if (isSignedIn && convexAuthenticated) {
           replaceAllBatches({ batches: next }).catch(() => {
             writeJson(SALARY_STORAGE_KEY, { batches: next });
             setToast({
@@ -765,7 +807,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [isSignedIn, replaceAllBatches],
+    [convexAuthenticated, isSignedIn, replaceAllBatches],
   );
 
   const value: DataContextValue = {
@@ -777,7 +819,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     reconcileSalaryBatches,
     isAuthEnabled: true,
     isSignedIn: !!isSignedIn,
-    isAuthLoaded: clerkLoaded && ready,
+    isAuthLoaded: clerkLoaded && ready && (!isSignedIn || !convexAuthLoading),
     toast,
     setToast,
   };
