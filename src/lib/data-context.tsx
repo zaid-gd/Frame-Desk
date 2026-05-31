@@ -358,7 +358,11 @@ function readInitialItems(): WorkItem[] {
   if (typeof window === "undefined") return [];
   const stored = readJson<unknown>(STORAGE_KEY, []);
   const storedItems = Array.isArray(stored) ? stored : [];
-  return storedItems.flatMap((item) => {
+  return normalizeWorkItems(storedItems);
+}
+
+function normalizeWorkItems(items: unknown[]): WorkItem[] {
+  return items.flatMap((item) => {
     const normalized = normalizeStoredItem(item);
     return normalized ? [normalized] : [];
   });
@@ -640,9 +644,9 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined) return;
     if (ready) return;
 
-    const loadedItems = convexItems;
+    const loadedItems = normalizeWorkItems(convexItems);
     const loadedSettings = convexSettings;
-    const loadedBatches = convexBatches;
+    const loadedBatches = normalizeSalaryState({ batches: convexBatches }).batches;
     let cancelled = false;
     const token = initializationToken.current + 1;
     initializationToken.current = token;
@@ -775,7 +779,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const setItems = useCallback(
     (updater: React.SetStateAction<WorkItem[]>) => {
       setItemsState((prev: WorkItem[]) => {
-        const next = typeof updater === "function" ? updater(prev) : updater;
+        const next = normalizeWorkItems(typeof updater === "function" ? updater(prev) : updater);
         if (isSignedIn && convexAuthenticated) {
           replaceAllItems({ items: next }).catch(() => {
             writeJson(STORAGE_KEY, next);
@@ -833,18 +837,19 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
             archivedDate: "",
           });
         }
+        const normalizedNext = normalizeSalaryState({ batches: next }).batches;
         if (isSignedIn && convexAuthenticated) {
-          replaceAllBatches({ batches: next }).catch(() => {
-            writeJson(SALARY_STORAGE_KEY, { batches: next });
+          replaceAllBatches({ batches: normalizedNext }).catch(() => {
+            writeJson(SALARY_STORAGE_KEY, { batches: normalizedNext });
             setToast({
               tone: "warning",
               message: "Cloud sync failed. Salary batches are saved locally for now.",
             });
           });
         } else {
-          writeJson(SALARY_STORAGE_KEY, { batches: next });
+          writeJson(SALARY_STORAGE_KEY, { batches: normalizedNext });
         }
-        return next;
+        return normalizedNext;
       });
     },
     [convexAuthenticated, isSignedIn, replaceAllBatches],

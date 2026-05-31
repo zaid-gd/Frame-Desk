@@ -6,10 +6,23 @@ export const list = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    return await ctx.db
+    const items = await ctx.db
       .query("workItems")
       .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
       .take(500);
+    return items.map((item) => ({
+      id: item.id,
+      profileId: item.profileId,
+      title: item.title,
+      client: item.client,
+      status: item.status,
+      workType: item.workType,
+      startDate: item.startDate,
+      dueDate: item.dueDate,
+      earnings: item.earnings,
+      notes: item.notes,
+      createdAt: item.createdAt,
+    }));
   },
 });
 

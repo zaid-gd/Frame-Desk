@@ -6,10 +6,17 @@ export const list = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    return await ctx.db
+    const batches = await ctx.db
       .query("salaryBatches")
       .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
       .take(500);
+    return batches.map((batch) => ({
+      id: batch.id,
+      number: batch.number,
+      completedDate: batch.completedDate,
+      archived: batch.archived,
+      archivedDate: batch.archivedDate,
+    }));
   },
 });
 
