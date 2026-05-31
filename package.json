@@ -6,7 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "convex dev --start \"npm run dev:next\"",
+    "dev:next": "next dev",
+    "convex:dev": "convex dev",
     "build": "next build",
     "check": "npm run lint && npm run build && npm audit --omit=dev",
     "check:full": "npm run check && npm run verify:prod",

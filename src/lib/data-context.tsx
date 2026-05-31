@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig } from "./types";
@@ -11,6 +11,7 @@ const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
 const SETTINGS_STORAGE_KEY = "video-editing-work-tracker:settings:v1";
 
 type ToastState = { message: string; tone: "success" | "info" | "warning" };
+type ClerkGetToken = ReturnType<typeof useAuth>["getToken"];
 
 const teamRoleOptions = ["Owner", "Editor", "Reviewer", "Client"];
 const LEGACY_DEMO_SETTINGS = {
@@ -442,6 +443,44 @@ function shouldUseAuthProfileValue(field: keyof Pick<SettingsState, "profileName
   return false;
 }
 
+function decodeJwtPayload(token: string) {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const parsed = JSON.parse(window.atob(padded));
+    return isPlainRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function diagnoseConvexAuthToken(getToken: ClerkGetToken) {
+  try {
+    const token = await getToken({ template: "convex", skipCache: true });
+    if (!token) {
+      return "Clerk is not returning a Convex JWT. Create a Clerk JWT template named convex, then sign out and back in.";
+    }
+
+    const claims = decodeJwtPayload(token);
+    const audience = typeof claims?.aud === "string" ? claims.aud : "";
+    const issuer = typeof claims?.iss === "string" ? claims.iss : "";
+
+    if (audience && audience !== "convex") {
+      return `Clerk Convex JWT has audience ${audience}, expected convex. Fix the Clerk JWT template audience.`;
+    }
+
+    if (!issuer) {
+      return "Clerk returned a Convex JWT, but it has no issuer claim. Check the Clerk JWT template.";
+    }
+
+    return `Clerk returned a Convex JWT, but Convex rejected it. Set CLERK_JWT_ISSUER_DOMAIN in Convex to ${issuer}.`;
+  } catch {
+    return "Clerk could not create a Convex JWT. Check that the Clerk JWT template named convex exists.";
+  }
+}
+
 interface DataContextValue {
   items: WorkItem[];
   setItems: React.Dispatch<React.SetStateAction<WorkItem[]>>;
@@ -540,6 +579,7 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
 function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { isSignedIn, user, isLoaded: clerkLoaded } = useUser();
+  const { getToken } = useAuth();
   const { isLoading: convexAuthLoading, isAuthenticated: convexAuthenticated } = useConvexAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
@@ -590,9 +630,8 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setItemsState(readInitialItems());
       setSettingsState(readInitialSettings());
       setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
-      setToast({
-        tone: "warning",
-        message: "Cloud auth is not connected. Data is saved on this device until Convex auth is fixed.",
+      void diagnoseConvexAuthToken(getToken).then((message) => {
+        setToast({ tone: "warning", message });
       });
       setReady(true);
       return;
@@ -676,6 +715,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     isSignedIn,
     convexAuthLoading,
     convexAuthenticated,
+    getToken,
     ready,
     convexItems,
     convexSettings,
