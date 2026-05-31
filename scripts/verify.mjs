@@ -126,6 +126,10 @@ const sourceChecks = [
   ["src/app/layout.tsx", "/og-image.png", "served social preview image metadata"],
   ["src/app/layout.tsx", "export const viewport", "responsive viewport metadata"],
   ["src/app/layout.tsx", "/icon.svg", "app icon metadata"],
+  ["src/app/layout.tsx", "data-clerk-modal-centering", "Clerk modal centering CSS fallback"],
+  ["src/app/layout.tsx", "clerkModalCenteringCss", "Clerk modal centering stylesheet"],
+  ["src/app/providers.tsx", "modalBackdrop", "Clerk modal backdrop appearance centering"],
+  ["src/app/providers.tsx", "modalContent", "Clerk modal content appearance centering"],
   ["package.json", "\"name\": \"cutlab-studio\"", "branded package name"],
   ["package.json", "\"node\": \">=22\"", "Node engine requirement"],
   ["next.config.mjs", "async headers()", "production response headers"],
@@ -325,7 +329,8 @@ for (const [route, expectedStatus, expectedText] of routes) {
       ['property="og:image"', "Open Graph image"],
       ['content="https://cutlab.studio/og-image.png"', "served Open Graph image URL"],
       ['name="twitter:card" content="summary_large_image"', "Twitter card"],
-      ['rel="icon" href="/icon.svg"', "icon link"]
+      ['rel="icon" href="/icon.svg"', "icon link"],
+      ["data-clerk-modal-centering", "Clerk modal centering style tag"]
     ];
 
     for (const [text, label] of metadataChecks) {

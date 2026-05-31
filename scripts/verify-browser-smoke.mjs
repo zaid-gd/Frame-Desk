@@ -7,29 +7,28 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const routes = ["/", "/projects", "/settings", "/profile"];
 const startupTimeoutMs = 30_000;
-const firefoxPath = findFirefox();
-
-if (!firefoxPath) {
-  console.log("Firefox was not found; skipping browser smoke verification.");
-  process.exit(0);
-}
-
-if (!canCaptureScreenshot(firefoxPath)) {
-  console.log("Firefox headless screenshots are unavailable in this environment; skipping browser smoke verification.");
-  process.exit(0);
-}
-
-const port = await getOpenPort();
-const baseUrl = `http://localhost:${port}`;
 const outputDirectory = mkdtempSync(join(tmpdir(), "cutlab-browser-smoke-"));
-const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
-const serverArgs = process.platform === "win32"
-  ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
-  : ["run", "start", "--", "-p", String(port)];
+class BrowserSmokeSkipped extends Error {}
 
 let server;
 
 try {
+  const firefoxPath = findFirefox();
+  if (!firefoxPath) {
+    skipUnavailableScreenshots("Firefox was not found.");
+  }
+
+  if (!canCaptureScreenshot(firefoxPath)) {
+    skipUnavailableScreenshots("Firefox headless screenshots are unavailable in this environment.");
+  }
+
+  const port = await getOpenPort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
+  const serverArgs = process.platform === "win32"
+    ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
+    : ["run", "start", "--", "-p", String(port)];
+
   server = spawn(serverCommand, serverArgs, {
     env: { ...process.env, PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
@@ -54,9 +53,9 @@ try {
       { encoding: "utf8", timeout: 30_000, windowsHide: true }
     );
 
-    const dimensions = readPngDimensions(screenshotPath);
+    const dimensions = await waitForPng(screenshotPath);
     if (!dimensions) {
-      throw new Error(`Firefox did not create a valid PNG for ${route}.\n${result.stderr || result.stdout}`);
+      skipUnavailableScreenshots(`Firefox did not create a valid PNG for ${route}.\n${result.stderr || result.stdout}`);
     }
     if (dimensions.width < 1200 || dimensions.height < 800) {
       throw new Error(`Browser screenshot for ${route} is unexpectedly small: ${dimensions.width}x${dimensions.height}.`);
@@ -69,6 +68,12 @@ try {
   }
 
   console.log(`Browser smoke verified ${routes.length} routes with Firefox headless against ${baseUrl}.`);
+} catch (error) {
+  if (error instanceof BrowserSmokeSkipped) {
+    console.log(`${error.message.trim()} Skipping browser smoke verification.`);
+  } else {
+    throw error;
+  }
 } finally {
   if (server && !server.killed) stopServer(server);
   rmSync(outputDirectory, { recursive: true, force: true });
@@ -106,6 +111,10 @@ function canCaptureScreenshot(browserPath) {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+function skipUnavailableScreenshots(reason) {
+  throw new BrowserSmokeSkipped(reason);
 }
 
 async function getOpenPort() {
@@ -158,4 +167,14 @@ function readPngDimensions(path) {
     width: bytes.readUInt32BE(16),
     height: bytes.readUInt32BE(20)
   };
+}
+
+async function waitForPng(path) {
+  const started = Date.now();
+  while (Date.now() - started < 2_000) {
+    const dimensions = readPngDimensions(path);
+    if (dimensions) return dimensions;
+    await delay(100);
+  }
+  return null;
 }

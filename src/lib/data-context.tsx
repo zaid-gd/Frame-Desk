@@ -55,18 +55,18 @@ const defaultIntegrationConfigs: Record<string, IntegrationConfig> = Object.from
 );
 
 const defaultSettings: SettingsState = {
-  studioName: "",
-  profileName: "",
-  profileUsername: "",
-  profileTitle: "",
-  profileBio: "",
-  profileLocation: "",
+  studioName: "CutLab Studio",
+  profileName: "Your Profile",
+  profileUsername: "editor",
+  profileTitle: "Video Editor",
+  profileBio: "Track active edits, delivery dates, feedback, and salary batches in one focused workspace.",
+  profileLocation: "Local workspace",
   profileImageUrl: "",
-  timeZone: "UTC",
+  timeZone: "Asia/Dubai",
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  currencyCode: "USD",
-  projectStages: ["Planning", "Pre-Production", "Production", "Post-Production", "Delivery"],
+  currencyCode: "INR",
+  projectStages: ["Planned", "In Progress", "Client Review", "Delivered"],
   notifications: {
     "Project updates": false,
     "Feedback received": false,
@@ -87,7 +87,7 @@ const defaultSettings: SettingsState = {
     "Frame.io": "",
   },
   integrationConfigs: { ...defaultIntegrationConfigs },
-  teamRole: "",
+  teamRole: "Editor",
   teamMembers: [],
   editorPermissions: {
     "Create and edit projects": false,

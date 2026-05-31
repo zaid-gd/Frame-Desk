@@ -229,18 +229,18 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
 ];
 
 const defaultSettings: SettingsState = {
-  studioName: "",
-  profileName: "",
-  profileUsername: "",
-  profileTitle: "",
-  profileBio: "",
-  profileLocation: "",
+  studioName: "CutLab Studio",
+  profileName: "Your Profile",
+  profileUsername: "editor",
+  profileTitle: "Video Editor",
+  profileBio: "Track active edits, delivery dates, feedback, and salary batches in one focused workspace.",
+  profileLocation: "Local workspace",
   profileImageUrl: "",
-  timeZone: "UTC",
+  timeZone: "Asia/Dubai",
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  currencyCode: "USD",
-  projectStages: [],
+  currencyCode: "INR",
+  projectStages: ["Planned", "In Progress", "Client Review", "Delivered"],
   notifications: {
     "Project updates": false,
     "Feedback received": false,
@@ -261,7 +261,7 @@ const defaultSettings: SettingsState = {
     "Frame.io": ""
   },
   integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
-  teamRole: "",
+  teamRole: "Editor",
   teamMembers: [],
   editorPermissions: {
     "Create and edit projects": false,
@@ -1766,6 +1766,10 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
     setIntegrationDialog(null);
   }
 
+  function disconnectIntegration(name: string) {
+    setDisconnectTarget(name);
+  }
+
   function confirmDisconnect() {
     if (!disconnectTarget) return;
     const cleared: IntegrationConfig = { ...emptyIntegrationConfig };
@@ -1912,6 +1916,54 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               </Stack>
             </Box>
             <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
+          </SettingsPanel>
+        <SettingsPanel title="Integrations" subtitle="Connect local records for storage, messaging, and review tools.">
+            <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ border: `1px solid ${border}`, borderRadius: "8px", overflow: "hidden" }}>
+              {integrationNames.map((name) => {
+                const config = settings.integrationConfigs[name] ?? { ...emptyIntegrationConfig };
+                const connected = Boolean(settings.integrations[name] || config.connected);
+                const account = settings.integrationAccounts[name] || config.account;
+                return (
+                  <Stack key={name} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.2} sx={{ p: 1.4, bgcolor: panel }}>
+                    <Stack direction="row" alignItems="center" gap={1.2} sx={{ minWidth: 0 }}>
+                      <Box sx={{ width: 34, height: 34, borderRadius: "7px", bgcolor: integrationColors[name], color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 760, flexShrink: 0 }}>
+                        {integrationIcons[name]}
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Stack direction="row" gap={0.8} alignItems="center" sx={{ flexWrap: "wrap" }}>
+                          <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{name}</Typography>
+                          <Chip
+                            label={connected ? "Connected" : "Not connected"}
+                            size="small"
+                            sx={{
+                              height: 20,
+                              borderRadius: "5px",
+                              bgcolor: connected ? "var(--app-success-bg, #e9f5e9)" : softPanel,
+                              color: connected ? "#3c8c4b" : muted,
+                              fontSize: 11,
+                              fontWeight: 720
+                            }}
+                          />
+                        </Stack>
+                        <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3, maxWidth: { xs: "100%", sm: 520 } }}>
+                          {account || integrationDescriptions[name]}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <Stack direction="row" gap={0.8} justifyContent={{ xs: "flex-start", sm: "flex-end" }}>
+                      {connected ? (
+                        <Button variant="outlined" onClick={() => disconnectIntegration(name)} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>
+                          Disconnect
+                        </Button>
+                      ) : null}
+                      <Button variant="outlined" onClick={() => openIntegration(name)} sx={outlineButtonSx}>
+                        {connected ? "Manage" : "Connect"}
+                      </Button>
+                    </Stack>
+                  </Stack>
+                );
+              })}
+            </Stack>
           </SettingsPanel>
         <Paper sx={{ ...panelSx, p: 2.25 }}>
             <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Appearance</Typography>

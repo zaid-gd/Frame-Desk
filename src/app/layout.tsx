@@ -79,11 +79,27 @@ const themeBootScript = `
 })();
 `;
 
+const clerkModalCenteringCss = `
+[class*="cl-modalBackdrop"] {
+  align-items: center !important;
+  display: flex !important;
+  justify-content: center !important;
+  min-height: 100dvh !important;
+  padding: 24px !important;
+}
+
+[class*="cl-modalContent"] {
+  margin: auto !important;
+  max-height: calc(100dvh - 48px) !important;
+}
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        <style data-clerk-modal-centering dangerouslySetInnerHTML={{ __html: clerkModalCenteringCss }} />
       </head>
       <body style={{ background: "var(--app-canvas, #fbfaf8)", color: "var(--app-ink, #19171f)" }}>
         <Providers>{children}</Providers>
