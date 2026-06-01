@@ -5,6 +5,7 @@ import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig } from "./types";
+import { normalizeIntegrationLinks } from "./integrations";
 
 const STORAGE_KEY = "video-editing-work-tracker:v1";
 const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
@@ -71,6 +72,7 @@ const defaultSettings: SettingsState = {
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
   currencyCode: "INR",
+  customClients: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
   salaryBatchSize: defaultSalaryBatchSize,
@@ -96,6 +98,7 @@ const defaultSettings: SettingsState = {
     "Frame.io": "",
   },
   integrationConfigs: { ...defaultIntegrationConfigs },
+  integrationLinks: {},
   teamRole: "Editor",
   teamMembers: [],
   editorPermissions: {
@@ -153,11 +156,13 @@ function freshDefaultSettings(): SettingsState {
   return {
     ...defaultSettings,
     projectTags: [...defaultSettings.projectTags],
+    customClients: [...defaultSettings.customClients],
     projectStages: [...defaultSettings.projectStages],
     notifications: { ...defaultSettings.notifications },
     integrations: { ...defaultSettings.integrations },
     integrationAccounts: { ...defaultSettings.integrationAccounts },
     integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
+    integrationLinks: normalizeIntegrationLinks(defaultSettings.integrationLinks),
     teamMembers: defaultSettings.teamMembers.map((m: TeamMember) => ({ ...m })),
     editorPermissions: { ...defaultSettings.editorPermissions },
     rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
@@ -244,6 +249,7 @@ function normalizeStoredItem(value: unknown): WorkItem | null {
     dueDate: stringSetting(value.dueDate, iso(todayDate())),
     earnings: typeof value.earnings === "number" && Number.isFinite(value.earnings) ? Math.max(0, value.earnings) : 0,
     notes: typeof value.notes === "string" ? value.notes : "",
+    integrationLinks: normalizeIntegrationLinks(value.integrationLinks),
   };
 }
 
@@ -354,6 +360,7 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     dateFormat: optionSetting(r.dateFormat, ["Month Day, Year", "Day Month Year", "YYYY-MM-DD"], defaultSettings.dateFormat),
     weekStart: optionSetting(r.weekStart, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], defaultSettings.weekStart),
     currencyCode: optionSetting(r.currencyCode, ["USD", "EUR", "GBP", "INR", "AED", "SAR"], defaultSettings.currencyCode),
+    customClients: stringListSetting(r.customClients, defaultSettings.customClients),
     projectTags,
     salaryWorkType,
     salaryBatchSize: positiveIntegerSetting(r.salaryBatchSize, defaultSettings.salaryBatchSize),
@@ -380,6 +387,7 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     integrations: booleanRecordSetting(r.integrations, defaultSettings.integrations),
     integrationAccounts: stringRecordSetting(r.integrationAccounts, defaultSettings.integrationAccounts),
     integrationConfigs: normalizeIntegrationConfigs(r.integrationConfigs, r.integrations, r.integrationAccounts),
+    integrationLinks: normalizeIntegrationLinks(r.integrationLinks),
     editorPermissions: booleanRecordSetting(r.editorPermissions, defaultSettings.editorPermissions),
     rolePermissions: normalizeRolePermissions(r.rolePermissions, r.editorPermissions),
   };

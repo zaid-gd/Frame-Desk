@@ -1,6 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const integrationLinkValidator = v.record(
+  v.string(),
+  v.object({
+    url: v.string(),
+    label: v.string(),
+    notes: v.string(),
+    updatedAt: v.string(),
+  })
+);
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -21,6 +31,7 @@ export const list = query({
       dueDate: item.dueDate,
       earnings: item.earnings,
       notes: item.notes,
+      integrationLinks: item.integrationLinks,
       createdAt: item.createdAt,
     }));
   },
@@ -40,6 +51,7 @@ export const replaceAll = mutation({
         dueDate: v.string(),
         earnings: v.number(),
         notes: v.string(),
+        integrationLinks: v.optional(integrationLinkValidator),
         createdAt: v.optional(v.string()),
       })
     ),

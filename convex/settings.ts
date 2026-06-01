@@ -8,6 +8,16 @@ const teamMemberSchema = v.object({
   email: v.string(),
 });
 
+const integrationLinkValidator = v.record(
+  v.string(),
+  v.object({
+    url: v.string(),
+    label: v.string(),
+    notes: v.string(),
+    updatedAt: v.string(),
+  })
+);
+
 export const get = query({
   args: {},
   handler: async (ctx) => {
@@ -34,6 +44,7 @@ export const upsert = mutation({
     dateFormat: v.string(),
     weekStart: v.string(),
     currencyCode: v.string(),
+    customClients: v.optional(v.array(v.string())),
     projectTags: v.array(v.string()),
     salaryWorkType: v.string(),
     salaryBatchSize: v.number(),
@@ -42,6 +53,7 @@ export const upsert = mutation({
     notifications: v.record(v.string(), v.boolean()),
     integrations: v.record(v.string(), v.boolean()),
     integrationAccounts: v.record(v.string(), v.string()),
+    integrationLinks: v.optional(integrationLinkValidator),
     teamRole: v.string(),
     teamMembers: v.array(teamMemberSchema),
     editorPermissions: v.record(v.string(), v.boolean()),

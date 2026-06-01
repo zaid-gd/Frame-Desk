@@ -1,3 +1,5 @@
+import type { IntegrationLinks } from "./integrations";
+
 export type EarningsMode = "manual" | "optional" | "batch" | "none";
 
 export type WorkTypeConfig = {
@@ -43,6 +45,7 @@ export type WorkItem = {
   dueDate: string;
   earnings: number;
   notes: string;
+  integrationLinks?: IntegrationLinks;
 };
 
 export type SalaryBatch = {
@@ -96,6 +99,7 @@ export type SettingsState = {
   dateFormat: string;
   weekStart: string;
   currencyCode: string;
+  customClients: string[];
   projectTags: string[];
   salaryWorkType: string;
   salaryBatchSize: number;
@@ -105,6 +109,7 @@ export type SettingsState = {
   integrations: Record<string, boolean>;
   integrationAccounts: Record<string, string>;
   integrationConfigs: Record<string, IntegrationConfig>;
+  integrationLinks: IntegrationLinks;
   teamRole: string;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;

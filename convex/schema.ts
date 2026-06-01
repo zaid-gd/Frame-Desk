@@ -14,6 +14,15 @@ export default defineSchema({
     dueDate: v.string(),
     earnings: v.number(),
     notes: v.string(),
+    integrationLinks: v.optional(v.record(
+      v.string(),
+      v.object({
+        url: v.string(),
+        label: v.string(),
+        notes: v.string(),
+        updatedAt: v.string(),
+      })
+    )),
     createdAt: v.optional(v.string()),
   }).index("by_userId", ["userId"]),
 
@@ -30,6 +39,7 @@ export default defineSchema({
     dateFormat: v.string(),
     weekStart: v.string(),
     currencyCode: v.string(),
+    customClients: v.optional(v.array(v.string())),
     projectTags: v.optional(v.array(v.string())),
     salaryWorkType: v.optional(v.string()),
     salaryBatchSize: v.optional(v.number()),
@@ -38,6 +48,15 @@ export default defineSchema({
     notifications: v.record(v.string(), v.boolean()),
     integrations: v.record(v.string(), v.boolean()),
     integrationAccounts: v.record(v.string(), v.string()),
+    integrationLinks: v.optional(v.record(
+      v.string(),
+      v.object({
+        url: v.string(),
+        label: v.string(),
+        notes: v.string(),
+        updatedAt: v.string(),
+      })
+    )),
     teamRole: v.string(),
     teamMembers: v.array(
       v.object({

@@ -56,10 +56,23 @@ import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
 import type { WorkItem, WorkTypeConfig, IntegrationConfig } from "@/lib/types";
+import type { IntegrationLink, IntegrationLinks, IntegrationServiceId } from "@/lib/integrations";
+import {
+  configuredIntegrationCount,
+  emptyIntegrationLink,
+  hasIntegrationLink,
+  integrationDisplayText,
+  integrationServices,
+  integrationStatusLabel,
+  isIntegrationServiceId,
+  isValidIntegrationUrl,
+  normalizeIntegrationLink
+} from "@/lib/integrations";
 
 const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
 const defaultSalaryWorkType = "Job / Salary";
@@ -98,7 +111,7 @@ const outlineButtonSx = {
   "&:hover": { borderColor: accent, bgcolor: hoverBg }
 };
 
-type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
+type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -122,6 +135,7 @@ type SettingsState = {
   dateFormat: string;
   weekStart: string;
   currencyCode: string;
+  customClients: string[];
   projectTags: string[];
   salaryWorkType: string;
   salaryBatchSize: number;
@@ -131,6 +145,7 @@ type SettingsState = {
   integrations: Record<string, boolean>;
   integrationAccounts: Record<string, string>;
   integrationConfigs: Record<string, IntegrationConfig>;
+  integrationLinks: IntegrationLinks;
   teamRole: string;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;
@@ -231,6 +246,7 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
   { key: "feedback", href: "/feedback", label: "Feedback", icon: <ChatBubbleOutlineOutlinedIcon /> },
   { key: "templates", href: "/templates", label: "Templates", icon: <InsertDriveFileOutlinedIcon /> },
   { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
+  { key: "integrations", href: "/integrations", label: "Integrations", icon: <OpenInNewIcon /> },
   { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon /> },
   { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> }
 ];
@@ -247,6 +263,7 @@ const defaultSettings: SettingsState = {
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
   currencyCode: "INR",
+  customClients: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
   salaryBatchSize: defaultSalaryBatchSize,
@@ -272,6 +289,7 @@ const defaultSettings: SettingsState = {
     "Frame.io": ""
   },
   integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
+  integrationLinks: {},
   teamRole: "Editor",
   teamMembers: [],
   editorPermissions: {
@@ -303,7 +321,8 @@ const emptyForm = (): WorkItem => ({
   startDate: iso(todayDate()),
   dueDate: iso(todayDate()),
   earnings: 0,
-  notes: ""
+  notes: "",
+  integrationLinks: {}
 });
 
 export function TrackerApp({ page }: { page: PageKey }) {
@@ -346,7 +365,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
   const projectTagOptions = useMemo(() => projectWorkTypeOptions(settings, projects), [projects, settings]);
   const filterProjectTagOptions = useMemo(() => ["ALL", ...projectTagOptions], [projectTagOptions]);
-  const clientOptions = useMemo(() => buildClientOptions(projects), [projects]);
+  const clientOptions = useMemo(() => buildClientOptions(projects, settings.customClients), [projects, settings.customClients]);
   const clientFilterOptions = useMemo(() => ["ALL", ...clientOptions], [clientOptions]);
   const filteredProjects = useMemo(() => {
     const searched = projects.filter((item) => {
@@ -461,7 +480,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   function saveProject() {
     const canonicalClient = canonicalClientName(form.client || "", clientOptions);
     const normalizedWorkType = canonicalWorkType(form.workType, projectTagOptions);
-    const normalizedForm = { ...form, client: canonicalClient, workType: normalizedWorkType };
+    const normalizedForm = { ...form, client: canonicalClient, workType: normalizedWorkType, integrationLinks: normalizeProjectIntegrationLinks(form.integrationLinks) };
     const typeConfig = getTypeConfig(normalizedForm.workType, settings);
     const error = validateProject(normalizedForm, typeConfig, projectTagOptions);
     if (error) {
@@ -476,7 +495,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
       profileId: profile.id,
       client: normalizedForm.client?.trim() || "",
       notes: normalizedForm.notes.trim(),
-      earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(normalizedForm.earnings)
+      earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(normalizedForm.earnings),
+      integrationLinks: normalizedForm.integrationLinks
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
     setDialogOpen(false);
@@ -485,22 +505,15 @@ export function TrackerApp({ page }: { page: PageKey }) {
     notify(editingId ? "Project updated." : "Project created.");
   }
 
-  function handleAddClientProject(clientName: string, projectTitle: string, workType: string) {
-    const payload: WorkItem = {
-      id: createId(),
-      profileId: profile.id,
-      createdAt: new Date().toISOString(),
-      title: projectTitle.trim() || "Onboarding & Planning",
-      client: clientName.trim(),
-      status: "Planned",
-      workType: canonicalWorkType(workType, projectTagOptions),
-      startDate: iso(todayDate()),
-      dueDate: iso(todayDate()),
-      earnings: 0,
-      notes: "Auto-generated project for new client onboarding."
-    };
-    setItems((current) => [payload, ...current]);
-    notify(`Client "${clientName}" added.`);
+  function handleAddClient(clientName: string) {
+    const canonical = canonicalClientName(clientName, clientOptions, false);
+    if (!canonical) return;
+    setSettings((current) => {
+      const existing = findExistingClientName(canonical, [...current.customClients, ...buildClientOptions(projects)]);
+      if (existing) return current;
+      return { ...current, customClients: [...current.customClients, canonical] };
+    });
+    notify(`Client "${canonical}" added.`);
   }
 
   const pageContent = page === "dashboard" ? (
@@ -530,7 +543,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   ) : page === "projects" ? (
     <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} />
   ) : page === "clients" ? (
-    <ClientsDesignPage projects={projects} projectTagOptions={projectTagOptions} onNewProject={openNewProject} onAddClientProject={handleAddClientProject} />
+    <ClientsDesignPage projects={projects} projectTagOptions={projectTagOptions} settings={settings} onAddClient={handleAddClient} />
   ) : page === "timeline" ? (
     <TimelineDesignPage projects={projects} />
   ) : page === "calendar" ? (
@@ -543,6 +556,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
     <TemplatesDesignPage onUseTemplate={openTemplateProject} />
   ) : page === "reports" ? (
     <ReportsDesignPage projects={projects} stats={stats} />
+  ) : page === "integrations" ? (
+    <IntegrationsDesignPage projects={projects} settings={settings} setSettings={setSettings} notify={notify} onEditProject={openEditProject} />
   ) : page === "team" ? (
     <TeamDesignPage projects={projects} settings={settings} setSettings={setSettings} />
   ) : page === "settings" ? (
@@ -647,6 +662,11 @@ function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState })
         ))}
       </Stack>
       <Box sx={{ position: "absolute", left: 24, right: 24, bottom: 28, pt: 2, borderTop: `1px solid ${border}` }}>
+        <Stack direction="row" gap={1.2} sx={{ mb: 1.2 }}>
+          <Link href="/privacy" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Privacy</Link>
+          <Typography component="span" sx={{ color: muted, fontSize: 12 }}>·</Typography>
+          <Link href="/terms" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Terms</Link>
+        </Stack>
         <Button
           fullWidth
           aria-label="Open profile menu"
@@ -761,6 +781,10 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
 }
 
 function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState }) {
+  const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
+  const notificationOpen = Boolean(notificationAnchor);
+  const enabledNotifications = Object.entries(settings.notifications).filter(([, enabled]) => enabled);
+
   return (
     <Box sx={{ display: { xs: "block", lg: "none" }, position: "fixed", zIndex: 20, top: 0, left: 0, right: 0, bgcolor: panel, borderBottom: `1px solid ${border}` }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.4 }}>
@@ -770,7 +794,48 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
           </Box>
           <Typography noWrap sx={{ fontSize: 22, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont, maxWidth: 180 }}>{settings.studioName}</Typography>
         </Stack>
-        <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
+        <Tooltip title="Notifications">
+          <Button
+            aria-label="Open notifications"
+            aria-haspopup="menu"
+            aria-expanded={notificationOpen ? "true" : undefined}
+            onClick={(event) => setNotificationAnchor(event.currentTarget)}
+            sx={{ minWidth: 36, width: 36, height: 36, p: 0, color: ink, borderRadius: "6px", position: "relative" }}
+          >
+            <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
+            {enabledNotifications.length ? (
+              <Box sx={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", bgcolor: accent, border: `1px solid ${panel}` }} />
+            ) : null}
+          </Button>
+        </Tooltip>
+        <Menu
+          anchorEl={notificationAnchor}
+          open={notificationOpen}
+          onClose={() => setNotificationAnchor(null)}
+          PaperProps={{ sx: { width: 290, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
+        >
+          <Box sx={{ px: 1.5, py: 1 }}>
+            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>Notifications</Typography>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>
+              {enabledNotifications.length ? `${enabledNotifications.length} notification types enabled` : "No notification types enabled"}
+            </Typography>
+          </Box>
+          <Divider sx={{ borderColor: border }} />
+          {enabledNotifications.length ? enabledNotifications.map(([name]) => (
+            <MenuItem key={name} sx={{ display: "block", color: ink, py: 1 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{name}</Typography>
+              <Typography sx={{ color: muted, fontSize: 12 }}>{notificationCopy(name)}</Typography>
+            </MenuItem>
+          )) : (
+            <Box sx={{ px: 1.5, py: 1.2 }}>
+              <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Turn on deadline, feedback, or weekly summary notifications from Settings.</Typography>
+            </Box>
+          )}
+          <Divider sx={{ borderColor: border }} />
+          <MenuItem component={Link} href="/settings" onClick={() => setNotificationAnchor(null)} sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>
+            Manage Notifications
+          </MenuItem>
+        </Menu>
       </Stack>
       <Box sx={{ px: 1.5, pb: 1.2, overflowX: "auto", scrollbarWidth: "none" }}>
         <Stack direction="row" gap={0.7} sx={{ width: "max-content" }}>
@@ -1121,16 +1186,15 @@ function ProjectDirectoryPage({ projects, onNewProject, onEditProject, onDeleteP
 function ClientsDesignPage({
   projects,
   projectTagOptions,
-  onNewProject,
-  onAddClientProject
+  settings,
+  onAddClient
 }: {
   projects: WorkItem[];
   projectTagOptions: string[];
-  onNewProject: () => void;
-  onAddClientProject?: (clientName: string, projectTitle: string, workType: string) => void;
+  settings: SettingsState;
+  onAddClient: (clientName: string) => void;
 }) {
-  const settings = useTrackerSettings();
-  const clients = buildClientSummaries(projects);
+  const clients = buildClientSummaries(projects, settings.customClients);
   const [clientQuery, setClientQuery] = useState("");
   const [clientStatusFilter, setClientStatusFilter] = useState<"ALL" | "Active" | "Inactive">("ALL");
   const [clientWorkFilter, setClientWorkFilter] = useState<ProjectKind>("ALL");
@@ -1140,8 +1204,6 @@ function ClientsDesignPage({
 
   const [addClientOpen, setAddClientOpen] = useState(false);
   const [newClientName, setNewClientName] = useState("");
-  const [newClientProject, setNewClientProject] = useState("Onboarding & Planning");
-  const [newClientWorkType, setNewClientWorkType] = useState("Freelance");
   const [addClientError, setAddClientError] = useState("");
 
   const filteredClients = clients.filter((client) => {
@@ -1165,9 +1227,6 @@ function ClientsDesignPage({
   const deliveredProjects = projects.length - activeProjects;
   const selectedFeedbackStatus = selectedProjects.length ? clientFeedbackStatus(selectedProjects) : "Approved";
   const pendingRevisions = selectedProjects.filter((project) => project.status === "In Progress" || project.status === "Planned");
-  const selectedNewClientWorkType = projectTagOptions.some((type) => type.toLowerCase() === newClientWorkType.toLowerCase())
-    ? canonicalWorkType(newClientWorkType, projectTagOptions)
-    : projectTagOptions[0];
   const clientTabs: { key: ClientDetailTab; label: string }[] = [
     { key: "Overview", label: "Overview" },
     { key: "Projects", label: `Projects (${selectedProjects.length})` },
@@ -1177,31 +1236,18 @@ function ClientsDesignPage({
 
   function handleSaveClient() {
     const clientName = newClientName.trim();
-    const projectTitle = newClientProject.trim();
     if (!clientName) {
       setAddClientError("Client name is required.");
       return;
     }
-    const existingClient = findExistingClientName(clientName, buildClientOptions(projects));
+    const existingClient = findExistingClientName(clientName, buildClientOptions(projects, settings.customClients));
     if (existingClient) {
       setAddClientError(`Client already exists as "${existingClient}". Select it from the project client dropdown instead.`);
       setSelectedClientName(existingClient);
       return;
     }
-    if (!projectTitle) {
-      setAddClientError("Initial project title is required.");
-      return;
-    }
-    if (!projectTagOptions.some((type) => type.toLowerCase() === newClientWorkType.toLowerCase())) {
-      setAddClientError("Choose a valid project type.");
-      return;
-    }
-    if (onAddClientProject) {
-      onAddClientProject(clientName, projectTitle, canonicalWorkType(newClientWorkType, projectTagOptions));
-    }
+    onAddClient(clientName);
     setNewClientName("");
-    setNewClientProject("Onboarding & Planning");
-    setNewClientWorkType("Freelance");
     setAddClientError("");
     setAddClientOpen(false);
     setSelectedClientName(clientName);
@@ -1217,12 +1263,9 @@ function ClientsDesignPage({
   return (
     <PageFrame
       title="Clients"
-      subtitle="Manage client relationships from the client names attached to projects."
+      subtitle="Manage saved clients and the client names attached to projects."
       action={
-        <Stack direction="row" spacing={1.2}>
-          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setAddClientError(""); setAddClientOpen(true); }} sx={outlineButtonSx}>Add Client</Button>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onNewProject} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>New Project</Button>
-        </Stack>
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setAddClientError(""); setAddClientOpen(true); }} sx={outlineButtonSx}>New Client</Button>
       }
     >
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
@@ -1314,7 +1357,7 @@ function ClientsDesignPage({
               <Box sx={{ px: 2, py: 5, textAlign: "center" }}>
                 <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>No client names yet</Typography>
                 <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 520, mx: "auto" }}>
-                  Add a client name when creating or editing a project, and client records will appear here.
+                  Create a client here, or type a new client name from the project form.
                 </Typography>
               </Box>
             )}
@@ -1337,7 +1380,7 @@ function ClientsDesignPage({
               </Stack>
               <Stack gap={1.1} sx={{ mt: 2.3, pb: 2, borderBottom: `1px solid ${border}` }}>
                 <ClientInfoRow icon={<MailOutlineIcon />} text="Contact email not set" />
-                <ClientInfoRow icon={<PublicOutlinedIcon />} text="Project-level client record" />
+                <ClientInfoRow icon={<PublicOutlinedIcon />} text={selectedProjects.length ? "Project-linked client record" : "Saved client record"} />
                 <ClientInfoRow icon={<PlaceOutlinedIcon />} text="Saved with project records" />
               </Stack>
               <Stack direction="row" gap={1} sx={{ mt: 2, mb: 2, overflowX: "auto", scrollbarWidth: "none" }}>
@@ -1363,18 +1406,17 @@ function ClientsDesignPage({
         </Paper>
       </Box>
       <Dialog open={addClientOpen} onClose={() => setAddClientOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
-        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Add New Client</DialogTitle>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>New Client</DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ mt: 1.5 }}>
             <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => { setNewClientName(e.target.value); setAddClientError(""); }} fullWidth />
-            <TextField label="Initial Project Title" placeholder="e.g. Onboarding & Planning" value={newClientProject} onChange={(e) => { setNewClientProject(e.target.value); setAddClientError(""); }} fullWidth />
-            <DialogSelect label="Project Type" value={selectedNewClientWorkType} options={projectTagOptions} onChange={setNewClientWorkType} />
+            <Typography sx={{ color: muted, fontSize: 12 }}>This creates a client option without creating a project. You can attach it to a project later.</Typography>
             {addClientError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{addClientError}</Typography> : null}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setAddClientOpen(false)} sx={{ color: muted }}>Cancel</Button>
-          <Button onClick={handleSaveClient} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Add Client</Button>
+          <Button onClick={handleSaveClient} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Client</Button>
         </DialogActions>
       </Dialog>
     </PageFrame>
@@ -1588,6 +1630,7 @@ function CalendarDesignPage({ projects, settings }: { projects: WorkItem[]; sett
               const dayProjects = projects.filter((project) => project.dueDate === key);
               const isCurrentMonth = day.date.getMonth() === visibleMonth.getMonth();
               const isSelected = selectedDate === key;
+              const isToday = key === iso(todayDate());
               return (
                 <Box
                   key={key}
@@ -1605,13 +1648,14 @@ function CalendarDesignPage({ projects, settings }: { projects: WorkItem[]; sett
                     borderRight: `1px solid ${border}`,
                     borderBottom: `1px solid ${border}`,
                     bgcolor: isSelected ? activeBg : isCurrentMonth ? panel : softPanel,
+                    boxShadow: isToday && !isSelected ? `inset 0 0 0 2px ${accent}` : "none",
                     color: "inherit",
                     opacity: isCurrentMonth ? 1 : 0.55,
                     "&:hover": { bgcolor: hoverBg }
                   }}
                 >
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography sx={{ color: isSelected ? accent : ink, fontSize: 13, fontWeight: 760 }}>{day.date.getDate()}</Typography>
+                    <Typography sx={{ color: isSelected || isToday ? accent : ink, fontSize: 13, fontWeight: 760 }}>{day.date.getDate()}</Typography>
                     {dayProjects.length ? <Chip label={dayProjects.length} size="small" sx={{ height: 20, minWidth: 22, bgcolor: activeBg, color: accent, borderRadius: "5px", fontSize: 11 }} /> : null}
                   </Stack>
                   <Stack gap={0.5} sx={{ mt: 1 }}>
@@ -1827,7 +1871,7 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
 }
 
 function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
-  const clients = buildClientSummaries(projects);
+  const clients = buildClientSummaries(projects, settings.customClients);
   const [memberForm, setMemberForm] = useState({ name: "", role: "Editor", email: "" });
   const [memberError, setMemberError] = useState("");
 
@@ -1914,42 +1958,233 @@ function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkIte
   );
 }
 
+function IntegrationsDesignPage({
+  projects,
+  settings,
+  setSettings,
+  notify,
+  onEditProject
+}: {
+  projects: WorkItem[];
+  settings: SettingsState;
+  setSettings: (settings: SettingsState) => void;
+  notify: (message: string, tone?: ToastState["tone"]) => void;
+  onEditProject: (item: WorkItem) => void;
+}) {
+  const projectLinks = projects.filter((project) => configuredIntegrationCount(project.integrationLinks) > 0);
+  const globalCount = configuredIntegrationCount(settings.integrationLinks);
+
+  return (
+    <PageFrame
+      title="Integrations"
+      subtitle="Save external service links for your workspace and individual projects. Links only; no OAuth, syncing, or API access."
+    >
+      <Stack gap={1.5}>
+        <IntegrationLinkManager
+          title="Global Integrations"
+          subtitle="Workspace-level service links used across your editing workflow."
+          links={settings.integrationLinks}
+          emptyTitle="No global integration links"
+          emptyBody="Add links to shared folders, calendars, channels, and review spaces your studio uses often."
+          onChange={(integrationLinks) => {
+            setSettings({ ...settings, integrationLinks });
+            notify("Global integration links updated.", "success");
+          }}
+        />
+
+        <Paper sx={{ ...panelSx, p: 2.25 }}>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.2} sx={{ mb: 1.5 }}>
+            <Box>
+              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Project Integrations</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>Project-specific links stay attached to each project record.</Typography>
+            </Box>
+            <Chip label={`${projectLinks.length} projects linked`} size="small" sx={{ alignSelf: { xs: "flex-start", md: "center" }, bgcolor: globalCount ? activeBg : softPanel, color: globalCount ? accent : muted, borderRadius: "5px" }} />
+          </Stack>
+          {projectLinks.length ? (
+            <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ border: `1px solid ${border}`, borderRadius: "8px", overflow: "hidden" }}>
+              {projectLinks.map((project) => (
+                <Stack key={project.id} direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} gap={1.2} sx={{ p: 1.4, bgcolor: panel }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography noWrap sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{project.title}</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>{configuredIntegrationCount(project.integrationLinks)} saved {configuredIntegrationCount(project.integrationLinks) === 1 ? "link" : "links"}</Typography>
+                    <Stack direction="row" gap={0.7} flexWrap="wrap" sx={{ mt: 0.8 }}>
+                      {integrationServices.map((service) => hasIntegrationLink(project.integrationLinks?.[service.id]) ? (
+                        <Chip key={service.id} label={service.shortName} size="small" sx={{ height: 22, borderRadius: "5px", bgcolor: activeBg, color: accent, fontSize: 11 }} />
+                      ) : null)}
+                    </Stack>
+                  </Box>
+                  <Button variant="outlined" onClick={() => onEditProject(project)} sx={outlineButtonSx}>Manage Project Links</Button>
+                </Stack>
+              ))}
+            </Stack>
+          ) : (
+            <EmptyPanel title="No project integration links" body="Open a project and add service links for folders, review pages, channels, or calendar events." />
+          )}
+        </Paper>
+      </Stack>
+    </PageFrame>
+  );
+}
+
+function IntegrationLinkManager({
+  title,
+  subtitle,
+  links,
+  emptyTitle,
+  emptyBody,
+  onChange
+}: {
+  title: string;
+  subtitle: string;
+  links: IntegrationLinks | undefined;
+  emptyTitle: string;
+  emptyBody: string;
+  onChange: (links: IntegrationLinks) => void;
+}) {
+  const [editing, setEditing] = useState<{ serviceId: IntegrationServiceId; link: IntegrationLink } | null>(null);
+  const [error, setError] = useState("");
+  const configuredCount = configuredIntegrationCount(links);
+
+  function openEditor(serviceId: IntegrationServiceId) {
+    setEditing({ serviceId, link: { ...emptyIntegrationLink, ...normalizeIntegrationLink(links?.[serviceId]) } });
+    setError("");
+  }
+
+  function saveLink() {
+    if (!editing) return;
+    const link = normalizeIntegrationLink(editing.link);
+    if (!isValidIntegrationUrl(link.url)) {
+      setError("Enter a valid http or https URL.");
+      return;
+    }
+    onChange({
+      ...(links ?? {}),
+      [editing.serviceId]: {
+        ...link,
+        updatedAt: new Date().toISOString()
+      }
+    });
+    setEditing(null);
+    setError("");
+  }
+
+  function removeLink(serviceId: IntegrationServiceId) {
+    const next: IntegrationLinks = { ...(links ?? {}) };
+    delete next[serviceId];
+    onChange(next);
+  }
+
+  function openLink(url: string) {
+    if (typeof window === "undefined" || !isValidIntegrationUrl(url)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <Paper sx={{ ...panelSx, p: 2.25 }}>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.2} sx={{ mb: 1.5 }}>
+        <Box>
+          <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>{title}</Typography>
+          <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>{subtitle}</Typography>
+        </Box>
+        <Chip label={`${configuredCount} configured`} size="small" sx={{ alignSelf: { xs: "flex-start", md: "center" }, bgcolor: configuredCount ? activeBg : softPanel, color: configuredCount ? accent : muted, borderRadius: "5px" }} />
+      </Stack>
+      {!configuredCount ? <Box sx={{ mb: 1.4 }}><EmptyPanel title={emptyTitle} body={emptyBody} /></Box> : null}
+      <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ border: `1px solid ${border}`, borderRadius: "8px", overflow: "hidden" }}>
+        {integrationServices.map((service) => {
+          const link = links?.[service.id];
+          const linked = hasIntegrationLink(link);
+          return (
+            <Stack key={service.id} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.2} sx={{ p: 1.4, bgcolor: panel }}>
+              <Stack direction="row" alignItems="center" gap={1.2} sx={{ minWidth: 0 }}>
+                <Box sx={{ width: 34, height: 34, borderRadius: "7px", bgcolor: service.color, color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 760, flexShrink: 0 }}>
+                  {service.icon}
+                </Box>
+                <Box sx={{ minWidth: 0 }}>
+                  <Stack direction="row" gap={0.8} alignItems="center" sx={{ flexWrap: "wrap" }}>
+                    <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{service.name}</Typography>
+                    <Chip
+                      label={integrationStatusLabel(link)}
+                      size="small"
+                      sx={{
+                        height: 20,
+                        borderRadius: "5px",
+                        bgcolor: linked ? "var(--app-success-bg, #e9f5e9)" : softPanel,
+                        color: linked ? "#3c8c4b" : muted,
+                        fontSize: 11,
+                        fontWeight: 720
+                      }}
+                    />
+                  </Stack>
+                  <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3, maxWidth: { xs: "100%", sm: 520 } }}>
+                    {integrationDisplayText(link, service.description)}
+                  </Typography>
+                </Box>
+              </Stack>
+              <Stack direction="row" gap={0.8} justifyContent={{ xs: "flex-start", sm: "flex-end" }} flexWrap="wrap">
+                {linked && link ? (
+                  <Button variant="outlined" startIcon={<OpenInNewIcon sx={{ fontSize: 17 }} />} onClick={() => openLink(link.url)} sx={outlineButtonSx}>Open</Button>
+                ) : null}
+                {linked ? (
+                  <Button variant="outlined" onClick={() => removeLink(service.id)} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>Remove</Button>
+                ) : null}
+                <Button variant="outlined" onClick={() => openEditor(service.id)} sx={outlineButtonSx}>{linked ? "Edit" : "Add Link"}</Button>
+              </Stack>
+            </Stack>
+          );
+        })}
+      </Stack>
+
+      <Dialog open={Boolean(editing)} onClose={() => setEditing(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>
+          {editing ? `${hasIntegrationLink(links?.[editing.serviceId]) ? "Edit" : "Add"} ${integrationServices.find((service) => service.id === editing.serviceId)?.name} Link` : "Integration Link"}
+        </DialogTitle>
+        <DialogContent>
+          <Stack gap={2} sx={{ pt: 1 }}>
+            <TextField
+              label="URL"
+              value={editing?.link.url ?? ""}
+              onChange={(event) => {
+                setEditing((current) => current ? { ...current, link: { ...current.link, url: event.target.value } } : current);
+                setError("");
+              }}
+              fullWidth
+              autoFocus
+              placeholder="https://..."
+              error={Boolean(error)}
+            />
+            <TextField
+              label="Label"
+              value={editing?.link.label ?? ""}
+              onChange={(event) => setEditing((current) => current ? { ...current, link: { ...current.link, label: event.target.value } } : current)}
+              fullWidth
+              placeholder="Client review folder"
+            />
+            <TextField
+              label="Notes"
+              value={editing?.link.notes ?? ""}
+              onChange={(event) => setEditing((current) => current ? { ...current, link: { ...current.link, notes: event.target.value } } : current)}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Optional context for this link"
+            />
+            {error ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{error}</Typography> : null}
+            <Typography sx={{ color: muted, fontSize: 12 }}>This stores a link only. CutLab will not authenticate, browse files, sync data, or call this service.</Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setEditing(null)} sx={{ color: muted }}>Cancel</Button>
+          <Button onClick={saveLink} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Link</Button>
+        </DialogActions>
+      </Dialog>
+    </Paper>
+  );
+}
+
 function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; onNewProject: () => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
   const stageColors = ["#6c4db3", "#7eadea", "#d39a27", "#9a75d1", "#6dab55", "#d65f59"];
-  const [integrationDialog, setIntegrationDialog] = useState<{ name: string; config: IntegrationConfig } | null>(null);
-  const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
-  const [testingConnection, setTestingConnection] = useState(false);
-
-  const [googleLoginOpen, setGoogleLoginOpen] = useState(false);
-  const [googleCustomEmail, setGoogleCustomEmail] = useState("");
-  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
-  const integrationValidationError = integrationDialog ? validateIntegrationConfig(integrationDialog.name, integrationDialog.config) : "";
-
-  function selectGoogleAccount(email: string) {
-    let finalEmail = email.trim();
-    if (!finalEmail.includes("@")) {
-      finalEmail = `${finalEmail}@gmail.com`;
-    }
-    setIntegrationDialog((current) =>
-      current
-        ? {
-            ...current,
-            config: {
-              ...current.config,
-              connected: true,
-              account: finalEmail,
-              connectedAt: new Date().toISOString()
-            }
-          }
-        : current
-    );
-    setGoogleLoginOpen(false);
-    setShowCustomEmailInput(false);
-    setGoogleCustomEmail("");
-    notify(`Authenticated as ${finalEmail} via Google.`);
-  }
   const activeRole = settings.teamRole || "Owner";
   const activePerms = settings.rolePermissions[activeRole] ?? {};
   const roleCounts = ["Owner", "Editor", "Reviewer", "Client"].map((role) => ({
@@ -1960,73 +2195,6 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   function updateNotification(name: string, enabled: boolean) {
     setSettings({ ...settings, notifications: { ...settings.notifications, [name]: enabled } });
     notify(`${name} notifications ${enabled ? "enabled" : "disabled"}.`, "info");
-  }
-
-  function openIntegration(name: string) {
-    const existing = settings.integrationConfigs[name] ?? { ...emptyIntegrationConfig };
-    setIntegrationDialog({ name, config: { ...existing } });
-  }
-
-  function saveIntegration() {
-    if (!integrationDialog) return;
-    const config = integrationDialog.config;
-    const error = validateIntegrationConfig(integrationDialog.name, config);
-    if (error) {
-      notify(error, "warning");
-      return;
-    }
-    const hasAccount = config.account.trim();
-    const now = new Date().toISOString();
-    const updatedConfig: IntegrationConfig = {
-      ...config,
-      connected: Boolean(hasAccount),
-      account: config.account.trim(),
-      connectedAt: hasAccount ? (config.connectedAt || now) : "",
-      lastSyncAt: hasAccount ? now : ""
-    };
-    setSettings({
-      ...settings,
-      integrations: { ...settings.integrations, [integrationDialog.name]: updatedConfig.connected },
-      integrationAccounts: { ...settings.integrationAccounts, [integrationDialog.name]: updatedConfig.account },
-      integrationConfigs: { ...settings.integrationConfigs, [integrationDialog.name]: updatedConfig }
-    });
-    notify(`${integrationDialog.name} ${updatedConfig.connected ? "connected" : "updated"} successfully.`);
-    setIntegrationDialog(null);
-  }
-
-  function disconnectIntegration(name: string) {
-    setDisconnectTarget(name);
-  }
-
-  function confirmDisconnect() {
-    if (!disconnectTarget) return;
-    const cleared: IntegrationConfig = { ...emptyIntegrationConfig };
-    setSettings({
-      ...settings,
-      integrations: { ...settings.integrations, [disconnectTarget]: false },
-      integrationAccounts: { ...settings.integrationAccounts, [disconnectTarget]: "" },
-      integrationConfigs: { ...settings.integrationConfigs, [disconnectTarget]: cleared }
-    });
-    notify(`${disconnectTarget} disconnected.`, "warning");
-    setDisconnectTarget(null);
-  }
-
-  function testConnection() {
-    if (!integrationDialog) return;
-    const error = validateIntegrationConfig(integrationDialog.name, integrationDialog.config);
-    if (error) {
-      notify(error, "warning");
-      return;
-    }
-    setTestingConnection(true);
-    setTimeout(() => {
-      setTestingConnection(false);
-      if (integrationDialog) {
-        const now = new Date().toISOString();
-        setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, lastSyncAt: now } } : current);
-      }
-      notify("Connection details validated.", "success");
-    }, 1500);
   }
 
   function selectRole(role: string) {
@@ -2078,7 +2246,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   function resetSettings() {
-    setSettings({ ...defaultSettings, projectTags: [...defaultSettings.projectTags], projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
+    setSettings({ ...defaultSettings, customClients: [...defaultSettings.customClients], projectTags: [...defaultSettings.projectTags], projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), integrationLinks: {}, teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
     notify("Settings reset to defaults.", "warning");
   }
 
@@ -2238,54 +2406,17 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </Box>
             <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
           </SettingsPanel>
-        <SettingsPanel title="Integrations" subtitle="Connect local records for storage, messaging, and review tools.">
-            <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ border: `1px solid ${border}`, borderRadius: "8px", overflow: "hidden" }}>
-              {integrationNames.map((name) => {
-                const config = settings.integrationConfigs[name] ?? { ...emptyIntegrationConfig };
-                const connected = Boolean(settings.integrations[name] || config.connected);
-                const account = settings.integrationAccounts[name] || config.account;
-                return (
-                  <Stack key={name} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={1.2} sx={{ p: 1.4, bgcolor: panel }}>
-                    <Stack direction="row" alignItems="center" gap={1.2} sx={{ minWidth: 0 }}>
-                      <Box sx={{ width: 34, height: 34, borderRadius: "7px", bgcolor: integrationColors[name], color: "#fff", display: "grid", placeItems: "center", fontSize: 13, fontWeight: 760, flexShrink: 0 }}>
-                        {integrationIcons[name]}
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Stack direction="row" gap={0.8} alignItems="center" sx={{ flexWrap: "wrap" }}>
-                          <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{name}</Typography>
-                          <Chip
-                            label={connected ? "Connected" : "Not connected"}
-                            size="small"
-                            sx={{
-                              height: 20,
-                              borderRadius: "5px",
-                              bgcolor: connected ? "var(--app-success-bg, #e9f5e9)" : softPanel,
-                              color: connected ? "#3c8c4b" : muted,
-                              fontSize: 11,
-                              fontWeight: 720
-                            }}
-                          />
-                        </Stack>
-                        <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3, maxWidth: { xs: "100%", sm: 520 } }}>
-                          {account || integrationDescriptions[name]}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                    <Stack direction="row" gap={0.8} justifyContent={{ xs: "flex-start", sm: "flex-end" }}>
-                      {connected ? (
-                        <Button variant="outlined" onClick={() => disconnectIntegration(name)} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>
-                          Disconnect
-                        </Button>
-                      ) : null}
-                      <Button variant="outlined" onClick={() => openIntegration(name)} sx={outlineButtonSx}>
-                        {connected ? "Manage" : "Connect"}
-                      </Button>
-                    </Stack>
-                  </Stack>
-                );
-              })}
-            </Stack>
-          </SettingsPanel>
+        <IntegrationLinkManager
+          title="Integrations"
+          subtitle="Save workspace-level links for storage, messaging, calendars, and review tools."
+          links={settings.integrationLinks}
+          emptyTitle="No integration links configured"
+          emptyBody="Add links to shared folders, calendars, review pages, or team channels. This does not connect to external APIs."
+          onChange={(integrationLinks) => {
+            setSettings({ ...settings, integrationLinks });
+            notify("Integration links updated.", "success");
+          }}
+        />
         <Paper sx={{ ...panelSx, p: 2.25 }}>
             <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Appearance</Typography>
             <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>Customize how CutLab looks and feels for your tracker.</Typography>
@@ -2320,282 +2451,6 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </Box>
           </Paper>
       </Stack>
-
-      {/* Integration Config Dialog */}
-      <Dialog open={Boolean(integrationDialog)} onClose={() => setIntegrationDialog(null)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
-        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>
-          <Stack direction="row" alignItems="center" gap={1.2}>
-            <Box sx={{ width: 32, height: 32, borderRadius: "6px", bgcolor: integrationDialog ? integrationColors[integrationDialog.name] : accent, color: "#fff", display: "grid", placeItems: "center", fontSize: 14, fontWeight: 760 }}>{integrationDialog ? integrationIcons[integrationDialog.name] : "?"}</Box>
-            {integrationDialog?.name ? `${integrationDialog.config.connected ? "Manage" : "Connect"} ${integrationDialog.name}` : "Connect integration"}
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Stack gap={2} sx={{ pt: 1 }}>
-            <Typography sx={{ color: muted, fontSize: 13 }}>
-              {integrationDialog ? integrationDescriptions[integrationDialog.name] : "Configure your integration connection details."}
-            </Typography>
-            {integrationDialog?.name === "Google Drive" ? (
-              <Stack gap={1.5}>
-                {integrationDialog.config.connected && integrationDialog.config.account ? (
-                  <Paper sx={{ p: 1.5, border: `1px solid ${border}`, bgcolor: softPanel, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontSize: 11, color: muted, fontWeight: 700 }}>SIGNED IN AS</Typography>
-                      <Typography noWrap sx={{ fontSize: 13.5, color: ink, fontWeight: 760, mt: 0.3 }}>{integrationDialog.config.account}</Typography>
-                    </Box>
-                    <Button variant="outlined" onClick={() => setGoogleLoginOpen(true)} sx={{ ...outlineButtonSx, fontSize: 12, height: 32, py: 0 }}>Change</Button>
-                  </Paper>
-                ) : (
-                  <Box sx={{ py: 0.5 }}>
-                    <Button
-                      variant="outlined"
-                      startIcon={
-                        <svg width="18" height="18" viewBox="0 0 18 18">
-                          <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4" />
-                          <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853" />
-                          <path d="M3.964 10.707a5.416 5.416 0 01-.282-1.707c0-.596.102-1.174.282-1.707V4.961H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05" />
-                          <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.961l3.007 2.332C4.672 5.164 6.656 3.58 9 3.58z" fill="#EA4335" />
-                        </svg>
-                      }
-                      onClick={() => setGoogleLoginOpen(true)}
-                      sx={{
-                        color: "#19171f",
-                        borderColor: "#dedbe5",
-                        bgcolor: "#ffffff",
-                        borderRadius: "6px",
-                        textTransform: "none",
-                        fontWeight: 720,
-                        py: 1.2,
-                        fontSize: 14,
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
-                        "&:hover": { bgcolor: "#f7f4fc", borderColor: accent }
-                      }}
-                      fullWidth
-                    >
-                      Sign in with Google
-                    </Button>
-                  </Box>
-                )}
-              </Stack>
-            ) : (
-              <TextField
-                label="Account email or name"
-                value={integrationDialog?.config.account || ""}
-                onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, account: event.target.value } } : current)}
-                fullWidth
-                autoFocus
-                placeholder="you@example.com"
-                error={Boolean(integrationDialog && requiresAccountEmail(integrationDialog.name) && integrationDialog.config.account.trim() && !isValidEmail(integrationDialog.config.account))}
-              />
-            )}
-            {integrationDialog?.name === "Google Drive" || integrationDialog?.name === "Dropbox" ? (
-              <TextField
-                label="Folder path"
-                value={integrationDialog?.config.folder || ""}
-                onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, folder: event.target.value } } : current)}
-                fullWidth
-                placeholder={integrationDialog?.name === "Google Drive" ? "/Projects/Video Edits" : "/Deliverables"}
-              />
-            ) : null}
-            {integrationDialog?.name === "Slack" ? (
-              <>
-                <TextField
-                  label="Workspace name"
-                  value={integrationDialog?.config.workspace || ""}
-                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, workspace: event.target.value } } : current)}
-                  fullWidth
-                  placeholder="My Studio Workspace"
-                />
-                <TextField
-                  label="Channel"
-                  value={integrationDialog?.config.channel || ""}
-                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, channel: event.target.value } } : current)}
-                  fullWidth
-                  placeholder="#project-updates"
-                />
-                <TextField
-                  label="Webhook URL (optional)"
-                  value={integrationDialog?.config.webhookUrl || ""}
-                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, webhookUrl: event.target.value } } : current)}
-                  fullWidth
-                  placeholder="https://hooks.slack.com/services/..."
-                  error={Boolean(integrationDialog?.config.webhookUrl.trim() && !isValidUrl(integrationDialog.config.webhookUrl))}
-                />
-              </>
-            ) : null}
-            {integrationDialog?.name === "Frame.io" ? (
-              <>
-                <TextField
-                  label="Workspace"
-                  value={integrationDialog?.config.workspace || ""}
-                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, workspace: event.target.value } } : current)}
-                  fullWidth
-                  placeholder="Studio Workspace"
-                />
-                <TextField
-                  label="Project folder"
-                  value={integrationDialog?.config.folder || ""}
-                  onChange={(event) => setIntegrationDialog((current) => current ? { ...current, config: { ...current.config, folder: event.target.value } } : current)}
-                  fullWidth
-                  placeholder="/Reviews/Active"
-                />
-              </>
-            ) : null}
-            {integrationDialog?.config.lastSyncAt ? (
-              <Typography sx={{ color: muted, fontSize: 12 }}>Last synced: {formatTimestamp(integrationDialog.config.lastSyncAt)}</Typography>
-            ) : null}
-            {integrationValidationError ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{integrationValidationError}</Typography> : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button onClick={() => setIntegrationDialog(null)} sx={{ color: muted }}>Cancel</Button>
-          <Button
-            onClick={testConnection}
-            disabled={testingConnection || Boolean(integrationValidationError)}
-            variant="outlined"
-            sx={{ borderColor: border, color: accent, borderRadius: "5px", fontSize: 13, "&:hover": { borderColor: accent } }}
-          >
-            {testingConnection ? <CircularProgress size={16} sx={{ color: accent, mr: 1 }} /> : null}
-            {testingConnection ? "Testing..." : "Test Connection"}
-          </Button>
-          <Button onClick={saveIntegration} variant="contained" disabled={Boolean(integrationValidationError)} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Connection</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Google Login Dialog */}
-      <Dialog
-        open={googleLoginOpen}
-        onClose={() => setGoogleLoginOpen(false)}
-        fullWidth
-        maxWidth="xs"
-        PaperProps={{
-          sx: {
-            bgcolor: "#ffffff",
-            color: "#1f2024",
-            borderRadius: "12px",
-            border: "1px solid #e0e0e0",
-            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-            p: 2.5
-          }
-        }}
-      >
-        <Stack alignItems="center" spacing={2} sx={{ pt: 1, pb: 2 }}>
-          <svg width="24" height="24" viewBox="0 0 24 24">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-          </svg>
-          <Typography sx={{ fontSize: 20, fontWeight: 500, color: "#202124", fontFamily: "'Google Sans', Roboto, Arial" }}>
-            Sign in with Google
-          </Typography>
-          <Typography sx={{ fontSize: 13, color: "#5f6368", textAlign: "center" }}>
-            to continue to <strong style={{ color: "#202124" }}>CutLab Studio</strong>
-          </Typography>
-        </Stack>
-
-        <DialogContent sx={{ p: 0 }}>
-          <Stack gap={1.2} sx={{ mt: 1 }}>
-            {!showCustomEmailInput ? (
-              <>
-                <Box
-                  component="button"
-                  onClick={() => selectGoogleAccount("jordan.lee@gmail.com")}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                    p: 1.5,
-                    width: "100%",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    bgcolor: "transparent",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    transition: "background-color 150ms",
-                    "&:hover": { bgcolor: "#f8f9fa" }
-                  }}
-                >
-                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#e8f0fe", color: "#1a73e8", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 13 }}>JL</Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: "#3c4043" }}>Jordan Lee</Typography>
-                    <Typography sx={{ fontSize: 12, color: "#5f6368" }}>jordan.lee@gmail.com</Typography>
-                  </Box>
-                </Box>
-
-                <Box
-                  component="button"
-                  onClick={() => setShowCustomEmailInput(true)}
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                    p: 1.5,
-                    width: "100%",
-                    border: "1px solid #e0e0e0",
-                    borderRadius: "8px",
-                    bgcolor: "transparent",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    transition: "background-color 150ms",
-                    "&:hover": { bgcolor: "#f8f9fa" }
-                  }}
-                >
-                  <Box sx={{ width: 32, height: 32, borderRadius: "50%", bgcolor: "#f1f3f4", color: "#5f6368", display: "grid", placeItems: "center", fontWeight: 700, fontSize: 14 }}>+</Box>
-                  <Typography sx={{ fontSize: 13.5, color: "#1a73e8", fontWeight: 600 }}>Use another account</Typography>
-                </Box>
-              </>
-            ) : (
-              <Stack gap={1.5}>
-                <TextField
-                  label="Email or phone"
-                  value={googleCustomEmail}
-                  onChange={(e) => setGoogleCustomEmail(e.target.value)}
-                  fullWidth
-                  autoFocus
-                  placeholder="name@gmail.com"
-                  sx={{
-                    "& .MuiOutlinedInput-root": {
-                      bgcolor: "#fff",
-                      color: "#202124",
-                      "& fieldset": { borderColor: "#dadce0" }
-                    },
-                    "& label": { color: "#5f6368" }
-                  }}
-                />
-                <Stack direction="row" spacing={1.5} justifyContent="flex-end">
-                  <Button onClick={() => setShowCustomEmailInput(false)} sx={{ color: "#5f6368", textTransform: "none" }}>Back</Button>
-                  <Button
-                    variant="contained"
-                    disabled={!googleCustomEmail.trim()}
-                    onClick={() => selectGoogleAccount(googleCustomEmail)}
-                    sx={{ bgcolor: "#1a73e8", color: "#fff", textTransform: "none", "&:hover": { bgcolor: "#1557b0" } }}
-                  >
-                    Next
-                  </Button>
-                </Stack>
-              </Stack>
-            )}
-
-            <Typography sx={{ fontSize: 11, color: "#5f6368", mt: 2, lineHeight: 1.4 }}>
-              To continue, Google will share your name, email address, and profile picture with CutLab Studio. Before using this app, you can review its privacy policy and terms of service.
-            </Typography>
-          </Stack>
-        </DialogContent>
-      </Dialog>
-
-      {/* Disconnect Confirmation Dialog */}
-      <Dialog open={Boolean(disconnectTarget)} onClose={() => setDisconnectTarget(null)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
-        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>Disconnect {disconnectTarget}?</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: muted, fontSize: 14 }}>
-            This will remove all saved connection details for {disconnectTarget}. You can reconnect it anytime from the Integrations panel.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDisconnectTarget(null)} sx={{ color: muted }}>Cancel</Button>
-          <Button onClick={confirmDisconnect} variant="contained" sx={{ bgcolor: "#bd3f37", color: "#fff", "&:hover": { bgcolor: "#a9342d" } }}>Disconnect</Button>
-        </DialogActions>
-      </Dialog>
     </PageFrame>
   );
 }
@@ -2896,6 +2751,7 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
 }
 
 function PageFrame({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
+  const settings = useTrackerSettings();
   return (
     <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: 3 }}>
@@ -2905,13 +2761,64 @@ function PageFrame({ title, subtitle, action, children }: { title: string; subti
         </Box>
         <Stack direction="row" alignItems="center" justifyContent={{ xs: "space-between", sm: "flex-end" }} gap={1.5} sx={{ flexShrink: 0 }}>
           {action}
-          <Box sx={{ width: 36, height: 36, borderRadius: "50%", display: "grid", placeItems: "center", color: ink }}>
-            <NotificationsNoneOutlinedIcon />
-          </Box>
+          <NotificationBell settings={settings} />
         </Stack>
       </Stack>
       {children}
     </Box>
+  );
+}
+
+function NotificationBell({ settings }: { settings: SettingsState }) {
+  const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
+  const notificationOpen = Boolean(notificationAnchor);
+  const enabledNotifications = Object.entries(settings.notifications).filter(([, enabled]) => enabled);
+
+  return (
+    <>
+      <Tooltip title="Notifications">
+        <Button
+          aria-label="Open notifications"
+          aria-haspopup="menu"
+          aria-expanded={notificationOpen ? "true" : undefined}
+          onClick={(event) => setNotificationAnchor(event.currentTarget)}
+          sx={{ minWidth: 36, width: 36, height: 36, p: 0, color: ink, borderRadius: "6px", position: "relative" }}
+        >
+          <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
+          {enabledNotifications.length ? (
+            <Box sx={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", bgcolor: accent, border: `1px solid ${panel}` }} />
+          ) : null}
+        </Button>
+      </Tooltip>
+      <Menu
+        anchorEl={notificationAnchor}
+        open={notificationOpen}
+        onClose={() => setNotificationAnchor(null)}
+        PaperProps={{ sx: { width: 290, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
+      >
+        <Box sx={{ px: 1.5, py: 1 }}>
+          <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>Notifications</Typography>
+          <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>
+            {enabledNotifications.length ? `${enabledNotifications.length} notification types enabled` : "No notification types enabled"}
+          </Typography>
+        </Box>
+        <Divider sx={{ borderColor: border }} />
+        {enabledNotifications.length ? enabledNotifications.map(([name]) => (
+          <MenuItem key={name} sx={{ display: "block", color: ink, py: 1 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{name}</Typography>
+            <Typography sx={{ color: muted, fontSize: 12 }}>{notificationCopy(name)}</Typography>
+          </MenuItem>
+        )) : (
+          <Box sx={{ px: 1.5, py: 1.2 }}>
+            <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Turn on deadline, feedback, or weekly summary notifications from Settings.</Typography>
+          </Box>
+        )}
+        <Divider sx={{ borderColor: border }} />
+        <MenuItem component={Link} href="/settings" onClick={() => setNotificationAnchor(null)} sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>
+          Manage Notifications
+        </MenuItem>
+      </Menu>
+    </>
   );
 }
 
@@ -3008,8 +2915,13 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
   );
 }
 
-function buildClientSummaries(projects: WorkItem[]) {
+function buildClientSummaries(projects: WorkItem[], savedClients: string[] = []) {
   const groups = new Map<string, { name: string; projects: WorkItem[] }>();
+  for (const client of savedClients) {
+    const clientName = client.trim();
+    if (!clientName) continue;
+    groups.set(clientName.toLowerCase(), { name: clientName, projects: [] });
+  }
   for (const project of projects) {
     const clientName = project.client?.trim();
     if (!clientName) continue;
@@ -3343,7 +3255,11 @@ function ProjectDialog({
           <TextField label="Project name" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} fullWidth />
           <Autocomplete
             freeSolo
+            selectOnFocus
+            clearOnBlur={false}
+            handleHomeEndKeys
             options={clientOptions}
+            noOptionsText="Type a new client name"
             value={form.client || ""}
             inputValue={form.client || ""}
             onInputChange={(_, value) => setForm({ ...form, client: canonicalClientName(value, clientOptions, false) })}
@@ -3352,7 +3268,7 @@ function ProjectDialog({
               <TextField
                 {...params}
                 label="Client"
-                placeholder={clientOptions.length ? "Select a client or type a new one" : "Type a client name"}
+                placeholder={clientOptions.length ? "Choose existing or type new client" : "Type a new client name"}
                 helperText={clientSuggestionText(form.client || "", clientOptions)}
                 fullWidth
               />
@@ -3363,11 +3279,19 @@ function ProjectDialog({
             <DialogSelect label="Tag" value={selectedWorkType} options={workTypeOptions} onChange={(value) => setForm({ ...form, workType: value, earnings: 0 })} />
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
-            <TextField label="Start date" type="date" value={form.startDate} onChange={(event) => setForm({ ...form, startDate: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} />
-            <TextField label="Due date" type="date" value={form.dueDate} onChange={(event) => setForm({ ...form, dueDate: event.target.value })} fullWidth InputLabelProps={{ shrink: true }} />
+            <DatePickerField label="Start date" value={form.startDate} settings={settings} onChange={(value) => setForm({ ...form, startDate: value })} />
+            <DatePickerField label="Due date" value={form.dueDate} settings={settings} onChange={(value) => setForm({ ...form, dueDate: value })} />
           </Stack>
           <TextField label="Earnings" type="number" value={form.earnings} disabled={typeConfig.earningsMode === "batch"} helperText={typeConfig.earningsMode === "batch" ? `${settings.salaryWorkType} earnings are batch tracked in settings.` : ""} onChange={(event) => setForm({ ...form, earnings: Number(event.target.value || 0) })} fullWidth />
           <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
+          <IntegrationLinkManager
+            title="Project Integrations"
+            subtitle="Attach service links that belong only to this project."
+            links={form.integrationLinks}
+            emptyTitle="No project links"
+            emptyBody="Add links to this project's folders, reviews, channels, or calendar events."
+            onChange={(integrationLinks) => setForm({ ...form, integrationLinks })}
+          />
           {formError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{formError}</Typography> : null}
         </Stack>
       </DialogContent>
@@ -3407,6 +3331,92 @@ function DialogSelect({ label, value, options, onChange }: { label: string; valu
   );
 }
 
+function DatePickerField({ label, value, settings, onChange }: { label: string; value: string; settings: SettingsState; onChange: (value: string) => void }) {
+  const selected = isIsoDate(value) ? new Date(`${value}T00:00:00`) : todayDate();
+  const [anchor, setAnchor] = useState<null | HTMLElement>(null);
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(selected.getFullYear(), selected.getMonth(), 1));
+  const open = Boolean(anchor);
+  const monthDays = calendarMonthDays(visibleMonth, settings.weekStart);
+  const weekdays = orderedWeekdays(settings.weekStart);
+  const monthLabel = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(visibleMonth);
+
+  function shiftMonth(offset: number) {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  }
+
+  function chooseDate(next: string) {
+    onChange(next);
+    setAnchor(null);
+  }
+
+  return (
+    <Box sx={{ width: "100%" }}>
+      <Typography sx={{ color: muted, fontSize: 12, fontWeight: 680, mb: 0.7 }}>{label}</Typography>
+      <Button
+        fullWidth
+        variant="outlined"
+        startIcon={<CalendarTodayOutlinedIcon sx={{ fontSize: 17 }} />}
+        onClick={(event) => {
+          const nextSelected = isIsoDate(value) ? new Date(`${value}T00:00:00`) : todayDate();
+          setVisibleMonth(new Date(nextSelected.getFullYear(), nextSelected.getMonth(), 1));
+          setAnchor(event.currentTarget);
+        }}
+        sx={{ justifyContent: "flex-start", borderColor: border, color: ink, bgcolor: controlPanel, height: 46, borderRadius: "6px", fontSize: 14, fontWeight: 650, "&:hover": { borderColor: accent, bgcolor: hoverBg } }}
+      >
+        {isIsoDate(value) ? formatDate(value, settings.dateFormat) : "Choose date"}
+      </Button>
+      <Menu
+        anchorEl={anchor}
+        open={open}
+        onClose={() => setAnchor(null)}
+        PaperProps={{ sx: { width: 330, maxWidth: "calc(100vw - 32px)", p: 1.2, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
+      >
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 0.4, mb: 1 }}>
+          <Button size="small" aria-label={`Previous ${label.toLowerCase()} month`} onClick={() => shiftMonth(-1)} sx={{ minWidth: 32, color: accent, border: `1px solid ${border}` }}>‹</Button>
+          <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{monthLabel}</Typography>
+          <Button size="small" aria-label={`Next ${label.toLowerCase()} month`} onClick={() => shiftMonth(1)} sx={{ minWidth: 32, color: accent, border: `1px solid ${border}` }}>›</Button>
+        </Stack>
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 0.4 }}>
+          {weekdays.map((day) => (
+            <Typography key={day} sx={{ color: muted, fontSize: 10, fontWeight: 760, textAlign: "center", textTransform: "uppercase", py: 0.5 }}>{day}</Typography>
+          ))}
+          {monthDays.map((day) => {
+            const key = iso(day.date);
+            const selectedDay = key === value;
+            const isCurrentMonth = day.date.getMonth() === visibleMonth.getMonth();
+            const isToday = key === iso(todayDate());
+            return (
+              <Button
+                key={key}
+                aria-label={`Choose ${formatDate(key, settings.dateFormat)} for ${label}`}
+                onClick={() => chooseDate(key)}
+                sx={{
+                  minWidth: 0,
+                  height: 36,
+                  borderRadius: "6px",
+                  color: selectedDay ? "#fff" : isCurrentMonth ? ink : muted,
+                  bgcolor: selectedDay ? accent : isToday ? activeBg : "transparent",
+                  border: isToday && !selectedDay ? `1px solid ${accent}` : "1px solid transparent",
+                  fontSize: 12,
+                  fontWeight: selectedDay || isToday ? 760 : 650,
+                  opacity: isCurrentMonth ? 1 : 0.48,
+                  "&:hover": { bgcolor: selectedDay ? accent : hoverBg }
+                }}
+              >
+                {day.date.getDate()}
+              </Button>
+            );
+          })}
+        </Box>
+        <Stack direction="row" justifyContent="space-between" sx={{ mt: 1 }}>
+          <Button size="small" onClick={() => chooseDate(iso(todayDate()))} sx={{ color: accent, fontSize: 12 }}>Today</Button>
+          <Button size="small" onClick={() => setAnchor(null)} sx={{ color: muted, fontSize: 12 }}>Close</Button>
+        </Stack>
+      </Menu>
+    </Box>
+  );
+}
+
 function validateProject(item: WorkItem, type: WorkTypeConfig, workTypeOptions: string[]) {
   if (!item.title.trim()) return "Project name is required.";
   if (!statusOptions.includes(item.status as ProjectStatus)) return "Choose a valid project status.";
@@ -3415,7 +3425,23 @@ function validateProject(item: WorkItem, type: WorkTypeConfig, workTypeOptions: 
   if (!isIsoDate(item.startDate) || !isIsoDate(item.dueDate)) return "Use valid start and due dates.";
   if (dateTime(item.startDate) > dateTime(item.dueDate)) return "Due date must be on or after start date.";
   if (type.earningsMode !== "batch" && safeMoneyValue(item.earnings) < 0) return "Earnings must be zero or higher.";
+  const invalidLink = integrationServices.find((service) => {
+    const link = item.integrationLinks?.[service.id];
+    return link?.url && !isValidIntegrationUrl(link.url);
+  });
+  if (invalidLink) return `${invalidLink.name} needs a valid http or https URL.`;
   return "";
+}
+
+function normalizeProjectIntegrationLinks(links: IntegrationLinks | undefined): IntegrationLinks {
+  const normalized: IntegrationLinks = {};
+  for (const service of integrationServices) {
+    const link = normalizeIntegrationLink(links?.[service.id]);
+    if (!link.url && !link.label && !link.notes) continue;
+    if (!isIntegrationServiceId(service.id)) continue;
+    normalized[service.id] = link;
+  }
+  return normalized;
 }
 
 function isValidEmail(value: string) {
@@ -3631,9 +3657,16 @@ function canonicalWorkType(value: string, options: string[]) {
   return options.find((option) => option.toLowerCase() === trimmed.toLowerCase()) ?? trimmed;
 }
 
-function buildClientOptions(projects: WorkItem[]) {
+function buildClientOptions(projects: WorkItem[], savedClients: string[] = []) {
   const seen = new Set<string>();
   const result: string[] = [];
+  for (const savedClient of savedClients) {
+    const client = savedClient.trim();
+    const key = client.toLowerCase();
+    if (!client || seen.has(key)) continue;
+    seen.add(key);
+    result.push(client);
+  }
   for (const project of projects) {
     const client = project.client?.trim();
     const key = client?.toLowerCase();
