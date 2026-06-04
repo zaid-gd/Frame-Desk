@@ -5,7 +5,17 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import { setTimeout as delay } from "node:timers/promises";
 
-const routes = ["/", "/projects", "/settings", "/profile"];
+const routes = [
+  { path: "/", label: "dashboard", expectedText: ["Dashboard"] },
+  { path: "/projects", label: "projects", expectedText: ["Projects", "Project Library"] },
+  {
+    path: "/team",
+    label: "team",
+    expectedText: ["Team", "Team Members", "Loading workspace"],
+  },
+  { path: "/settings", label: "settings", expectedText: ["Settings"] },
+  { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },
+];
 const startupTimeoutMs = 30_000;
 const outputDirectory = mkdtempSync(join(tmpdir(), "cutlab-browser-smoke-"));
 class BrowserSmokeSkipped extends Error {}
@@ -13,15 +23,6 @@ class BrowserSmokeSkipped extends Error {}
 let server;
 
 try {
-  const firefoxPath = findFirefox();
-  if (!firefoxPath) {
-    skipUnavailableScreenshots("Firefox was not found.");
-  }
-
-  if (!canCaptureScreenshot(firefoxPath)) {
-    skipUnavailableScreenshots("Firefox headless screenshots are unavailable in this environment.");
-  }
-
   const port = await getOpenPort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
@@ -46,24 +47,48 @@ try {
   await waitForServer(baseUrl, () => output);
 
   for (const route of routes) {
-    const screenshotPath = join(outputDirectory, `${route === "/" ? "dashboard" : route.slice(1)}.png`);
+    const pageResponse = await fetch(`${baseUrl}${route.path}`, { signal: AbortSignal.timeout(5_000) });
+    if (!pageResponse.ok) {
+      throw new Error(`Browser smoke route ${route.path} returned ${pageResponse.status}.`);
+    }
+    const pageHtml = await pageResponse.text();
+    for (const text of route.expectedText) {
+      if (!pageHtml.includes(text)) {
+        throw new Error(`Browser smoke route ${route.path} is missing expected text: ${text}`);
+      }
+    }
+  }
+  console.log(`Browser smoke verified route HTML for ${routes.length} routes against ${baseUrl}.`);
+
+  const firefoxPath = findFirefox();
+  if (!firefoxPath) {
+    skipUnavailableScreenshots("Firefox was not found.");
+  }
+
+  if (!canCaptureScreenshot(firefoxPath)) {
+    skipUnavailableScreenshots("Firefox headless screenshots are unavailable in this environment.");
+  }
+
+  for (const route of routes) {
+
+    const screenshotPath = join(outputDirectory, `${route.label}.png`);
     const result = spawnSync(
       firefoxPath,
-      ["--headless", "--window-size=1440,1000", "--screenshot", screenshotPath, `${baseUrl}${route}`],
+      ["--headless", "--window-size=1440,1000", "--screenshot", screenshotPath, `${baseUrl}${route.path}`],
       { encoding: "utf8", timeout: 30_000, windowsHide: true }
     );
 
     const dimensions = await waitForPng(screenshotPath);
     if (!dimensions) {
-      skipUnavailableScreenshots(`Firefox did not create a valid PNG for ${route}.\n${result.stderr || result.stdout}`);
+      skipUnavailableScreenshots(`Firefox did not create a valid PNG for ${route.path}.\n${result.stderr || result.stdout}`);
     }
     if (dimensions.width < 1200 || dimensions.height < 800) {
-      throw new Error(`Browser screenshot for ${route} is unexpectedly small: ${dimensions.width}x${dimensions.height}.`);
+      throw new Error(`Browser screenshot for ${route.path} is unexpectedly small: ${dimensions.width}x${dimensions.height}.`);
     }
 
     const bytes = readFileSync(screenshotPath);
     if (bytes.byteLength < 50_000) {
-      throw new Error(`Browser screenshot for ${route} looks too small to be a real rendered page: ${bytes.byteLength} bytes.`);
+      throw new Error(`Browser screenshot for ${route.path} looks too small to be a real rendered page: ${bytes.byteLength} bytes.`);
     }
   }
 

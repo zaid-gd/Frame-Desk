@@ -4,12 +4,13 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig } from "./types";
+import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink } from "./types";
 import { normalizeIntegrationLinks } from "./integrations";
 
 const STORAGE_KEY = "video-editing-work-tracker:v1";
 const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
 const SETTINGS_STORAGE_KEY = "video-editing-work-tracker:settings:v1";
+const RESOURCES_STORAGE_KEY = "video-editing-work-tracker:resources:v1";
 const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
 const defaultSalaryWorkType = "Job / Salary";
 const defaultSalaryBatchSize = 20;
@@ -61,17 +62,17 @@ const defaultIntegrationConfigs: Record<string, IntegrationConfig> = Object.from
 );
 
 const defaultSettings: SettingsState = {
-  studioName: "CutLab Studio",
-  profileName: "Your Profile",
-  profileUsername: "editor",
-  profileTitle: "Video Editor",
-  profileBio: "Track active edits, delivery dates, feedback, and salary batches in one focused workspace.",
-  profileLocation: "Local workspace",
+  studioName: "",
+  profileName: "",
+  profileUsername: "",
+  profileTitle: "",
+  profileBio: "",
+  profileLocation: "",
   profileImageUrl: "",
-  timeZone: "Asia/Dubai",
+  timeZone: "UTC",
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  currencyCode: "INR",
+  currencyCode: "USD",
   customClients: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
@@ -99,7 +100,7 @@ const defaultSettings: SettingsState = {
   },
   integrationConfigs: { ...defaultIntegrationConfigs },
   integrationLinks: {},
-  teamRole: "Editor",
+  teamRole: "",
   teamMembers: [],
   editorPermissions: {
     "Create and edit projects": false,
@@ -142,6 +143,11 @@ function writeJson(key: string, value: unknown) {
   } catch {
     return false;
   }
+}
+
+function isProjectAuthorizationError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /permission|team access|required|not authenticated/i.test(message);
 }
 
 function removeKey(key: string) {
@@ -239,6 +245,11 @@ function normalizeStoredItem(value: unknown): WorkItem | null {
   if (!id || !title) return null;
   return {
     id,
+    teamId: typeof value.teamId === "string" && value.teamId.trim() ? value.teamId : undefined,
+    ownerUserId: typeof value.ownerUserId === "string" && value.ownerUserId.trim() ? value.ownerUserId : undefined,
+    assigneeUserIds: Array.isArray(value.assigneeUserIds)
+      ? value.assigneeUserIds.flatMap((id): string[] => (typeof id === "string" && id.trim() ? [id] : []))
+      : [],
     profileId: stringSetting(value.profileId, "video-editing"),
     createdAt: typeof value.createdAt === "string" ? value.createdAt : undefined,
     title,
@@ -417,6 +428,38 @@ function normalizeWorkItems(items: unknown[]): WorkItem[] {
   });
 }
 
+function normalizeResourceLink(value: unknown): ResourceLink | null {
+  if (!isPlainRecord(value)) return null;
+  const id = typeof value.id === "string" && value.id.trim() ? value.id : "";
+  const title = typeof value.title === "string" && value.title.trim() ? value.title.trim() : "";
+  const url = typeof value.url === "string" && value.url.trim() ? value.url.trim() : "";
+  if (!id || !title || !url) return null;
+  const now = new Date().toISOString();
+  return {
+    id,
+    title,
+    url,
+    category: typeof value.category === "string" && value.category.trim() ? value.category.trim() : "Other",
+    projectId: typeof value.projectId === "string" ? value.projectId.trim() : "",
+    notes: typeof value.notes === "string" ? value.notes : "",
+    createdAt: typeof value.createdAt === "string" && value.createdAt ? value.createdAt : now,
+    updatedAt: typeof value.updatedAt === "string" && value.updatedAt ? value.updatedAt : now,
+  };
+}
+
+function normalizeResourceLinks(value: unknown): ResourceLink[] {
+  const resources = Array.isArray(value) ? value : [];
+  return resources.flatMap((resource) => {
+    const normalized = normalizeResourceLink(resource);
+    return normalized ? [normalized] : [];
+  });
+}
+
+function readInitialResources(): ResourceLink[] {
+  if (typeof window === "undefined") return [];
+  return normalizeResourceLinks(readJson<unknown>(RESOURCES_STORAGE_KEY, []));
+}
+
 function isSalaryWorkType(value: string, settings: SettingsState) {
   return value.trim().toLowerCase() === settings.salaryWorkType.trim().toLowerCase();
 }
@@ -547,6 +590,8 @@ interface DataContextValue {
   setItems: React.Dispatch<React.SetStateAction<WorkItem[]>>;
   settings: SettingsState;
   setSettings: React.Dispatch<React.SetStateAction<SettingsState>>;
+  resourceLinks: ResourceLink[];
+  setResourceLinks: React.Dispatch<React.SetStateAction<ResourceLink[]>>;
   salaryBatches: SalaryBatch[];
   reconcileSalaryBatches: (items: WorkItem[]) => void;
   isAuthEnabled: boolean;
@@ -568,12 +613,14 @@ export function DataProvider({ children, mode = "local" }: { children: React.Rea
 function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   useEffect(() => {
     setItemsState(readInitialItems());
     setSettingsState(readInitialSettings());
+    setResourceLinksState(readInitialResources());
     setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
   }, []);
 
@@ -595,6 +642,14 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
     setSettingsState((prev: SettingsState) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
       writeJson(SETTINGS_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const setResourceLinks = useCallback((updater: React.SetStateAction<ResourceLink[]>) => {
+    setResourceLinksState((prev: ResourceLink[]) => {
+      const next = normalizeResourceLinks(typeof updater === "function" ? updater(prev) : updater);
+      writeJson(RESOURCES_STORAGE_KEY, next);
       return next;
     });
   }, []);
@@ -626,6 +681,8 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
     setItems,
     settings,
     setSettings,
+    resourceLinks,
+    setResourceLinks,
     salaryBatches,
     reconcileSalaryBatches,
     isAuthEnabled: false,
@@ -644,6 +701,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { isLoading: convexAuthLoading, isAuthenticated: convexAuthenticated } = useConvexAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -655,9 +713,11 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const convexItems = useQuery(api.workItems.list, {});
   const convexSettings = useQuery(api.settings.get, {});
   const convexBatches = useQuery(api.salaryBatches.list, {});
+  const convexResources = useQuery(api.resourceLinks.list, {});
   const replaceAllItems = useMutation(api.workItems.replaceAll);
   const upsertSettings = useMutation(api.settings.upsert);
   const replaceAllBatches = useMutation(api.salaryBatches.replaceAll);
+  const replaceAllResources = useMutation(api.resourceLinks.replaceAll);
 
   useEffect(() => {
     if (!clerkLoaded) return;
@@ -675,6 +735,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     const stored = readInitialItems();
     setItemsState(stored);
     setSettingsState(readInitialSettings());
+    setResourceLinksState(readInitialResources());
 
     const salState = normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] }));
     setSalaryBatches(salState.batches);
@@ -690,6 +751,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       if (ready) return;
       setItemsState(readInitialItems());
       setSettingsState(readInitialSettings());
+      setResourceLinksState(readInitialResources());
       setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
       void diagnoseConvexAuthToken(getToken).then((message) => {
         setToast({ tone: "warning", message });
@@ -698,12 +760,13 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined) return;
+    if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined || convexResources === undefined) return;
     if (ready) return;
 
     const loadedItems = normalizeWorkItems(convexItems);
     const loadedSettings = convexSettings;
     const loadedBatches = normalizeSalaryState({ batches: convexBatches }).batches;
+    const loadedResources = normalizeResourceLinks(convexResources);
     let cancelled = false;
     const token = initializationToken.current + 1;
     initializationToken.current = token;
@@ -712,10 +775,12 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       const localItems = readInitialItems();
       const localSettings = readJson<Partial<SettingsState>>(SETTINGS_STORAGE_KEY, {});
       const localBatches = normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] }));
+      const localResources = readInitialResources();
       const mergedLocalSettings = Object.keys(localSettings).length > 0 ? mergeSettings(localSettings) : readInitialSettings();
       let nextItems: WorkItem[] = loadedItems;
       let nextSettings = loadedSettings ? mergeSettings(loadedSettings) : mergedLocalSettings;
       let nextBatches: SalaryBatch[] = loadedBatches;
+      let nextResources: ResourceLink[] = loadedResources;
       let syncFailed = false;
 
       if (loadedItems.length === 0 && localItems.length > 0) {
@@ -737,6 +802,17 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         } catch {
           syncFailed = true;
           nextBatches = localBatches.batches;
+        }
+      }
+
+      if (loadedResources.length === 0 && localResources.length > 0) {
+        try {
+          await replaceAllResources({ resources: localResources });
+          removeKey(RESOURCES_STORAGE_KEY);
+          nextResources = localResources;
+        } catch {
+          syncFailed = true;
+          nextResources = localResources;
         }
       }
 
@@ -763,6 +839,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       if (cancelled || initializationToken.current !== token) return;
       setItemsState(nextItems);
       setSettingsState(nextSettings);
+      setResourceLinksState(nextResources);
       setSalaryBatches(nextBatches);
       setReady(true);
     }
@@ -781,10 +858,19 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     convexItems,
     convexSettings,
     convexBatches,
+    convexResources,
     replaceAllItems,
     replaceAllBatches,
+    replaceAllResources,
     upsertSettings,
   ]);
+
+  // Keep signed-in workspaces live after the initial cloud load. Team project
+  // changes from other members arrive through Convex subscriptions here.
+  useEffect(() => {
+    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !ready || convexItems === undefined) return;
+    setItemsState(normalizeWorkItems(convexItems));
+  }, [clerkLoaded, convexAuthenticated, convexItems, isSignedIn, ready]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;
@@ -838,7 +924,15 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setItemsState((prev: WorkItem[]) => {
         const next = normalizeWorkItems(typeof updater === "function" ? updater(prev) : updater);
         if (isSignedIn && convexAuthenticated) {
-          replaceAllItems({ items: next }).catch(() => {
+          replaceAllItems({ items: next }).catch((error) => {
+            if (isProjectAuthorizationError(error)) {
+              setItemsState(prev);
+              setToast({
+                tone: "warning",
+                message: "Project change was not allowed by your team permissions.",
+              });
+              return;
+            }
             writeJson(STORAGE_KEY, next);
             setToast({
               tone: "warning",
@@ -874,6 +968,27 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       });
     },
     [convexAuthenticated, isSignedIn, upsertSettings],
+  );
+
+  const setResourceLinks = useCallback(
+    (updater: React.SetStateAction<ResourceLink[]>) => {
+      setResourceLinksState((prev: ResourceLink[]) => {
+        const next = normalizeResourceLinks(typeof updater === "function" ? updater(prev) : updater);
+        if (isSignedIn && convexAuthenticated) {
+          replaceAllResources({ resources: next }).catch(() => {
+            writeJson(RESOURCES_STORAGE_KEY, next);
+            setToast({
+              tone: "warning",
+              message: "Cloud sync failed. Resources are saved locally for now.",
+            });
+          });
+        } else {
+          writeJson(RESOURCES_STORAGE_KEY, next);
+        }
+        return next;
+      });
+    },
+    [convexAuthenticated, isSignedIn, replaceAllResources],
   );
 
   const reconcileSalaryBatches = useCallback(
@@ -917,6 +1032,8 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     setItems,
     settings,
     setSettings,
+    resourceLinks,
+    setResourceLinks,
     salaryBatches,
     reconcileSalaryBatches,
     isAuthEnabled: true,

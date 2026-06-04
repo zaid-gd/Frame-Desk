@@ -35,6 +35,9 @@ export type ProfileConfig = {
 
 export type WorkItem = {
   id: string;
+  teamId?: string;
+  ownerUserId?: string;
+  assigneeUserIds?: string[];
   profileId: string;
   createdAt?: string;
   title: string;
@@ -46,6 +49,17 @@ export type WorkItem = {
   earnings: number;
   notes: string;
   integrationLinks?: IntegrationLinks;
+};
+
+export type ResourceLink = {
+  id: string;
+  title: string;
+  url: string;
+  category: string;
+  projectId: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SalaryBatch = {

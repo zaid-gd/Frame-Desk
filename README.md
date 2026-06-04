@@ -9,7 +9,7 @@
 ![Status](https://img.shields.io/badge/status-V1%20polished-2f7d32)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CutLab Studio is a local-first production tracker for video editors. It brings projects, client work, delivery dates, revision queues, salary edit batches, reports, team settings, and profile pages into one focused workspace.
+CutLab Studio is a local-first production tracker for video editors. It brings projects, client work, delivery dates, revision queues, salary edit batches, reports, team collaboration, resources, and profile pages into one focused workspace.
 
 The app is built for the real operating rhythm of editing work: planned cuts, in-progress revisions, delivered projects, freelance payments, personal channel uploads, and salary edits that count toward batch payouts.
 
@@ -38,7 +38,8 @@ The app is built for the real operating rhythm of editing work: planned cuts, in
 - Media and feedback pages driven by project data instead of placeholder content.
 - Reusable project templates for client campaigns, salary edits, channel uploads, and revision sprints.
 - Reports for workload, delivery rate, salary edits, earnings, and work mix.
-- Team page with member validation, roles, permissions, and organization profile visibility.
+- Convex-backed Team workspace for small editing teams, with owner invites, role permissions, shared projects, assignments, comments, notifications, chat, and activity feed.
+- Resources page for storing project asset and reference links until deeper storage/OAuth integrations are added.
 - Settings for profile details, time zone, date format, week start, workflow stages, notifications, integrations, theme, accent color, and density.
 - Public profile and organization profile pages connected to current settings and project stats.
 - Local-first data handling with optional Clerk + Convex account-backed sync.
@@ -66,6 +67,20 @@ Timeline and calendar views help show what is due, what shipped, and where each 
 ### Media And Feedback
 
 Media summarizes production packages by work type and status. Feedback highlights planned and in-progress work that may need review attention.
+
+### Team Collaboration
+
+The Team workspace is built for small editing teams of up to five members. Owners create a workspace, invite members by email, and assign roles. Invited users must sign in with the invited email before joining.
+
+Team projects are shared through Convex. Owners and editors can create and edit projects, reviewers can comment, and status-only updates are controlled by role permissions. Projects support owner metadata, active-member assignments, team comments, mention notifications, assignment notifications, and status/note activity logging.
+
+The Team page includes:
+
+- Member list with pending invites, active members, role changes, and removals.
+- Project comments synced through Convex.
+- Lightweight team chat for quick handoffs.
+- In-app notifications for mentions, role changes, assignments, and project updates.
+- Activity feed for workspace creation, invites, joins, comments, project changes, and member management.
 
 ### Templates
 
@@ -142,6 +157,10 @@ CLERK_FRONTEND_API_URL=
 ```bash
 npm run lint
 npm run build
+npm run verify:team
+npm run verify:team:live
+npm run verify:browser
+npm run verify:prod
 npm run verify
 ```
 
@@ -151,11 +170,23 @@ Available checks:
 | --- | --- |
 | `npm run lint` | TypeScript check with `tsc --noEmit` |
 | `npm run build` | Next.js production build |
+| `npm run verify:team` | Static Team collaboration invariant checks across Convex and UI code |
+| `npm run verify:team:live` | Clerk/Convex prerequisite check plus the required two-account Team smoke-test checklist |
+| `npm run verify:browser` | Production browser smoke route checks, including the Team route, with optional Firefox screenshots |
 | `npm run verify` | Route, link, asset, and source invariant verification |
 | `npm run verify:prod` | Production server verification |
-| `npm run check:full` | Full CI-style verification path |
+| `npm run check:full` | Full CI-style verification path: typecheck, build, audit, Team invariants, browser smoke, and production verification |
 
-Recent local verification covered 15 routes, 306 rendered internal links, 280 Next assets, 4 PNG assets, and 104 source invariants.
+For Team changes, also run `npm run verify:team:live`, then complete the live two-account Clerk/Convex smoke test before release:
+
+1. Start the app with Convex enabled.
+2. Sign in as an owner, create a Team workspace, and invite a second user by email.
+3. Sign in as the invited user with the invited email and join with the invite code.
+4. As owner/editor, create a team project, assign the invited member, and update notes/status.
+5. Confirm the invited member sees the shared project, assignment notification, status update, activity feed entry, and project comments in real time.
+6. Confirm role limits: reviewers can comment but cannot edit; clients cannot use team chat; removed members lose workspace access.
+
+Recent production verification covered 19 routes, 450 rendered internal links, 390 Next assets, 4 PNG assets, and 125 source invariants.
 
 ## Why This Exists
 
@@ -175,4 +206,4 @@ Longer version:
 
 ## Current Status
 
-CutLab Studio is in a polished V1 state. The main routes, forms, settings, data-backed pages, local persistence, optional cloud sync path, loading states, empty states, validation states, dark mode surfaces, and verification scripts are all wired and passing production checks.
+CutLab Studio is in a polished V1 state. The main routes, forms, settings, data-backed pages, local persistence, optional cloud sync path, Team collaboration layer, loading states, empty states, validation states, dark mode surfaces, and verification scripts are all wired and passing local production checks.
