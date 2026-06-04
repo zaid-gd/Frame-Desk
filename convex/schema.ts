@@ -5,6 +5,9 @@ export default defineSchema({
   workItems: defineTable({
     userId: v.string(),
     id: v.string(),
+    teamId: v.optional(v.string()),
+    ownerUserId: v.optional(v.string()),
+    assigneeUserIds: v.optional(v.array(v.string())),
     profileId: v.string(),
     title: v.string(),
     client: v.optional(v.string()),
@@ -24,7 +27,79 @@ export default defineSchema({
       })
     )),
     createdAt: v.optional(v.string()),
-  }).index("by_userId", ["userId"]),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_teamId", ["teamId"])
+    .index("by_teamId_and_id", ["teamId", "id"]),
+
+  teamWorkspaces: defineTable({
+    ownerUserId: v.string(),
+    name: v.string(),
+    inviteCode: v.string(),
+    createdAt: v.string(),
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_inviteCode", ["inviteCode"]),
+
+  teamMembers: defineTable({
+    teamId: v.string(),
+    userId: v.string(),
+    email: v.string(),
+    name: v.string(),
+    role: v.string(),
+    status: v.string(),
+    permissions: v.record(v.string(), v.boolean()),
+    createdAt: v.string(),
+    joinedAt: v.optional(v.string()),
+  })
+    .index("by_teamId", ["teamId"])
+    .index("by_userId", ["userId"])
+    .index("by_teamId_and_userId", ["teamId", "userId"])
+    .index("by_teamId_and_email", ["teamId", "email"]),
+
+  teamActivity: defineTable({
+    teamId: v.string(),
+    actorUserId: v.string(),
+    actorName: v.string(),
+    kind: v.string(),
+    projectId: v.optional(v.string()),
+    message: v.string(),
+    createdAt: v.string(),
+  }).index("by_teamId_and_createdAt", ["teamId", "createdAt"]),
+
+  teamChatMessages: defineTable({
+    teamId: v.string(),
+    authorUserId: v.string(),
+    authorName: v.string(),
+    body: v.string(),
+    mentions: v.array(v.string()),
+    createdAt: v.string(),
+  }).index("by_teamId_and_createdAt", ["teamId", "createdAt"]),
+
+  projectComments: defineTable({
+    teamId: v.string(),
+    projectId: v.string(),
+    authorUserId: v.string(),
+    authorName: v.string(),
+    body: v.string(),
+    mentions: v.array(v.string()),
+    createdAt: v.string(),
+  })
+    .index("by_teamId_and_projectId", ["teamId", "projectId"])
+    .index("by_teamId_and_createdAt", ["teamId", "createdAt"]),
+
+  teamNotifications: defineTable({
+    teamId: v.string(),
+    userId: v.string(),
+    kind: v.string(),
+    projectId: v.optional(v.string()),
+    message: v.string(),
+    read: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_userId_and_read", ["userId", "read"])
+    .index("by_teamId_and_userId", ["teamId", "userId"])
+    .index("by_teamId_and_userId_and_createdAt", ["teamId", "userId", "createdAt"]),
 
   settings: defineTable({
     userId: v.string(),
@@ -93,5 +168,17 @@ export default defineSchema({
     completedDate: v.string(),
     archived: v.boolean(),
     archivedDate: v.string(),
+  }).index("by_userId", ["userId"]),
+
+  resourceLinks: defineTable({
+    userId: v.string(),
+    id: v.string(),
+    title: v.string(),
+    url: v.string(),
+    category: v.string(),
+    projectId: v.string(),
+    notes: v.string(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
   }).index("by_userId", ["userId"]),
 });

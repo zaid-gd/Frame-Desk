@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as resourceLinks from "../resourceLinks.js";
 import type * as salaryBatches from "../salaryBatches.js";
 import type * as settings from "../settings.js";
+import type * as team from "../team.js";
 import type * as workItems from "../workItems.js";
 
 import type {
@@ -19,8 +21,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  resourceLinks: typeof resourceLinks;
   salaryBatches: typeof salaryBatches;
   settings: typeof settings;
+  team: typeof team;
   workItems: typeof workItems;
 }>;
 

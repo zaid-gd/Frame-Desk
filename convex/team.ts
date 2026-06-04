@@ -1,0 +1,658 @@
+import { v } from "convex/values";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+
+const MAX_TEAM_MEMBERS = 5;
+const TEAM_WORKSPACE_NAME_LIMIT = 80;
+
+const roleValidator = v.union(
+  v.literal("Owner"),
+  v.literal("Editor"),
+  v.literal("Reviewer"),
+  v.literal("Client")
+);
+
+const permissionDefaults: Record<string, Record<string, boolean>> = {
+  Owner: {
+    viewProjects: true,
+    createProjects: true,
+    editProjects: true,
+    updateStatus: true,
+    commentProjects: true,
+    manageTeam: true,
+    useChat: true,
+  },
+  Editor: {
+    viewProjects: true,
+    createProjects: true,
+    editProjects: true,
+    updateStatus: true,
+    commentProjects: true,
+    manageTeam: false,
+    useChat: true,
+  },
+  Reviewer: {
+    viewProjects: true,
+    createProjects: false,
+    editProjects: false,
+    updateStatus: false,
+    commentProjects: true,
+    manageTeam: false,
+    useChat: true,
+  },
+  Client: {
+    viewProjects: true,
+    createProjects: false,
+    editProjects: false,
+    updateStatus: false,
+    commentProjects: true,
+    manageTeam: false,
+    useChat: false,
+  },
+};
+
+async function requireIdentity(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+  return identity;
+}
+
+function normalizeEmail(email?: string | null) {
+  return (email ?? "").trim().toLowerCase();
+}
+
+function actorName(identity: Awaited<ReturnType<typeof requireIdentity>>) {
+  return identity.name || identity.nickname || identity.email || "Team member";
+}
+
+function inviteCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+async function uniqueInviteCode(ctx: MutationCtx) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = inviteCode();
+    const existing = await ctx.db
+      .query("teamWorkspaces")
+      .withIndex("by_inviteCode", (q) => q.eq("inviteCode", code))
+      .unique();
+    if (!existing) return code;
+  }
+  throw new Error("Could not create a unique invite code");
+}
+
+function mentionsFrom(body: string) {
+  const matches = body.match(/@[\w.-]+/g) ?? [];
+  return [...new Set(matches.map((mention) => mention.slice(1).toLowerCase()))].slice(0, 8);
+}
+
+async function findActiveMembership(ctx: QueryCtx | MutationCtx, teamId: string, userId: string) {
+  const membership = await ctx.db
+    .query("teamMembers")
+    .withIndex("by_teamId_and_userId", (q) => q.eq("teamId", teamId).eq("userId", userId))
+    .unique();
+  if (!membership || membership.status !== "active") throw new Error("Team access required");
+  return membership;
+}
+
+async function requirePermission(ctx: MutationCtx, teamId: string, permission: string) {
+  const identity = await requireIdentity(ctx);
+  const member = await findActiveMembership(ctx, teamId, identity.tokenIdentifier);
+  if (!member.permissions[permission]) throw new Error("Permission denied");
+  return { identity, member };
+}
+
+async function requireTeamProject(ctx: QueryCtx | MutationCtx, teamId: string, projectId: string) {
+  const project = await ctx.db
+    .query("workItems")
+    .withIndex("by_teamId_and_id", (q) => q.eq("teamId", teamId).eq("id", projectId))
+    .unique();
+  if (!project) throw new Error("Team project not found");
+  return project;
+}
+
+async function logActivity(
+  ctx: MutationCtx,
+  args: {
+    teamId: string;
+    actorUserId: string;
+    actorName: string;
+    kind: string;
+    message: string;
+    projectId?: string;
+  }
+) {
+  await ctx.db.insert("teamActivity", {
+    ...args,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+async function notifyMentionedMembers(
+  ctx: MutationCtx,
+  args: {
+    teamId: string;
+    mentions: string[];
+    message: string;
+    kind: string;
+    projectId?: string;
+    senderUserId: string;
+    requiredPermission?: string;
+  }
+) {
+  const members = await membersMatchingMentions(ctx, args);
+  if (!members.length) return;
+  const createdAt = new Date().toISOString();
+  await Promise.all(
+    members.map((member) =>
+      ctx.db.insert("teamNotifications", {
+        teamId: args.teamId,
+        userId: member.userId,
+        kind: args.kind,
+        projectId: args.projectId,
+        message: args.message,
+        read: false,
+        createdAt,
+      })
+    )
+  );
+}
+
+async function membersMatchingMentions(
+  ctx: MutationCtx,
+  args: { teamId: string; mentions: string[]; senderUserId: string; requiredPermission?: string }
+) {
+  if (!args.mentions.length) return [];
+  const members = await ctx.db
+    .query("teamMembers")
+    .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+    .take(MAX_TEAM_MEMBERS + 1);
+  return members.filter((member) => {
+    if (member.status !== "active" || member.userId === args.senderUserId) return false;
+    if (args.requiredPermission && !member.permissions[args.requiredPermission]) return false;
+    const normalizedName = member.name.trim().toLowerCase();
+    const nameToken = normalizedName.replace(/\s+/g, ".");
+    const firstNameToken = normalizedName.split(/\s+/)[0] ?? "";
+    const compactNameToken = normalizedName.replace(/\s+/g, "");
+    const emailToken = normalizeEmail(member.email).split("@")[0];
+    return [nameToken, firstNameToken, compactNameToken, emailToken].some(
+      (token) => token.length > 0 && args.mentions.includes(token)
+    );
+  });
+}
+
+async function notifyProjectParticipants(
+  ctx: MutationCtx,
+  args: {
+    teamId: string;
+    senderUserId: string;
+    project: Doc<"workItems">;
+    message: string;
+    excludeUserIds?: string[];
+  }
+) {
+  const recipientIds = [...new Set([args.project.ownerUserId, ...(args.project.assigneeUserIds ?? [])])];
+  const excludedUserIds = new Set([args.senderUserId, ...(args.excludeUserIds ?? [])]);
+  const createdAt = new Date().toISOString();
+  await Promise.all(
+    recipientIds
+      .filter((userId): userId is string => Boolean(userId && !excludedUserIds.has(userId)))
+      .slice(0, MAX_TEAM_MEMBERS)
+      .map((userId) =>
+        ctx.db.insert("teamNotifications", {
+          teamId: args.teamId,
+          userId,
+          kind: "project_comment",
+          projectId: args.project.id,
+          message: args.message,
+          read: false,
+          createdAt,
+        })
+      )
+  );
+}
+
+async function cleanupRemovedMemberProjects(
+  ctx: MutationCtx,
+  args: { teamId: string; memberUserId: string; transferOwnerUserId: string }
+) {
+  const teamProjects = await ctx.db
+    .query("workItems")
+    .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+    .take(500);
+  let reassignedProjectCount = 0;
+  const projectUpdates = teamProjects
+    .map((project) => {
+      const patch: { assigneeUserIds?: string[]; ownerUserId?: string } = {};
+      if ((project.assigneeUserIds ?? []).includes(args.memberUserId)) {
+        patch.assigneeUserIds = (project.assigneeUserIds ?? []).filter((userId) => userId !== args.memberUserId);
+      }
+      if (project.ownerUserId === args.memberUserId) {
+        patch.ownerUserId = args.transferOwnerUserId;
+        reassignedProjectCount += 1;
+      }
+      return Object.keys(patch).length ? ctx.db.patch(project._id, patch) : null;
+    })
+    .filter((update): update is Promise<void> => update !== null);
+  await Promise.all(projectUpdates);
+  return reassignedProjectCount;
+}
+
+export const getMyWorkspace = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .take(5);
+    const currentMember = memberships.find((member) => member.status === "active");
+    if (!currentMember) return null;
+
+    const workspace = await ctx.db.get(currentMember.teamId as Doc<"teamWorkspaces">["_id"]);
+    if (!workspace) return null;
+
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_teamId", (q) => q.eq("teamId", currentMember.teamId))
+      .take(MAX_TEAM_MEMBERS + 1);
+    const activity = await ctx.db
+      .query("teamActivity")
+      .withIndex("by_teamId_and_createdAt", (q) => q.eq("teamId", currentMember.teamId))
+      .order("desc")
+      .take(40);
+    const chat = currentMember.permissions.useChat
+      ? await ctx.db
+          .query("teamChatMessages")
+          .withIndex("by_teamId_and_createdAt", (q) => q.eq("teamId", currentMember.teamId))
+          .order("desc")
+          .take(40)
+      : [];
+    const notifications = await ctx.db
+      .query("teamNotifications")
+      .withIndex("by_teamId_and_userId_and_createdAt", (q) =>
+        q.eq("teamId", currentMember.teamId).eq("userId", identity.tokenIdentifier)
+      )
+      .order("desc")
+      .take(25);
+
+    return {
+      workspace,
+      currentMember,
+      members,
+      activity,
+      chat: chat.reverse(),
+      notifications,
+    };
+  },
+});
+
+export const listProjectComments = query({
+  args: { teamId: v.string(), projectId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const member = await findActiveMembership(ctx, args.teamId, identity.tokenIdentifier);
+    if (!member.permissions.viewProjects) throw new Error("Permission denied");
+    await requireTeamProject(ctx, args.teamId, args.projectId);
+    const comments = await ctx.db
+      .query("projectComments")
+      .withIndex("by_teamId_and_projectId", (q) =>
+        q.eq("teamId", args.teamId).eq("projectId", args.projectId)
+      )
+      .order("desc")
+      .take(40);
+    return comments.reverse();
+  },
+});
+
+export const createWorkspace = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const workspaceName = (args.name.trim() || "CutLab Studio Team").slice(0, TEAM_WORKSPACE_NAME_LIMIT);
+    const memberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .take(5);
+    const activeMembership = memberships.find((member) => member.status === "active");
+    if (activeMembership) return activeMembership.teamId;
+
+    const now = new Date().toISOString();
+    const workspaceId = await ctx.db.insert("teamWorkspaces", {
+      ownerUserId: identity.tokenIdentifier,
+      name: workspaceName,
+      inviteCode: await uniqueInviteCode(ctx),
+      createdAt: now,
+    });
+    await ctx.db.insert("teamMembers", {
+      teamId: workspaceId,
+      userId: identity.tokenIdentifier,
+      email: normalizeEmail(identity.email),
+      name: actorName(identity),
+      role: "Owner",
+      status: "active",
+      permissions: permissionDefaults.Owner,
+      createdAt: now,
+      joinedAt: now,
+    });
+    await logActivity(ctx, {
+      teamId: workspaceId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "workspace_created",
+      message: `${actorName(identity)} created the team workspace.`,
+    });
+    return workspaceId;
+  },
+});
+
+export const inviteMember = mutation({
+  args: { teamId: v.string(), email: v.string(), role: roleValidator },
+  handler: async (ctx, args) => {
+    const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
+    const email = normalizeEmail(args.email);
+    if (!email.includes("@")) throw new Error("Enter a valid email address");
+
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+      .take(MAX_TEAM_MEMBERS + 1);
+    if (members.length >= MAX_TEAM_MEMBERS) throw new Error("Small teams are limited to 5 members");
+
+    const existing = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_teamId_and_email", (q) => q.eq("teamId", args.teamId).eq("email", email))
+      .unique();
+    if (existing) throw new Error("That member is already invited or active");
+
+    await ctx.db.insert("teamMembers", {
+      teamId: args.teamId,
+      userId: "",
+      email,
+      name: email.split("@")[0],
+      role: args.role,
+      status: "invited",
+      permissions: permissionDefaults[args.role],
+      createdAt: new Date().toISOString(),
+    });
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "member_invited",
+      message: `${actorName(identity)} invited ${email} as ${args.role}.`,
+    });
+  },
+});
+
+export const joinWorkspace = mutation({
+  args: { inviteCode: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const email = normalizeEmail(identity.email);
+    if (!email) throw new Error("Your account needs an email address to join an invited team");
+    const existingMemberships = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .take(5);
+    const existingActiveMembership = existingMemberships.find((member) => member.status === "active");
+    const workspace = await ctx.db
+      .query("teamWorkspaces")
+      .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode.trim().toUpperCase()))
+      .unique();
+    if (!workspace) throw new Error("Invite code not found");
+    if (existingActiveMembership && existingActiveMembership.teamId !== workspace._id) {
+      throw new Error("You are already active in another team workspace");
+    }
+
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_teamId", (q) => q.eq("teamId", workspace._id))
+      .take(MAX_TEAM_MEMBERS + 1);
+    const userMember = members.find((member) => member.userId === identity.tokenIdentifier);
+    if (userMember?.status === "active") return workspace._id;
+    if (members.filter((member) => member.status === "active").length >= MAX_TEAM_MEMBERS) {
+      throw new Error("This team is already full");
+    }
+
+    const invitedMember = members.find((member) => member.status === "invited" && member.email === email);
+    if (!invitedMember) throw new Error("Your email address is not invited to this team");
+    const now = new Date().toISOString();
+    await ctx.db.patch(invitedMember._id, {
+      userId: identity.tokenIdentifier,
+      name: actorName(identity),
+      status: "active",
+      joinedAt: now,
+    });
+    await logActivity(ctx, {
+      teamId: workspace._id,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "member_joined",
+      message: `${actorName(identity)} joined the workspace.`,
+    });
+    if (workspace.ownerUserId !== identity.tokenIdentifier) {
+      await ctx.db.insert("teamNotifications", {
+        teamId: workspace._id,
+        userId: workspace.ownerUserId,
+        kind: "member_joined",
+        message: `${actorName(identity)} joined your workspace.`,
+        read: false,
+        createdAt: now,
+      });
+    }
+    return workspace._id;
+  },
+});
+
+export const updateMemberRole = mutation({
+  args: { teamId: v.string(), memberId: v.id("teamMembers"), role: roleValidator },
+  handler: async (ctx, args) => {
+    const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
+    if (args.role === "Owner") throw new Error("Owner role cannot be assigned here");
+    const member = await ctx.db.get(args.memberId);
+    if (!member || member.teamId !== args.teamId) throw new Error("Team member not found");
+    if (member.role === "Owner") throw new Error("Owner role cannot be changed");
+    await ctx.db.patch(args.memberId, {
+      role: args.role,
+      permissions: permissionDefaults[args.role],
+    });
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "member_role_updated",
+      message: `${actorName(identity)} changed ${member.name} to ${args.role}.`,
+    });
+    if (member.userId) {
+      await ctx.db.insert("teamNotifications", {
+        teamId: args.teamId,
+        userId: member.userId,
+        kind: "role_updated",
+        message: `Your team role was changed to ${args.role}.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  },
+});
+
+export const removeMember = mutation({
+  args: { teamId: v.string(), memberId: v.id("teamMembers") },
+  handler: async (ctx, args) => {
+    const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
+    const member = await ctx.db.get(args.memberId);
+    if (!member || member.teamId !== args.teamId) throw new Error("Team member not found");
+    if (member.role === "Owner") throw new Error("Owner cannot be removed");
+    if (member.userId === identity.tokenIdentifier) throw new Error("You cannot remove yourself");
+
+    const reassignedProjectCount = member.userId
+      ? await cleanupRemovedMemberProjects(ctx, {
+          teamId: args.teamId,
+          memberUserId: member.userId,
+          transferOwnerUserId: identity.tokenIdentifier,
+        })
+      : 0;
+    await ctx.db.delete(args.memberId);
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "member_removed",
+      message: `${actorName(identity)} removed ${member.email || member.name} from the workspace.${reassignedProjectCount ? ` ${reassignedProjectCount} owned project${reassignedProjectCount === 1 ? "" : "s"} transferred to ${actorName(identity)}.` : ""}`,
+    });
+  },
+});
+
+export const leaveWorkspace = mutation({
+  args: { teamId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const member = await findActiveMembership(ctx, args.teamId, identity.tokenIdentifier);
+    if (member.role === "Owner") throw new Error("Team owners must transfer ownership before leaving");
+    const workspace = await ctx.db.get(args.teamId as Doc<"teamWorkspaces">["_id"]);
+    if (!workspace) throw new Error("Team workspace not found");
+
+    const reassignedProjectCount = await cleanupRemovedMemberProjects(ctx, {
+      teamId: args.teamId,
+      memberUserId: identity.tokenIdentifier,
+      transferOwnerUserId: workspace.ownerUserId,
+    });
+    await ctx.db.delete(member._id);
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "member_left",
+      message: `${actorName(identity)} left the workspace.${reassignedProjectCount ? ` ${reassignedProjectCount} owned project${reassignedProjectCount === 1 ? "" : "s"} transferred to the workspace owner.` : ""}`,
+    });
+    if (workspace.ownerUserId !== identity.tokenIdentifier) {
+      await ctx.db.insert("teamNotifications", {
+        teamId: args.teamId,
+        userId: workspace.ownerUserId,
+        kind: "member_left",
+        message: `${actorName(identity)} left the workspace.`,
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+  },
+});
+
+export const sendChatMessage = mutation({
+  args: { teamId: v.string(), body: v.string() },
+  handler: async (ctx, args) => {
+    const { identity } = await requirePermission(ctx, args.teamId, "useChat");
+    const body = args.body.trim();
+    if (!body) throw new Error("Message cannot be empty");
+    const storedBody = body.slice(0, 800);
+    const mentions = mentionsFrom(storedBody);
+    await ctx.db.insert("teamChatMessages", {
+      teamId: args.teamId,
+      authorUserId: identity.tokenIdentifier,
+      authorName: actorName(identity),
+      body: storedBody,
+      mentions,
+      createdAt: new Date().toISOString(),
+    });
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "chat_message",
+      message: `${actorName(identity)} posted in team chat.`,
+    });
+    await notifyMentionedMembers(ctx, {
+      teamId: args.teamId,
+      mentions,
+      kind: "mention",
+      message: `${actorName(identity)} mentioned you in team chat.`,
+      senderUserId: identity.tokenIdentifier,
+      requiredPermission: "useChat",
+    });
+  },
+});
+
+export const addProjectComment = mutation({
+  args: { teamId: v.string(), projectId: v.string(), body: v.string() },
+  handler: async (ctx, args) => {
+    const { identity, member } = await requirePermission(ctx, args.teamId, "commentProjects");
+    if (!member.permissions.viewProjects) throw new Error("Permission denied");
+    const project = await requireTeamProject(ctx, args.teamId, args.projectId);
+    const body = args.body.trim();
+    if (!body) throw new Error("Comment cannot be empty");
+    const storedBody = body.slice(0, 1000);
+    const mentions = mentionsFrom(storedBody);
+    const mentionedMembers = await membersMatchingMentions(ctx, {
+      teamId: args.teamId,
+      mentions,
+      senderUserId: identity.tokenIdentifier,
+    });
+    await ctx.db.insert("projectComments", {
+      teamId: args.teamId,
+      projectId: args.projectId,
+      authorUserId: identity.tokenIdentifier,
+      authorName: actorName(identity),
+      body: storedBody,
+      mentions,
+      createdAt: new Date().toISOString(),
+    });
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "project_comment",
+      projectId: args.projectId,
+      message: `${actorName(identity)} commented on ${project.title}.`,
+    });
+    await notifyProjectParticipants(ctx, {
+      teamId: args.teamId,
+      senderUserId: identity.tokenIdentifier,
+      project,
+      message: `${actorName(identity)} commented on ${project.title}.`,
+      excludeUserIds: mentionedMembers.map((member) => member.userId),
+    });
+    await notifyMentionedMembers(ctx, {
+      teamId: args.teamId,
+      projectId: args.projectId,
+      mentions,
+      kind: "project_mention",
+      message: `${actorName(identity)} mentioned you in a project comment.`,
+      senderUserId: identity.tokenIdentifier,
+    });
+  },
+});
+
+export const markNotificationRead = mutation({
+  args: { notificationId: v.id("teamNotifications") },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const notification = await ctx.db.get(args.notificationId);
+    if (!notification || notification.userId !== identity.tokenIdentifier) {
+      throw new Error("Notification not found");
+    }
+    await ctx.db.patch(args.notificationId, { read: true });
+  },
+});
+
+export const markAllNotificationsRead = mutation({
+  args: { teamId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    await findActiveMembership(ctx, args.teamId, identity.tokenIdentifier);
+    const notifications = await ctx.db
+      .query("teamNotifications")
+      .withIndex("by_teamId_and_userId_and_createdAt", (q) =>
+        q.eq("teamId", args.teamId).eq("userId", identity.tokenIdentifier)
+      )
+      .order("desc")
+      .take(50);
+    await Promise.all(
+      notifications
+        .filter((notification) => !notification.read)
+        .map((notification) => ctx.db.patch(notification._id, { read: true }))
+    );
+  },
+});

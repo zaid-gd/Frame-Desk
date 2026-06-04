@@ -2,7 +2,9 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
+import { api } from "../../convex/_generated/api";
 import {
   Box,
   Button,
@@ -60,7 +62,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
-import type { WorkItem, WorkTypeConfig, IntegrationConfig } from "@/lib/types";
+import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink } from "@/lib/types";
 import type { IntegrationLink, IntegrationLinks, IntegrationServiceId } from "@/lib/integrations";
 import {
   configuredIntegrationCount,
@@ -79,6 +81,10 @@ const defaultSalaryWorkType = "Job / Salary";
 const defaultSalaryBatchSize = 20;
 const defaultSalaryBatchAmount = 10000;
 const AUTH_MODE_STORAGE_KEY = "cutlab-studio:auth-mode:v1";
+const TEAM_WORKSPACE_NAME_LIMIT = 80;
+const TEAM_CHAT_MESSAGE_LIMIT = 800;
+const TEAM_PROJECT_COMMENT_LIMIT = 1000;
+const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const sidebarWidth = 264;
 const headingFont = "Georgia, 'Times New Roman', serif";
 const defaultAccent = "#5b3fa0";
@@ -111,7 +117,7 @@ const outlineButtonSx = {
   "&:hover": { borderColor: accent, bgcolor: hoverBg }
 };
 
-type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
+type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -122,6 +128,12 @@ type TeamMember = {
   name: string;
   role: string;
   email: string;
+};
+type WorkspaceMemberOption = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
 };
 type SettingsState = {
   studioName: string;
@@ -175,6 +187,7 @@ const currencyLabels: Record<string, string> = {
   AED: "AED (Dh)",
   SAR: "SAR (SR)"
 };
+const resourceCategories = ["Asset Folder", "Raw Footage", "Music / SFX", "Brand Assets", "Review Link", "Reference", "Other"];
 const sortLabels: Record<SortKey, string> = {
   createdAt_desc: "Newest",
   createdAt_asc: "Oldest",
@@ -243,6 +256,7 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
   { key: "timeline", href: "/timeline", label: "Timeline", icon: <ViewTimelineOutlinedIcon /> },
   { key: "calendar", href: "/calendar", label: "Calendar", icon: <CalendarMonthOutlinedIcon /> },
   { key: "media", href: "/media", label: "Media", icon: <CollectionsOutlinedIcon /> },
+  { key: "resources", href: "/resources", label: "Resources", icon: <OpenInNewIcon /> },
   { key: "feedback", href: "/feedback", label: "Feedback", icon: <ChatBubbleOutlineOutlinedIcon /> },
   { key: "templates", href: "/templates", label: "Templates", icon: <InsertDriveFileOutlinedIcon /> },
   { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
@@ -252,17 +266,17 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
 ];
 
 const defaultSettings: SettingsState = {
-  studioName: "CutLab Studio",
-  profileName: "Your Profile",
-  profileUsername: "editor",
-  profileTitle: "Video Editor",
-  profileBio: "Track active edits, delivery dates, feedback, and salary batches in one focused workspace.",
-  profileLocation: "Local workspace",
+  studioName: "",
+  profileName: "",
+  profileUsername: "",
+  profileTitle: "",
+  profileBio: "",
+  profileLocation: "",
   profileImageUrl: "",
-  timeZone: "Asia/Dubai",
+  timeZone: "UTC",
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
-  currencyCode: "INR",
+  currencyCode: "USD",
   customClients: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
@@ -290,7 +304,7 @@ const defaultSettings: SettingsState = {
   },
   integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)),
   integrationLinks: {},
-  teamRole: "Editor",
+  teamRole: "",
   teamMembers: [],
   editorPermissions: {
     "Create and edit projects": false,
@@ -326,10 +340,14 @@ const emptyForm = (): WorkItem => ({
 });
 
 export function TrackerApp({ page }: { page: PageKey }) {
-  const { items, setItems, settings, setSettings, isSignedIn, isAuthLoaded, toast, setToast, reconcileSalaryBatches } = useData();
+  const { items, setItems, settings, setSettings, resourceLinks, setResourceLinks, isSignedIn, isAuthLoaded, toast, setToast, reconcileSalaryBatches } = useData();
   const { openSignIn, openSignUp } = useClerk();
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const shouldLoadTeamPermissions = Boolean(isSignedIn && isConvexAuthenticated);
+  const teamData = useQuery(api.team.getMyWorkspace, shouldLoadTeamPermissions ? {} : "skip");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
+  const [detailProjectId, setDetailProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkItem | null>(null);
   const [form, setForm] = useState<WorkItem>(emptyForm);
   const [formError, setFormError] = useState("");
@@ -363,6 +381,17 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [isAuthLoaded, isSignedIn]);
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
+  const activeTeamMembers = useMemo(() => teamData?.members.filter((member) => member.status === "active") ?? [], [teamData]);
+  const teamDataLoading = Boolean(isSignedIn && (isConvexAuthLoading || (isConvexAuthenticated && teamData === undefined)));
+  const teamSyncUnavailable = Boolean(isSignedIn && !isConvexAuthLoading && !isConvexAuthenticated);
+  const currentTeamId = teamData?.workspace?._id;
+  const projectPermissions = teamData?.currentMember.permissions;
+  const canCreateProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.createProjects);
+  const canEditProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.editProjects);
+  const canUpdateProjectStatus = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.updateStatus);
+  const canCommentProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.commentProjects);
+  const canManageTeamProjects = Boolean(projectPermissions?.manageTeam);
+  const detailProject = useMemo(() => items.find((item) => item.id === detailProjectId) ?? null, [detailProjectId, items]);
   const projectTagOptions = useMemo(() => projectWorkTypeOptions(settings, projects), [projects, settings]);
   const filterProjectTagOptions = useMemo(() => ["ALL", ...projectTagOptions], [projectTagOptions]);
   const clientOptions = useMemo(() => buildClientOptions(projects, settings.customClients), [projects, settings.customClients]);
@@ -417,8 +446,12 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [projects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
 
   function openNewProject() {
+    if (!canCreateProjects) {
+      notify("Your team role cannot create projects.", "warning");
+      return;
+    }
     setEditingId("");
-    setForm({ ...emptyForm(), notes: defaultProjectNotes(settings) });
+    setForm({ ...emptyForm(), teamId: currentTeamId, assigneeUserIds: [], notes: defaultProjectNotes(settings) });
     setFormError("");
     setDialogOpen(true);
   }
@@ -445,9 +478,15 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }
 
   function openTemplateProject(template: { title: string; workType: string; notes: string }) {
+    if (!canCreateProjects) {
+      notify("Your team role cannot create projects.", "warning");
+      return;
+    }
     setEditingId("");
     setForm({
       ...emptyForm(),
+      teamId: currentTeamId,
+      assigneeUserIds: [],
       title: template.title,
       workType: template.workType,
       startDate: iso(todayDate()),
@@ -459,20 +498,49 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }
 
   function openEditProject(item: WorkItem) {
+    if (item.teamId && !canEditProjects) {
+      notify("Your team role cannot edit team projects.", "warning");
+      return;
+    }
     setEditingId(item.id);
+    setDetailProjectId("");
     setForm(item);
     setFormError("");
     setDialogOpen(true);
   }
 
+  function openProjectDetails(item: WorkItem) {
+    setDetailProjectId(item.id);
+  }
+
+  function canDeleteProject(project: WorkItem | null) {
+    if (!project) return false;
+    if (!project.teamId) return true;
+    return (canEditProjects || canManageTeamProjects) && (project.ownerUserId === teamData?.currentMember.userId || canManageTeamProjects);
+  }
+
   function requestDeleteProject(id: string) {
     const target = items.find((item) => item.id === id);
+    if (target && !canDeleteProject(target)) {
+      notify("Only the project owner or a team owner can delete this team project.", "warning");
+      return;
+    }
     if (target) setDeleteTarget(target);
+  }
+
+  function updateProjectStatus(project: WorkItem, status: string) {
+    if (project.teamId && !canUpdateProjectStatus && !canEditProjects) {
+      notify("Your team role cannot update project status.", "warning");
+      return;
+    }
+    setItems((current) => current.map((item) => (item.id === project.id ? { ...item, status } : item)));
+    notify(`${project.title} status updated.`);
   }
 
   function confirmDeleteProject() {
     if (!deleteTarget) return;
     setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
+    if (detailProjectId === deleteTarget.id) setDetailProjectId("");
     setDeleteTarget(null);
     notify("Project deleted.", "warning");
   }
@@ -491,6 +559,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
       ...normalizedForm,
       title: normalizedForm.title.trim(),
       id: editingId || createId(),
+      teamId: normalizedForm.teamId ?? (editingId ? undefined : currentTeamId),
+      ownerUserId: normalizedForm.ownerUserId ?? (!editingId && (normalizedForm.teamId ?? currentTeamId) ? teamData?.currentMember.userId : undefined),
+      assigneeUserIds: normalizedForm.assigneeUserIds ?? [],
       createdAt: form.createdAt || new Date().toISOString(),
       profileId: profile.id,
       client: normalizedForm.client?.trim() || "",
@@ -537,11 +608,15 @@ export function TrackerApp({ page }: { page: PageKey }) {
       sortKey={sortKey}
       setSortKey={setSortKey}
       onNewProject={openNewProject}
+      onViewProject={openProjectDetails}
       onEditProject={openEditProject}
       onDeleteProject={requestDeleteProject}
+      canCreateProjects={canCreateProjects}
+      canEditProjects={canEditProjects}
+      canDeleteProject={canDeleteProject}
     />
   ) : page === "projects" ? (
-    <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} />
+    <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onViewProject={openProjectDetails} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} canCreateProjects={canCreateProjects} canEditProjects={canEditProjects} canDeleteProject={canDeleteProject} />
   ) : page === "clients" ? (
     <ClientsDesignPage projects={projects} projectTagOptions={projectTagOptions} settings={settings} onAddClient={handleAddClient} />
   ) : page === "timeline" ? (
@@ -550,6 +625,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
     <CalendarDesignPage projects={projects} settings={settings} />
   ) : page === "media" ? (
     <MediaDesignPage projects={projects} />
+  ) : page === "resources" ? (
+    <ResourcesDesignPage resources={resourceLinks} projects={projects} setResources={setResourceLinks} notify={notify} />
   ) : page === "feedback" ? (
     <FeedbackDesignPage projects={projects} />
   ) : page === "templates" ? (
@@ -582,6 +659,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       clientOptions={clientOptions}
       workTypeOptions={projectTagOptions}
       settings={settings}
+      teamMembers={activeTeamMembers}
       formError={formError}
       onClose={() => setDialogOpen(false)}
       onSave={saveProject}
@@ -594,6 +672,24 @@ export function TrackerApp({ page }: { page: PageKey }) {
       onConfirm={confirmDeleteProject}
     />
   );
+  const detailDialog = (
+    <ProjectDetailDialog
+      project={detailProject}
+      settings={settings}
+      canEdit={canEditProjects || !detailProject?.teamId}
+      canDelete={canDeleteProject(detailProject)}
+      canUpdateStatus={canUpdateProjectStatus || canEditProjects || !detailProject?.teamId}
+      canComment={canCommentProjects}
+      teamMembers={activeTeamMembers}
+      onClose={() => setDetailProjectId("")}
+      onEdit={(project) => openEditProject(project)}
+      onDelete={(project) => {
+        setDetailProjectId("");
+        requestDeleteProject(project.id);
+      }}
+      onStatusChange={updateProjectStatus}
+    />
+  );
   const loadingStatus = !isAuthLoaded ? <AppLoadingStatus /> : null;
 
   if (page === "profile") {
@@ -602,6 +698,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
       {projectDialog}
       {deleteDialog}
+      {detailDialog}
       {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
@@ -631,6 +728,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       <AppToast toast={toast} onClose={() => setToast(null)} />
       {projectDialog}
       {deleteDialog}
+      {detailDialog}
       {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
@@ -781,10 +879,6 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
 }
 
 function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState }) {
-  const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
-  const notificationOpen = Boolean(notificationAnchor);
-  const enabledNotifications = Object.entries(settings.notifications).filter(([, enabled]) => enabled);
-
   return (
     <Box sx={{ display: { xs: "block", lg: "none" }, position: "fixed", zIndex: 20, top: 0, left: 0, right: 0, bgcolor: panel, borderBottom: `1px solid ${border}` }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.4 }}>
@@ -794,48 +888,7 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
           </Box>
           <Typography noWrap sx={{ fontSize: 22, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont, maxWidth: 180 }}>{settings.studioName}</Typography>
         </Stack>
-        <Tooltip title="Notifications">
-          <Button
-            aria-label="Open notifications"
-            aria-haspopup="menu"
-            aria-expanded={notificationOpen ? "true" : undefined}
-            onClick={(event) => setNotificationAnchor(event.currentTarget)}
-            sx={{ minWidth: 36, width: 36, height: 36, p: 0, color: ink, borderRadius: "6px", position: "relative" }}
-          >
-            <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
-            {enabledNotifications.length ? (
-              <Box sx={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", bgcolor: accent, border: `1px solid ${panel}` }} />
-            ) : null}
-          </Button>
-        </Tooltip>
-        <Menu
-          anchorEl={notificationAnchor}
-          open={notificationOpen}
-          onClose={() => setNotificationAnchor(null)}
-          PaperProps={{ sx: { width: 290, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
-        >
-          <Box sx={{ px: 1.5, py: 1 }}>
-            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>Notifications</Typography>
-            <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>
-              {enabledNotifications.length ? `${enabledNotifications.length} notification types enabled` : "No notification types enabled"}
-            </Typography>
-          </Box>
-          <Divider sx={{ borderColor: border }} />
-          {enabledNotifications.length ? enabledNotifications.map(([name]) => (
-            <MenuItem key={name} sx={{ display: "block", color: ink, py: 1 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{name}</Typography>
-              <Typography sx={{ color: muted, fontSize: 12 }}>{notificationCopy(name)}</Typography>
-            </MenuItem>
-          )) : (
-            <Box sx={{ px: 1.5, py: 1.2 }}>
-              <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Turn on deadline, feedback, or weekly summary notifications from Settings.</Typography>
-            </Box>
-          )}
-          <Divider sx={{ borderColor: border }} />
-          <MenuItem component={Link} href="/settings" onClick={() => setNotificationAnchor(null)} sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>
-            Manage Notifications
-          </MenuItem>
-        </Menu>
+        <NotificationBell settings={settings} />
       </Stack>
       <Box sx={{ px: 1.5, pb: 1.2, overflowX: "auto", scrollbarWidth: "none" }}>
         <Stack direction="row" gap={0.7} sx={{ width: "max-content" }}>
@@ -1029,8 +1082,12 @@ function DashboardPage(props: {
   sortKey: SortKey;
   setSortKey: (value: SortKey) => void;
   onNewProject: () => void;
+  onViewProject: (item: WorkItem) => void;
   onEditProject: (item: WorkItem) => void;
   onDeleteProject: (id: string) => void;
+  canCreateProjects: boolean;
+  canEditProjects: boolean;
+  canDeleteProject: (project: WorkItem) => boolean;
 }) {
   const settings = useTrackerSettings();
 
@@ -1056,6 +1113,7 @@ function DashboardPage(props: {
             variant="outlined"
             startIcon={<AddIcon sx={{ fontSize: 18 }} />}
             onClick={props.onNewProject}
+            disabled={!props.canCreateProjects}
             sx={{
               borderColor: border,
               color: accent,
@@ -1146,7 +1204,7 @@ function DashboardPage(props: {
             <ProjectTableHeader />
             <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
               {props.projects.map((project) => (
-                <ProjectRow key={project.id} project={project} onEdit={() => props.onEditProject(project)} onDelete={() => props.onDeleteProject(project.id)} />
+                <ProjectRow key={project.id} project={project} canEdit={props.canEditProjects || !project.teamId} canDelete={props.canDeleteProject(project)} onView={() => props.onViewProject(project)} onEdit={() => props.onEditProject(project)} onDelete={() => props.onDeleteProject(project.id)} />
               ))}
             </Stack>
           </Paper>
@@ -1158,12 +1216,12 @@ function DashboardPage(props: {
   );
 }
 
-function ProjectDirectoryPage({ projects, onNewProject, onEditProject, onDeleteProject }: { projects: WorkItem[]; onNewProject: () => void; onEditProject: (item: WorkItem) => void; onDeleteProject: (id: string) => void }) {
+function ProjectDirectoryPage({ projects, onNewProject, onViewProject, onEditProject, onDeleteProject, canCreateProjects, canEditProjects, canDeleteProject }: { projects: WorkItem[]; onNewProject: () => void; onViewProject: (item: WorkItem) => void; onEditProject: (item: WorkItem) => void; onDeleteProject: (id: string) => void; canCreateProjects: boolean; canEditProjects: boolean; canDeleteProject: (project: WorkItem) => boolean }) {
   return (
     <PageFrame
       title="Projects"
       subtitle="A focused index for every tracked edit, handoff, and salary batch item."
-      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} sx={outlineButtonSx}>New Project</Button>}
+      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} disabled={!canCreateProjects} sx={outlineButtonSx}>New Project</Button>}
     >
       <Paper sx={panelSx}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
@@ -1173,7 +1231,7 @@ function ProjectDirectoryPage({ projects, onNewProject, onEditProject, onDeleteP
         <ProjectTableHeader />
         <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
           {projects.length ? projects.map((project) => (
-            <ProjectRow key={project.id} project={project} onEdit={() => onEditProject(project)} onDelete={() => onDeleteProject(project.id)} />
+            <ProjectRow key={project.id} project={project} canEdit={canEditProjects || !project.teamId} canDelete={canDeleteProject(project)} onView={() => onViewProject(project)} onEdit={() => onEditProject(project)} onDelete={() => onDeleteProject(project.id)} />
           )) : (
             <Typography sx={{ color: muted, fontSize: 14, p: 2 }}>No projects saved yet.</Typography>
           )}
@@ -1741,6 +1799,174 @@ function MediaDesignPage({ projects }: { projects: WorkItem[] }) {
   );
 }
 
+function ResourcesDesignPage({ resources, projects, setResources, notify }: { resources: ResourceLink[]; projects: WorkItem[]; setResources: React.Dispatch<React.SetStateAction<ResourceLink[]>>; notify: (message: string, tone?: ToastState["tone"]) => void }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState("");
+  const [form, setForm] = useState<ResourceLink>(() => emptyResourceForm());
+  const [error, setError] = useState("");
+  const sortedResources = [...resources].sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+  const linkedToProjects = resources.filter((resource) => resource.projectId).length;
+  const projectOptions = ["General", ...projects.map((project) => project.id)];
+  const projectLabels = Object.fromEntries(projects.map((project) => [project.id, project.title]));
+  const projectSelectValue = form.projectId || "General";
+  const safeProjectOptions = projectSelectValue && !projectOptions.includes(projectSelectValue)
+    ? [projectSelectValue, ...projectOptions]
+    : projectOptions;
+  const safeProjectLabels = projectSelectValue && !projectLabels[projectSelectValue] && projectSelectValue !== "General"
+    ? { ...projectLabels, [projectSelectValue]: "Deleted project" }
+    : projectLabels;
+
+  function emptyResourceForm(): ResourceLink {
+    const now = new Date().toISOString();
+    return {
+      id: "",
+      title: "",
+      url: "",
+      category: "Asset Folder",
+      projectId: "",
+      notes: "",
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  function openNewResource() {
+    setEditingId("");
+    setForm(emptyResourceForm());
+    setError("");
+    setDialogOpen(true);
+  }
+
+  function openEditResource(resource: ResourceLink) {
+    setEditingId(resource.id);
+    setForm(resource);
+    setError("");
+    setDialogOpen(true);
+  }
+
+  function saveResource() {
+    const title = form.title.trim();
+    const url = form.url.trim();
+    if (!title) {
+      setError("Resource title is required.");
+      return;
+    }
+    if (!isValidIntegrationUrl(url)) {
+      setError("Enter a valid http or https URL.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const payload: ResourceLink = {
+      ...form,
+      id: editingId || createId(),
+      title,
+      url,
+      category: form.category.trim() || "Other",
+      projectId: form.projectId,
+      notes: form.notes.trim(),
+      createdAt: form.createdAt || now,
+      updatedAt: now,
+    };
+    setResources((current) => (editingId ? current.map((resource) => (resource.id === editingId ? payload : resource)) : [payload, ...current]));
+    setDialogOpen(false);
+    setEditingId("");
+    setForm(emptyResourceForm());
+    notify(editingId ? "Resource updated." : "Resource added.");
+  }
+
+  function removeResource(id: string) {
+    setResources((current) => current.filter((resource) => resource.id !== id));
+    notify("Resource removed.", "warning");
+  }
+
+  function openResource(url: string) {
+    if (typeof window === "undefined" || !isValidIntegrationUrl(url)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function projectName(projectId: string) {
+    return projects.find((project) => project.id === projectId)?.title ?? "";
+  }
+
+  return (
+    <PageFrame
+      title="Resources"
+      subtitle="Store asset folders, reference links, review pages, and handoff resources."
+      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={openNewResource} sx={outlineButtonSx}>New Resource</Button>}
+    >
+      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
+        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Resources" value={String(resources.length)} helper="Saved asset and reference links" /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Project Linked" value={String(linkedToProjects)} helper="Attached to tracked projects" /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Categories" value={String(new Set(resources.map((resource) => resource.category)).size)} helper="Resource groups in use" /></Grid>
+      </Grid>
+
+      <Paper sx={panelSx}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
+          <Box>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Resource Library</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.4 }}>Manual links for now; this can later map to cloud storage APIs or OAuth providers.</Typography>
+          </Box>
+          <Chip label={`${resources.length} saved`} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+        </Stack>
+        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+          {sortedResources.length ? sortedResources.map((resource) => (
+            <Box key={resource.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.4fr) 160px minmax(0, 1fr) 140px" }, gap: 2, px: 2, py: 1.5, alignItems: "center" }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Stack direction="row" gap={0.8} alignItems="center" sx={{ mb: 0.4, flexWrap: "wrap" }}>
+                  <Typography noWrap sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{resource.title}</Typography>
+                  <Chip label={resource.category} size="small" sx={{ height: 21, bgcolor: softPanel, color: muted, borderRadius: "5px", fontSize: 11 }} />
+                </Stack>
+                <Typography noWrap sx={{ color: muted, fontSize: 12 }}>{resource.url}</Typography>
+                {resource.notes ? <Typography sx={{ color: muted, fontSize: 12, mt: 0.45 }}>{resource.notes}</Typography> : null}
+              </Box>
+              <Typography sx={{ color: ink, fontSize: 13 }}>{resource.projectId ? projectName(resource.projectId) || "Linked project" : "General"}</Typography>
+              <Typography noWrap sx={{ color: muted, fontSize: 12 }}>{formatDate((resource.updatedAt || resource.createdAt).slice(0, 10))}</Typography>
+              <Stack direction="row" gap={0.6} justifyContent={{ xs: "flex-start", lg: "flex-end" }}>
+                <Tooltip title="Open resource">
+                  <Button aria-label={`Open ${resource.title}`} onClick={() => openResource(resource.url)} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}>
+                    <OpenInNewIcon sx={{ fontSize: 18 }} />
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Edit resource">
+                  <Button aria-label={`Edit ${resource.title}`} onClick={() => openEditResource(resource)} sx={{ minWidth: 34, width: 34, height: 34, color: muted, p: 0 }}>
+                    <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Delete resource">
+                  <Button aria-label={`Delete ${resource.title}`} onClick={() => removeResource(resource.id)} sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}>
+                    <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                  </Button>
+                </Tooltip>
+              </Stack>
+            </Box>
+          )) : <EmptyPanel title="No resources yet" body="Add asset folders, reference docs, cloud links, review URLs, or handoff resources." />}
+        </Stack>
+      </Paper>
+
+      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 24, fontWeight: 760 }}>{editingId ? "Edit Resource" : "New Resource"}</DialogTitle>
+        <DialogContent>
+          <Stack gap={2} sx={{ mt: 1 }}>
+            <TextField label="Resource title" value={form.title} onChange={(event) => { setForm({ ...form, title: event.target.value }); setError(""); }} fullWidth />
+            <TextField label="URL" value={form.url} placeholder="https://..." error={Boolean(error && !isValidIntegrationUrl(form.url))} onChange={(event) => { setForm({ ...form, url: event.target.value }); setError(""); }} fullWidth />
+            <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
+              <DialogSelect label="Category" value={form.category} options={resourceCategories} onChange={(value) => setForm({ ...form, category: value })} />
+              <DialogSelect label="Project" value={projectSelectValue} options={safeProjectOptions} labels={safeProjectLabels} onChange={(value) => setForm({ ...form, projectId: value === "General" ? "" : value })} />
+            </Stack>
+            <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
+            {error ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{error}</Typography> : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)} sx={{ color: muted }}>Cancel</Button>
+          <Button onClick={saveResource} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>Save Resource</Button>
+        </DialogActions>
+      </Dialog>
+    </PageFrame>
+  );
+}
+
 function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
   const settings = useTrackerSettings();
   const feedbackItems = projects.filter((project) => project.status === "In Progress" || project.status === "Planned").slice(0, 8);
@@ -1870,90 +2096,388 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
   );
 }
 
-function TeamDesignPage({ projects, settings, setSettings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
-  const clients = buildClientSummaries(projects, settings.customClients);
-  const [memberForm, setMemberForm] = useState({ name: "", role: "Editor", email: "" });
-  const [memberError, setMemberError] = useState("");
+function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
+  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const { openSignIn, openSignUp } = useClerk();
+  const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
+  const createWorkspace = useMutation(api.team.createWorkspace);
+  const joinWorkspace = useMutation(api.team.joinWorkspace);
+  const inviteMember = useMutation(api.team.inviteMember);
+  const updateMemberRole = useMutation(api.team.updateMemberRole);
+  const removeMember = useMutation(api.team.removeMember);
+  const leaveWorkspace = useMutation(api.team.leaveWorkspace);
+  const sendChatMessage = useMutation(api.team.sendChatMessage);
+  const addProjectComment = useMutation(api.team.addProjectComment);
+  const markNotificationRead = useMutation(api.team.markNotificationRead);
+  const markAllNotificationsRead = useMutation(api.team.markAllNotificationsRead);
+  const [workspaceName, setWorkspaceName] = useState(settings.studioName || "CutLab Studio Team");
+  const [inviteCode, setInviteCode] = useState("");
+  const [inviteForm, setInviteForm] = useState({ email: "", role: "Editor" });
+  const [chatBody, setChatBody] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [teamError, setTeamError] = useState("");
+  const [inviteCopyLabel, setInviteCopyLabel] = useState("Copy Invite Code");
+  const [busyAction, setBusyAction] = useState("");
+  const teamId = teamData?.workspace?._id;
+  const teamProjects = useMemo(() => (teamId ? projects.filter((project) => project.teamId === teamId) : []), [projects, teamId]);
+  const teamProjectTitles = useMemo(() => Object.fromEntries(teamProjects.map((project) => [project.id, project.title])), [teamProjects]);
+  const clients = buildClientSummaries(teamProjects, settings.customClients);
+  const selectedProject = teamProjects.find((project) => project.id === selectedProjectId) ?? teamProjects[0] ?? null;
+  const projectComments = useQuery(
+    api.team.listProjectComments,
+    isConvexAuthenticated && teamId && selectedProject ? { teamId, projectId: selectedProject.id } : "skip"
+  );
+  const activeMembers = teamData?.members.filter((member) => member.status === "active") ?? [];
+  const pendingInvites = teamData?.members.filter((member) => member.status === "invited") ?? [];
+  const unreadNotifications = teamData?.notifications.filter((notification) => !notification.read).length ?? 0;
+  const canManageTeam = Boolean(teamData?.currentMember.permissions.manageTeam);
+  const canUseChat = Boolean(teamData?.currentMember.permissions.useChat);
+  const canCommentProjects = Boolean(teamData?.currentMember.permissions.commentProjects);
+  const canLeaveWorkspace = Boolean(teamData && teamData.currentMember.role !== "Owner");
+  const inviteCodeIsValid = TEAM_INVITE_CODE_PATTERN.test(inviteCode.trim());
+  const inviteEmailIsValid = isValidEmail(inviteForm.email);
 
-  function addMember() {
-    if (!memberForm.name.trim()) {
-      setMemberError("Team member name is required.");
+  useEffect(() => {
+    if (!teamProjects.length) {
+      if (selectedProjectId) setSelectedProjectId("");
       return;
     }
-    if (memberForm.email.trim() && !isValidEmail(memberForm.email)) {
-      setMemberError("Enter a valid email address or leave it blank.");
-      return;
+    if (!teamProjects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectId(teamProjects[0].id);
     }
-    if (!teamRoleOptions.includes(memberForm.role)) {
-      setMemberError("Choose a valid team role.");
-      return;
+  }, [selectedProjectId, teamProjects]);
+
+  async function runTeamAction(label: string, action: () => Promise<unknown>) {
+    setBusyAction(label);
+    setTeamError("");
+    try {
+      await action();
+    } catch (error) {
+      setTeamError(error instanceof Error ? error.message : "Team action failed.");
+    } finally {
+      setBusyAction("");
     }
-    const member: TeamMember = {
-      id: createId(),
-      name: memberForm.name.trim(),
-      role: memberForm.role,
-      email: memberForm.email.trim()
-    };
-    setSettings({ ...settings, teamMembers: [...settings.teamMembers, member] });
-    setMemberForm({ name: "", role: "Editor", email: "" });
-    setMemberError("");
   }
 
-  function updateMember(id: string, next: Partial<TeamMember>) {
-    setSettings({ ...settings, teamMembers: settings.teamMembers.map((member) => (member.id === id ? { ...member, ...next } : member)) });
+  function formatActivityTime(value: string) {
+    return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
   }
 
-  function removeMember(id: string) {
-    setSettings({ ...settings, teamMembers: settings.teamMembers.filter((member) => member.id !== id) });
+  async function copyInviteCode(code: string) {
+    const copied = await copyText(code);
+    setInviteCopyLabel(copied ? "Copied" : "Copy Failed");
+    window.setTimeout(() => setInviteCopyLabel("Copy Invite Code"), 1800);
+  }
+
+  function teamProjectLabel(projectId?: string) {
+    if (!projectId) return "";
+    return teamProjectTitles[projectId] ?? "Deleted team project";
+  }
+
+  function showTeamProject(projectId?: string) {
+    if (!projectId || !teamProjectTitles[projectId]) return;
+    setSelectedProjectId(projectId);
   }
 
   return (
-    <PageFrame title="Team" subtitle="Studio people and ownership context for current work.">
+    <PageFrame title="Team" subtitle="Small-team workspace for shared projects, comments, chat, and activity.">
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Team Members" value={String(settings.teamMembers.length)} helper="Editable local team members" /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Team Members" value={String(activeMembers.length)} helper={`${pendingInvites.length} pending invite${pendingInvites.length === 1 ? "" : "s"} · 5 max`} /></Grid>
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Client Contacts" value={String(clients.length)} helper="Generated from project client names" /></Grid>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Active Work" value={String(projects.filter((project) => !isDoneStatus(project.status)).length)} helper="Projects needing ownership" /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Notifications" value={String(unreadNotifications)} helper="Unread mentions and project updates" /></Grid>
       </Grid>
-      <Paper sx={panelSx}>
-        <Stack sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Team Members</Typography>
-          <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>Add, edit, and remove the people who should appear in this local team list.</Typography>
-          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 120px" }, gap: 1, mt: 2 }}>
-            <TextField label="Name" value={memberForm.name} size="small" error={Boolean(memberError && !memberForm.name.trim())} onChange={(event) => { setMemberForm({ ...memberForm, name: event.target.value }); setMemberError(""); }} />
-            <DialogSelect label="Role" value={memberForm.role} options={teamRoleOptions} onChange={(value) => setMemberForm({ ...memberForm, role: value })} />
-            <TextField label="Email" value={memberForm.email} size="small" error={Boolean(memberForm.email.trim() && !isValidEmail(memberForm.email))} onChange={(event) => { setMemberForm({ ...memberForm, email: event.target.value }); setMemberError(""); }} />
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={addMember} sx={outlineButtonSx}>Add</Button>
+
+      {teamError ? <Paper sx={{ ...panelSx, p: 1.5, mb: 1.5, borderColor: "#d9675d", bgcolor: "#fff7f5" }}><Typography sx={{ color: "#9f3029", fontSize: 13, fontWeight: 700 }}>{teamError}</Typography></Paper> : null}
+
+      {!isUserLoaded ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Checking account status...</Typography></Stack></Paper>
+      ) : !isSignedIn ? (
+        <Paper sx={{ ...panelSx, p: { xs: 2.25, md: 3 } }}>
+          <Box sx={{ maxWidth: 720 }}>
+            <Typography sx={{ color: ink, fontSize: { xs: 24, md: 30 }, fontWeight: 780, lineHeight: 1.1 }}>Team workspaces require an account</Typography>
+            <Typography sx={{ color: muted, fontSize: 14, mt: 1 }}>
+              Local mode is available for solo tracking, but invites, shared projects, comments, notifications, activity, and chat need Clerk sign-in so Convex can sync the right team workspace.
+            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1} sx={{ mt: 2 }}>
+              <Button variant="contained" onClick={() => openSignUp()} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>Create Account</Button>
+              <Button variant="outlined" onClick={() => openSignIn()} sx={outlineButtonSx}>Sign In</Button>
+            </Stack>
           </Box>
-          {memberError ? <Typography sx={{ color: "#bd3f37", fontSize: 13, mt: 1 }}>{memberError}</Typography> : null}
-        </Stack>
-        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-          {settings.teamMembers.length ? settings.teamMembers.map((member) => (
-            <Box key={member.id} sx={{ py: 1 }}>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 180px minmax(0, 1fr) 92px" }, gap: 1, px: 2, py: 0.6, alignItems: "center" }}>
-                <TextField value={member.name} size="small" onChange={(event) => updateMember(member.id, { name: event.target.value })} />
-                <DialogSelect label="Role" value={member.role} options={teamRoleOptions} onChange={(value) => updateMember(member.id, { role: value })} />
-                <TextField value={member.email} placeholder="email optional" size="small" error={Boolean(member.email.trim() && !isValidEmail(member.email))} onChange={(event) => updateMember(member.id, { email: event.target.value.trim() })} />
-                <Button size="small" onClick={() => removeMember(member.id)} sx={{ color: "#bd3f37" }}>Remove</Button>
-              </Box>
-              <Box sx={{ px: 2.2, pb: 0.6, pt: 0.3 }}>
-                <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ gap: 0.6, alignItems: "center" }}>
-                  <Typography sx={{ fontSize: 11, color: muted, fontWeight: 700, mr: 0.5 }}>Active permissions:</Typography>
-                  {(() => {
-                    const rolePerms = settings.rolePermissions[member.role] || {};
-                    const activePerms = Object.entries(rolePerms).filter(([_, enabled]) => enabled);
-                    if (activePerms.length === 0) {
-                      return <Chip label="No permissions" size="small" sx={{ height: 18, fontSize: 10, bgcolor: softPanel, color: muted, borderRadius: "4px" }} />;
-                    }
-                    return activePerms.map(([perm]) => (
-                      <Chip key={perm} label={perm} size="small" sx={{ height: 18, fontSize: 10, bgcolor: activeBg, color: accent, borderRadius: "4px", fontWeight: 500 }} />
-                    ));
-                  })()}
+        </Paper>
+      ) : isConvexAuthLoading ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Connecting your account to Team sync...</Typography></Stack></Paper>
+      ) : !isConvexAuthenticated ? (
+        <Paper sx={{ ...panelSx, p: { xs: 2.25, md: 3 }, borderColor: "#d9675d", bgcolor: "#fff7f5" }}>
+          <Typography sx={{ color: "#9f3029", fontSize: 20, fontWeight: 780 }}>Team sync is not connected</Typography>
+          <Typography sx={{ color: "#9f3029", fontSize: 13, mt: 0.8, lineHeight: 1.55 }}>
+            Clerk sign-in is loaded, but Convex did not receive an authenticated token. Check `convex/auth.config.ts`, the Clerk JWT template audience, and the Clerk issuer environment variables before running the two-account Team smoke test.
+          </Typography>
+        </Paper>
+      ) : teamData === undefined ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Loading team workspace...</Typography></Stack></Paper>
+      ) : !teamData ? (
+        <Grid container spacing={1.5}>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Paper sx={{ ...panelSx, p: 2.25, height: "100%" }}>
+              <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>Create a workspace</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6 }}>Owners can invite up to four more members. Projects, comments, notifications, activity, and chat sync through Convex.</Typography>
+              <TextField
+                label="Workspace name"
+                value={workspaceName}
+                size="small"
+                fullWidth
+                sx={{ mt: 2 }}
+                slotProps={{ htmlInput: { maxLength: TEAM_WORKSPACE_NAME_LIMIT } }}
+                helperText={`${workspaceName.length}/${TEAM_WORKSPACE_NAME_LIMIT} characters`}
+                onChange={(event) => setWorkspaceName(event.target.value)}
+              />
+              <Button variant="contained" sx={{ mt: 1.4, bgcolor: accent, "&:hover": { bgcolor: accent } }} disabled={Boolean(busyAction)} onClick={() => runTeamAction("create", () => createWorkspace({ name: workspaceName }))}>Create Team Workspace</Button>
+            </Paper>
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Paper sx={{ ...panelSx, p: 2.25, height: "100%" }}>
+              <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>Join with an invite code</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6 }}>Use the six-character code from your team owner. Your signed-in email must match a pending invite.</Typography>
+              <TextField
+                label="Invite code"
+                value={inviteCode}
+                size="small"
+                fullWidth
+                sx={{ mt: 2 }}
+                slotProps={{ htmlInput: { maxLength: 6 } }}
+                error={Boolean(inviteCode.trim() && !inviteCodeIsValid)}
+                helperText="Enter the six-character code from your team owner."
+                onChange={(event) => setInviteCode(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              />
+              <Button variant="outlined" sx={{ ...outlineButtonSx, mt: 1.4 }} disabled={Boolean(busyAction) || !inviteCodeIsValid} onClick={() => runTeamAction("join", () => joinWorkspace({ inviteCode }))}>Join Workspace</Button>
+            </Paper>
+          </Grid>
+        </Grid>
+      ) : (
+        <Grid container spacing={1.5}>
+          <Grid size={{ xs: 12, lg: 7 }}>
+            <Stack gap={1.5}>
+              <Paper sx={panelSx}>
+                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.4} sx={{ p: 2 }}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>{teamData.workspace.name}</Typography>
+                    {canManageTeam ? (
+                      <Stack direction={{ xs: "column", sm: "row" }} gap={1} alignItems={{ xs: "flex-start", sm: "center" }} sx={{ mt: 0.65 }}>
+                        <Typography sx={{ color: muted, fontSize: 13 }}>Invite code <Box component="span" sx={{ color: accent, fontWeight: 800, letterSpacing: 1 }}>{teamData.workspace.inviteCode}</Box></Typography>
+                        <Button size="small" variant="outlined" onClick={() => copyInviteCode(teamData.workspace.inviteCode)} sx={{ ...outlineButtonSx, height: 30, px: 1.1, fontSize: 11 }}>{inviteCopyLabel}</Button>
+                      </Stack>
+                    ) : (
+                      <Typography sx={{ color: muted, fontSize: 13, mt: 0.45 }}>Invite code is visible to team owners only.</Typography>
+                    )}
+                  </Box>
+                  <Stack direction="row" gap={0.8} alignItems="center" flexWrap="wrap" sx={{ alignSelf: { xs: "flex-start", md: "center" }, justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+                    <Chip label={`${teamData.currentMember.role} access`} sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontWeight: 760 }} />
+                    {canLeaveWorkspace ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={Boolean(busyAction)}
+                        onClick={() => runTeamAction("leave", () => leaveWorkspace({ teamId: teamData.workspace._id }))}
+                        sx={{ ...outlineButtonSx, height: 32, color: "#bd3f37", borderColor: "#e4b4ae", fontSize: 11 }}
+                      >
+                        Leave Workspace
+                      </Button>
+                    ) : null}
+                  </Stack>
                 </Stack>
-              </Box>
-            </Box>
-          )) : <EmptyPanel title="No team members yet" body="Add a person above to start building the team list." />}
-        </Stack>
-      </Paper>
+                <Divider sx={{ borderColor: border }} />
+                <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+                  {teamData.members.map((member) => (
+                    <Stack key={member._id} direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1} sx={{ p: 1.5 }}>
+                      <Box>
+                        <Stack direction="row" gap={0.8} alignItems="center" flexWrap="wrap">
+                          <Typography sx={{ color: ink, fontSize: 14, fontWeight: 780 }}>{member.name}</Typography>
+                          <Chip label={member.role} size="small" sx={{ height: 20, fontSize: 10, bgcolor: softPanel, color: muted, borderRadius: "4px" }} />
+                          <Chip label={member.status} size="small" sx={{ height: 20, fontSize: 10, bgcolor: member.status === "active" ? activeBg : "#fff3d8", color: member.status === "active" ? accent : "#996b08", borderRadius: "4px" }} />
+                        </Stack>
+                        <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>{member.email || "No email on profile"}</Typography>
+                      </Box>
+                      <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ justifyContent: { xs: "flex-start", md: "flex-end" }, alignItems: "center" }}>
+                        {canManageTeam && member.role !== "Owner" ? (
+                          <Box sx={{ width: { xs: "100%", sm: 150 } }}>
+                            <DialogSelect
+                              label="Role"
+                              value={member.role}
+                              options={teamRoleOptions.filter((role) => role !== "Owner")}
+                              onChange={(role) => runTeamAction("role", () => updateMemberRole({ teamId: teamData.workspace._id, memberId: member._id, role: role as "Editor" | "Reviewer" | "Client" }))}
+                            />
+                          </Box>
+                        ) : Object.entries(member.permissions).filter(([, enabled]) => enabled).slice(0, 4).map(([permission]) => (
+                          <Chip key={permission} label={permission} size="small" sx={{ height: 21, fontSize: 10, bgcolor: softPanel, color: muted, borderRadius: "4px" }} />
+                        ))}
+                        {canManageTeam && member.role !== "Owner" ? (
+                          <Button
+                            size="small"
+                            disabled={Boolean(busyAction)}
+                            onClick={() => runTeamAction("remove", () => removeMember({ teamId: teamData.workspace._id, memberId: member._id }))}
+                            sx={{ color: "#bd3f37", fontSize: 12, fontWeight: 760 }}
+                          >
+                            {member.status === "invited" ? "Cancel Invite" : "Remove"}
+                          </Button>
+                        ) : null}
+                      </Stack>
+                    </Stack>
+                  ))}
+                </Stack>
+                {canManageTeam ? (
+                  <Box sx={{ p: 2, borderTop: `1px solid ${border}` }}>
+                    <Typography sx={{ color: ink, fontSize: 15, fontWeight: 760 }}>Invite member</Typography>
+                    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 150px 120px" }, gap: 1, mt: 1 }}>
+                      <TextField label="Email" value={inviteForm.email} size="small" error={Boolean(inviteForm.email.trim() && !isValidEmail(inviteForm.email))} onChange={(event) => setInviteForm({ ...inviteForm, email: event.target.value })} />
+                      <DialogSelect label="Role" value={inviteForm.role} options={teamRoleOptions.filter((role) => role !== "Owner")} onChange={(value) => setInviteForm({ ...inviteForm, role: value })} />
+                      <Button variant="outlined" sx={outlineButtonSx} disabled={Boolean(busyAction) || !inviteEmailIsValid} onClick={() => runTeamAction("invite", async () => { await inviteMember({ teamId: teamData.workspace._id, email: inviteForm.email, role: inviteForm.role as "Editor" | "Reviewer" | "Client" }); setInviteForm({ email: "", role: "Editor" }); })}>Invite</Button>
+                    </Box>
+                  </Box>
+                ) : null}
+              </Paper>
+
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1} sx={{ mb: 1.4 }}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Project Comments</Typography>
+                    <Typography sx={{ color: muted, fontSize: 13 }}>Leave notes for the team. Use @name or @emailname to notify someone.</Typography>
+                  </Box>
+                  <DialogSelect label="Project" value={selectedProject?.id ?? ""} options={teamProjects.map((project) => project.id)} labels={Object.fromEntries(teamProjects.map((project) => [project.id, project.title]))} onChange={setSelectedProjectId} />
+                </Stack>
+                {selectedProject ? (
+                  <Stack gap={1.2}>
+                    <Box sx={{ p: 1.2, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
+                      <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{selectedProject.title}</Typography>
+                      <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>{selectedProject.client || "No client"} · {selectedProject.status} · Due {formatDate(selectedProject.dueDate, settings.dateFormat)}</Typography>
+                    </Box>
+                    <Stack gap={1} sx={{ maxHeight: 270, overflow: "auto" }}>
+                      {projectComments === undefined ? <Typography sx={{ color: muted, fontSize: 13 }}>Loading comments...</Typography> : projectComments.length ? projectComments.map((comment) => (
+                        <Box key={comment._id} sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+                          <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{comment.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatActivityTime(comment.createdAt)}</Box></Typography>
+                          <Typography sx={{ color: ink, fontSize: 13, mt: 0.5, whiteSpace: "pre-wrap" }}>{comment.body}</Typography>
+                        </Box>
+                      )) : <EmptyPanel title="No project comments yet" body="Team notes for this project will appear here in real time." />}
+                    </Stack>
+                    {canCommentProjects ? (
+                      <Stack direction={{ xs: "column", md: "row" }} gap={1}>
+                        <TextField
+                          label="Project comment"
+                          value={commentBody}
+                          size="small"
+                          fullWidth
+                          multiline
+                          minRows={2}
+                          slotProps={{ htmlInput: { maxLength: TEAM_PROJECT_COMMENT_LIMIT } }}
+                          helperText={`${commentBody.length}/${TEAM_PROJECT_COMMENT_LIMIT} characters`}
+                          onChange={(event) => setCommentBody(event.target.value)}
+                        />
+                        <Button variant="contained" sx={{ bgcolor: accent, minWidth: 112, "&:hover": { bgcolor: accent } }} disabled={Boolean(busyAction) || !commentBody.trim()} onClick={() => runTeamAction("comment", async () => { await addProjectComment({ teamId: teamData.workspace._id, projectId: selectedProject.id, body: commentBody }); setCommentBody(""); })}>Post</Button>
+                      </Stack>
+                    ) : null}
+                  </Stack>
+                ) : <EmptyPanel title="No team projects yet" body="Create a team project to start leaving shared comments." />}
+              </Paper>
+            </Stack>
+          </Grid>
+
+          <Grid size={{ xs: 12, lg: 5 }}>
+            <Stack gap={1.5}>
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Team Chat</Typography>
+                <Typography sx={{ color: muted, fontSize: 13, mt: 0.35 }}>Quick workspace messages for small editing teams.</Typography>
+                <Stack gap={1} sx={{ mt: 1.4, maxHeight: 310, overflow: "auto" }}>
+                  {!canUseChat ? (
+                    <EmptyPanel title="Chat unavailable for your role" body="Your team role can use project comments and notifications, but cannot view or send team chat messages." />
+                  ) : teamData.chat.length ? teamData.chat.map((message) => (
+                    <Box key={message._id} sx={{ p: 1.1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+                      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{message.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatActivityTime(message.createdAt)}</Box></Typography>
+                      <Typography sx={{ color: ink, fontSize: 13, mt: 0.45, whiteSpace: "pre-wrap" }}>{message.body}</Typography>
+                    </Box>
+                  )) : <EmptyPanel title="No chat messages yet" body="Use chat for quick handoffs, blockers, and delivery updates." />}
+                </Stack>
+                {canUseChat ? (
+                  <Stack direction={{ xs: "column", md: "row" }} gap={1} sx={{ mt: 1.2 }}>
+                    <TextField
+                      label="Message"
+                      value={chatBody}
+                      size="small"
+                      fullWidth
+                      slotProps={{ htmlInput: { maxLength: TEAM_CHAT_MESSAGE_LIMIT } }}
+                      helperText={`${chatBody.length}/${TEAM_CHAT_MESSAGE_LIMIT} characters`}
+                      onChange={(event) => setChatBody(event.target.value)}
+                    />
+                    <Button variant="outlined" sx={outlineButtonSx} disabled={Boolean(busyAction) || !chatBody.trim()} onClick={() => runTeamAction("chat", async () => { await sendChatMessage({ teamId: teamData.workspace._id, body: chatBody }); setChatBody(""); })}>Send</Button>
+                  </Stack>
+                ) : null}
+              </Paper>
+
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                  <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Notifications</Typography>
+                  {unreadNotifications ? (
+                    <Button
+                      size="small"
+                      disabled={Boolean(busyAction)}
+                      onClick={() => runTeamAction("read-all", () => markAllNotificationsRead({ teamId: teamData.workspace._id }))}
+                      sx={{ color: accent, fontSize: 12, fontWeight: 760 }}
+                    >
+                      Mark all read
+                    </Button>
+                  ) : null}
+                </Stack>
+                <Stack gap={0.8} sx={{ mt: 1.2 }}>
+                  {teamData.notifications.length ? teamData.notifications.map((notification) => (
+                    <Stack key={notification._id} direction="row" justifyContent="space-between" gap={1} sx={{ p: 1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: notification.read ? panel : activeBg }}>
+                      <Box>
+                        <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{notification.message}</Typography>
+                        {notification.projectId ? <Typography sx={{ color: accent, fontSize: 11.5, fontWeight: 760, mt: 0.25 }}>Project: {teamProjectLabel(notification.projectId)}</Typography> : null}
+                        <Typography sx={{ color: muted, fontSize: 11, mt: 0.3 }}>{formatActivityTime(notification.createdAt)}</Typography>
+                      </Box>
+                      <Stack gap={0.35} alignItems="flex-end">
+                        {notification.projectId && teamProjectTitles[notification.projectId] ? (
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              showTeamProject(notification.projectId);
+                              if (!notification.read) {
+                                void markNotificationRead({ notificationId: notification._id });
+                              }
+                            }}
+                            sx={{ color: accent }}
+                          >
+                            View
+                          </Button>
+                        ) : null}
+                        {!notification.read ? <Button size="small" onClick={() => runTeamAction("read", () => markNotificationRead({ notificationId: notification._id }))}>Mark read</Button> : null}
+                      </Stack>
+                    </Stack>
+                  )) : <EmptyPanel title="No notifications" body="Mentions and project notifications will appear here." />}
+                </Stack>
+              </Paper>
+
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Activity Feed</Typography>
+                <Stack gap={0.8} sx={{ mt: 1.2 }}>
+                  {teamData.activity.length ? teamData.activity.map((activity) => (
+                    <Box key={activity._id} sx={{ p: 1, borderLeft: `3px solid ${accent}`, bgcolor: softPanel, borderRadius: "5px" }}>
+                      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{activity.message}</Typography>
+                      {activity.projectId ? (
+                        <Stack direction="row" alignItems="center" gap={0.8} sx={{ mt: 0.35, flexWrap: "wrap" }}>
+                          <Typography sx={{ color: accent, fontSize: 11.5, fontWeight: 760 }}>Project: {teamProjectLabel(activity.projectId)}</Typography>
+                          {teamProjectTitles[activity.projectId] ? <Button size="small" onClick={() => showTeamProject(activity.projectId)} sx={{ color: accent, p: 0, minWidth: 0, fontSize: 11 }}>View</Button> : null}
+                        </Stack>
+                      ) : null}
+                      <Typography sx={{ color: muted, fontSize: 11, mt: 0.3 }}>{formatActivityTime(activity.createdAt)}</Typography>
+                    </Box>
+                  )) : <EmptyPanel title="No activity yet" body="Workspace creation, invites, comments, and project updates will appear here." />}
+                </Stack>
+              </Paper>
+            </Stack>
+          </Grid>
+        </Grid>
+      )}
     </PageFrame>
   );
 }
@@ -2273,7 +2797,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
         <SettingsPanel title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
             <Stack gap={1.1}>
               {settings.projectTags.map((tag, index) => (
-                <Stack key={`${tag}-${index}`} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} gap={1.2}>
+                <Stack key={`project-tag-${index}`} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} gap={1.2}>
                   <TextField
                     label={`Tag ${index + 1}`}
                     value={tag}
@@ -2331,7 +2855,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
           </SettingsPanel>
         <SettingsPanel title="Project Stages" subtitle="Default workflow stages for new work.">
             {settings.projectStages.map((stage, index) => (
-              <Stack key={`${stage}-${index}`} direction="row" alignItems="center" gap={1.2}>
+              <Stack key={`project-stage-${index}`} direction="row" alignItems="center" gap={1.2}>
                 <Box sx={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, bgcolor: stageColors[index % stageColors.length] }} />
                 <TextField
                   value={stage}
@@ -2771,8 +3295,16 @@ function PageFrame({ title, subtitle, action, children }: { title: string; subti
 
 function NotificationBell({ settings }: { settings: SettingsState }) {
   const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
+  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
+  const markNotificationRead = useMutation(api.team.markNotificationRead);
+  const markAllNotificationsRead = useMutation(api.team.markAllNotificationsRead);
   const notificationOpen = Boolean(notificationAnchor);
   const enabledNotifications = Object.entries(settings.notifications).filter(([, enabled]) => enabled);
+  const teamNotifications = teamData?.notifications ?? [];
+  const unreadCount = teamNotifications.filter((notification) => !notification.read).length;
+  const teamNotificationSyncUnavailable = Boolean(isUserLoaded && isSignedIn && !isConvexAuthLoading && !isConvexAuthenticated);
 
   return (
     <>
@@ -2785,7 +3317,7 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
           sx={{ minWidth: 36, width: 36, height: 36, p: 0, color: ink, borderRadius: "6px", position: "relative" }}
         >
           <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
-          {enabledNotifications.length ? (
+          {unreadCount || enabledNotifications.length ? (
             <Box sx={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", bgcolor: accent, border: `1px solid ${panel}` }} />
           ) : null}
         </Button>
@@ -2797,13 +3329,66 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
         PaperProps={{ sx: { width: 290, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
       >
         <Box sx={{ px: 1.5, py: 1 }}>
-          <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>Notifications</Typography>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>Notifications</Typography>
+            {teamData && unreadCount ? (
+              <Button
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  markAllNotificationsRead({ teamId: teamData.workspace._id }).catch(() => undefined);
+                }}
+                sx={{ color: accent, fontSize: 11, fontWeight: 760, p: 0, minWidth: 0 }}
+              >
+                Mark all read
+              </Button>
+            ) : null}
+          </Stack>
           <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>
-            {enabledNotifications.length ? `${enabledNotifications.length} notification types enabled` : "No notification types enabled"}
+            {isConvexAuthLoading ? "Connecting team notifications..." : teamNotificationSyncUnavailable ? "Team notifications are not connected" : teamNotifications.length ? `${unreadCount} unread team notification${unreadCount === 1 ? "" : "s"}` : enabledNotifications.length ? `${enabledNotifications.length} notification types enabled` : "No notifications yet"}
           </Typography>
         </Box>
         <Divider sx={{ borderColor: border }} />
-        {enabledNotifications.length ? enabledNotifications.map(([name]) => (
+        {isConvexAuthLoading ? (
+          <Box sx={{ px: 1.5, py: 1.2 }}>
+            <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Waiting for Convex auth before loading Team notifications.</Typography>
+          </Box>
+        ) : teamNotificationSyncUnavailable ? (
+          <Box sx={{ px: 1.5, py: 1.2 }}>
+            <Typography sx={{ color: "#9f3029", fontSize: 12, lineHeight: 1.45 }}>Clerk is signed in, but Convex auth is not connected. Check Team sync before relying on shared notifications.</Typography>
+          </Box>
+        ) : teamNotifications.length ? teamNotifications.slice(0, 8).map((notification) => (
+          <MenuItem key={notification._id} sx={{ display: "block", color: ink, py: 1, bgcolor: notification.read ? panel : activeBg }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{notification.message}</Typography>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(notification.createdAt))}</Typography>
+            <Button
+              component={Link}
+              href="/team"
+              size="small"
+              onClick={() => {
+                setNotificationAnchor(null);
+                if (!notification.read) {
+                  void markNotificationRead({ notificationId: notification._id });
+                }
+              }}
+              sx={{ color: accent, fontSize: 11, fontWeight: 760, mt: 0.4, mr: 1, p: 0, minWidth: 0 }}
+            >
+              Open Team
+            </Button>
+            {!notification.read ? (
+              <Button
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  markNotificationRead({ notificationId: notification._id }).catch(() => undefined);
+                }}
+                sx={{ color: accent, fontSize: 11, fontWeight: 760, mt: 0.4, p: 0, minWidth: 0 }}
+              >
+                Mark read
+              </Button>
+            ) : null}
+          </MenuItem>
+        )) : enabledNotifications.length ? enabledNotifications.map(([name]) => (
           <MenuItem key={name} sx={{ display: "block", color: ink, py: 1 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{name}</Typography>
             <Typography sx={{ color: muted, fontSize: 12 }}>{notificationCopy(name)}</Typography>
@@ -3079,13 +3664,23 @@ function ProjectTableHeader() {
   );
 }
 
-function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: () => void; onDelete: () => void }) {
+function ProjectRow({ project, canEdit, canDelete, onView, onEdit, onDelete }: { project: WorkItem; canEdit: boolean; canDelete: boolean; onView: () => void; onEdit: () => void; onDelete: () => void }) {
   const settings = useTrackerSettings();
   const amount = isSalaryWorkType(project.workType, settings) ? "Batch tracked" : money(project.earnings, settings.currencyCode);
   const progress = projectProgress(project.status);
 
   return (
     <Box
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${project.title}`}
+      onClick={onView}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onView();
+        }
+      }}
       sx={{
         display: "grid",
         gridTemplateColumns: { xs: "minmax(0, 1fr) auto", lg: "minmax(300px, 1.6fr) 1fr 150px 130px 130px 140px 120px" },
@@ -3093,7 +3688,12 @@ function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: 
         alignItems: "center",
         px: 2,
         py: 1.5,
-        bgcolor: panel
+        bgcolor: panel,
+        cursor: "pointer",
+        outline: "none",
+        transition: "background-color 140ms ease",
+        "&:hover": { bgcolor: hoverBg },
+        "&:focus-visible": { boxShadow: `inset 0 0 0 2px ${accent}` }
       }}
     >
       <Stack direction="row" alignItems="center" gap={1.4} sx={{ minWidth: 0 }}>
@@ -3126,13 +3726,13 @@ function ProjectRow({ project, onEdit, onDelete }: { project: WorkItem; onEdit: 
         <LinearProgress variant="determinate" value={progress} sx={{ height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
       </Box>
       <Stack direction="row" gap={0.5} justifyContent="flex-end" sx={{ flexShrink: 0 }}>
-        <Tooltip title="Edit project">
-          <Button size="small" aria-label={`Edit ${project.title}`} onClick={onEdit} sx={{ minWidth: 34, width: 34, height: 34, color: muted, p: 0 }}>
+        <Tooltip title={canEdit ? "Edit project" : "Your role can view this project only"}>
+          <Button size="small" aria-label={`Edit ${project.title}`} disabled={!canEdit} onClick={(event) => { event.stopPropagation(); onEdit(); }} onKeyDown={(event) => event.stopPropagation()} sx={{ minWidth: 34, width: 34, height: 34, color: muted, p: 0 }}>
             <EditOutlinedIcon sx={{ fontSize: 18 }} />
           </Button>
         </Tooltip>
-        <Tooltip title="Delete project">
-          <Button size="small" aria-label={`Delete ${project.title}`} onClick={onDelete} sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}>
+        <Tooltip title={canDelete ? "Delete project" : "Only project owners or team owners can delete this project"}>
+          <Button size="small" aria-label={`Delete ${project.title}`} disabled={!canDelete} onClick={(event) => { event.stopPropagation(); onDelete(); }} onKeyDown={(event) => event.stopPropagation()} sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}>
             <DeleteOutlineIcon sx={{ fontSize: 18 }} />
           </Button>
         </Tooltip>
@@ -3222,6 +3822,196 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
+function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: string) => void }) {
+  if (!project) {
+    return null;
+  }
+
+  const progress = projectProgress(project.status);
+  const amount = isSalaryWorkType(project.workType, settings) ? "Batch tracked" : money(project.earnings, settings.currencyCode);
+  const configuredLinks = integrationServices
+    .map((service) => ({ service, link: project.integrationLinks?.[service.id] }))
+    .filter(({ link }) => hasIntegrationLink(link));
+
+  function openLink(url: string) {
+    if (typeof window === "undefined" || !isValidIntegrationUrl(url)) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  return (
+    <Dialog open onClose={onClose} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px", overflow: "hidden" } }}>
+      <DialogTitle sx={{ p: 0 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2} sx={{ px: { xs: 2, md: 3 }, py: 2.2, borderBottom: `1px solid ${border}` }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Stack direction="row" gap={1} alignItems="center" sx={{ mb: 0.9, flexWrap: "wrap" }}>
+              <StatusChip status={project.status} />
+              <Chip label={project.workType} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontWeight: 720 }} />
+              {configuredLinks.length ? <Chip label={`${configuredLinks.length} links`} size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px", fontWeight: 720 }} /> : null}
+            </Stack>
+            <Typography sx={{ color: ink, fontSize: { xs: 24, md: 30 }, fontWeight: 760, lineHeight: 1.1 }}>{project.title}</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>{project.client || "No client saved"}</Typography>
+          </Box>
+          <Button aria-label="Close project details" onClick={onClose} sx={{ minWidth: 34, width: 34, height: 34, color: muted, p: 0 }}>
+            <CloseIcon sx={{ fontSize: 20 }} />
+          </Button>
+        </Stack>
+      </DialogTitle>
+      <DialogContent sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.2, mb: 2 }}>
+          <ProjectDetailMetric label="Start" value={formatDate(project.startDate, settings.dateFormat)} />
+          <ProjectDetailMetric label="Due" value={formatDate(project.dueDate, settings.dateFormat)} />
+          <ProjectDetailMetric label="Amount" value={amount} />
+        </Box>
+        <Paper sx={{ ...panelSx, p: 2, mb: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+            <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Progress</Typography>
+            <Typography sx={{ color: priorityColor(project), fontSize: 13, fontWeight: 760 }}>{projectPriority(project)}</Typography>
+          </Stack>
+          <LinearProgress variant="determinate" value={progress} sx={{ height: 7, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1.2} sx={{ mt: 1 }}>
+            <Typography sx={{ color: muted, fontSize: 12 }}>{progress}% complete</Typography>
+            {canUpdateStatus ? <CompactSelect value={project.status} options={statusOptions} onChange={(status) => onStatusChange(project, status)} width={{ xs: "100%", sm: 170 }} /> : null}
+          </Stack>
+        </Paper>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 320px" }, gap: 2 }}>
+          <Paper sx={{ ...panelSx, p: 2 }}>
+            <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Notes</Typography>
+            <Typography sx={{ color: project.notes ? ink : muted, fontSize: 13, mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+              {project.notes || "No notes saved for this project yet."}
+            </Typography>
+          </Paper>
+          <Paper sx={{ ...panelSx, p: 2 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
+              <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Resources</Typography>
+              <Chip label={configuredIntegrationCount(project.integrationLinks)} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+            </Stack>
+            <Stack gap={1}>
+              {configuredLinks.length ? configuredLinks.map(({ service, link }) => link ? (
+                <Box key={service.id} sx={{ p: 1.1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{integrationDisplayText(link, service.name)}</Typography>
+                      <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{service.name}</Typography>
+                    </Box>
+                    <Tooltip title={`Open ${service.name}`}>
+                      <Button aria-label={`Open ${service.name} link`} onClick={() => openLink(link.url)} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}>
+                        <OpenInNewIcon sx={{ fontSize: 18 }} />
+                      </Button>
+                    </Tooltip>
+                  </Stack>
+                  {link.notes ? <Typography sx={{ color: muted, fontSize: 12, mt: 0.8, lineHeight: 1.45 }}>{link.notes}</Typography> : null}
+                </Box>
+              ) : null) : (
+                <Typography sx={{ color: muted, fontSize: 13 }}>No project links saved yet.</Typography>
+              )}
+            </Stack>
+          </Paper>
+        </Box>
+        <ProjectDetailCollaborationPanel project={project} teamMembers={teamMembers} canComment={canComment} />
+      </DialogContent>
+      <DialogActions sx={{ px: { xs: 2, md: 3 }, py: 2, borderTop: `1px solid ${border}` }}>
+        {canDelete ? <Button onClick={() => onDelete(project)} sx={{ color: "#bd3f37" }}>Delete</Button> : null}
+        {canEdit ? <Button onClick={() => onEdit(project)} variant="outlined" sx={outlineButtonSx}>Edit Project</Button> : <Typography sx={{ color: muted, fontSize: 13 }}>Your team role can view this project but cannot edit it.</Typography>}
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function ProjectDetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <Paper sx={{ ...panelSx, p: 1.6 }}>
+      <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>{label}</Typography>
+      <Typography sx={{ color: ink, fontSize: 15, fontWeight: 760, mt: 0.6 }}>{value}</Typography>
+    </Paper>
+  );
+}
+
+function formatShortDateTime(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: { project: WorkItem; teamMembers: WorkspaceMemberOption[]; canComment: boolean }) {
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const addProjectComment = useMutation(api.team.addProjectComment);
+  const [commentBody, setCommentBody] = useState("");
+  const [commentError, setCommentError] = useState("");
+  const projectComments = useQuery(
+    api.team.listProjectComments,
+    isConvexAuthenticated && project.teamId ? { teamId: project.teamId, projectId: project.id } : "skip"
+  );
+  const assignedMembers = teamMembers.filter((member) => (project.assigneeUserIds ?? []).includes(member.userId));
+
+  async function postComment() {
+    if (!isConvexAuthenticated || !project.teamId || !commentBody.trim()) return;
+    setCommentError("");
+    try {
+      await addProjectComment({ teamId: project.teamId, projectId: project.id, body: commentBody });
+      setCommentBody("");
+    } catch (error) {
+      setCommentError(error instanceof Error ? error.message : "Could not post comment.");
+    }
+  }
+
+  if (!project.teamId) {
+    return null;
+  }
+
+  return (
+    <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
+      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.2} sx={{ mb: 1.4 }}>
+        <Box>
+          <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Team Collaboration</Typography>
+          <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.35 }}>Assignments and project comments sync to the team workspace.</Typography>
+        </Box>
+        <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ justifyContent: { xs: "flex-start", md: "flex-end" } }}>
+          {assignedMembers.length ? assignedMembers.map((member) => (
+            <Chip key={member.userId} label={member.name || member.email} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontWeight: 720 }} />
+          )) : <Chip label="Unassigned" size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px" }} />}
+        </Stack>
+      </Stack>
+
+      <Stack gap={1} sx={{ maxHeight: 280, overflow: "auto", mb: 1.2 }}>
+        {isConvexAuthLoading ? (
+          <Typography sx={{ color: muted, fontSize: 13 }}>Connecting Team comments...</Typography>
+        ) : !isConvexAuthenticated ? (
+          <Typography sx={{ color: "#9f3029", fontSize: 13 }}>Team comments require Convex auth. Check Team sync before posting comments.</Typography>
+        ) : projectComments === undefined ? (
+          <Typography sx={{ color: muted, fontSize: 13 }}>Loading comments...</Typography>
+        ) : projectComments.length ? projectComments.map((comment) => (
+          <Box key={comment._id} sx={{ p: 1.15, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
+            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>
+              {comment.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatShortDateTime(comment.createdAt)}</Box>
+            </Typography>
+            <Typography sx={{ color: ink, fontSize: 13, mt: 0.5, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{comment.body}</Typography>
+          </Box>
+        )) : (
+          <Typography sx={{ color: muted, fontSize: 13 }}>No comments yet. Add a note for the team or mention someone with @name.</Typography>
+        )}
+      </Stack>
+
+      {canComment ? (
+        <Stack direction={{ xs: "column", md: "row" }} gap={1}>
+          <TextField
+            label="Team comment"
+            value={commentBody}
+            size="small"
+            fullWidth
+            multiline
+            minRows={2}
+            slotProps={{ htmlInput: { maxLength: TEAM_PROJECT_COMMENT_LIMIT } }}
+            onChange={(event) => setCommentBody(event.target.value)}
+            helperText={commentError || `${commentBody.length}/${TEAM_PROJECT_COMMENT_LIMIT} characters · Use @name or @emailname to notify a teammate.`}
+            error={Boolean(commentError)}
+          />
+          <Button variant="contained" sx={{ bgcolor: accent, minWidth: 112, "&:hover": { bgcolor: accent } }} disabled={!isConvexAuthenticated || !commentBody.trim()} onClick={postComment}>Post</Button>
+        </Stack>
+      ) : (
+        <Typography sx={{ color: muted, fontSize: 13 }}>Your team role can view comments but cannot add new ones.</Typography>
+      )}
+    </Paper>
+  );
+}
+
 function ProjectDialog({
   open,
   editing,
@@ -3231,6 +4021,7 @@ function ProjectDialog({
   clientOptions,
   workTypeOptions,
   settings,
+  teamMembers,
   onClose,
   onSave
 }: {
@@ -3242,11 +4033,13 @@ function ProjectDialog({
   clientOptions: string[];
   workTypeOptions: string[];
   settings: SettingsState;
+  teamMembers: WorkspaceMemberOption[];
   onClose: () => void;
   onSave: () => void;
 }) {
   const selectedWorkType = workTypeOptions.some((option) => option.toLowerCase() === form.workType.toLowerCase()) ? canonicalWorkType(form.workType, workTypeOptions) : workTypeOptions[0];
   const typeConfig = getTypeConfig(selectedWorkType, settings);
+  const assignedMembers = teamMembers.filter((member) => (form.assigneeUserIds ?? []).includes(member.userId));
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
       <DialogTitle sx={{ fontSize: 24, fontWeight: 760 }}>{editing ? "Edit Project" : "New Project"}</DialogTitle>
@@ -3262,7 +4055,7 @@ function ProjectDialog({
             noOptionsText="Type a new client name"
             value={form.client || ""}
             inputValue={form.client || ""}
-            onInputChange={(_, value) => setForm({ ...form, client: canonicalClientName(value, clientOptions, false) })}
+            onInputChange={(_, value) => setForm({ ...form, client: value })}
             onChange={(_, value) => setForm({ ...form, client: canonicalClientName(typeof value === "string" ? value : "", clientOptions) })}
             renderInput={(params) => (
               <TextField
@@ -3284,6 +4077,31 @@ function ProjectDialog({
           </Stack>
           <TextField label="Earnings" type="number" value={form.earnings} disabled={typeConfig.earningsMode === "batch"} helperText={typeConfig.earningsMode === "batch" ? `${settings.salaryWorkType} earnings are batch tracked in settings.` : ""} onChange={(event) => setForm({ ...form, earnings: Number(event.target.value || 0) })} fullWidth />
           <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
+          {form.teamId && teamMembers.length ? (
+            <Autocomplete
+              multiple
+              options={teamMembers}
+              value={assignedMembers}
+              isOptionEqualToValue={(option, value) => option.userId === value.userId}
+              getOptionLabel={(option) => option.name || option.email || "Team member"}
+              onChange={(_, members) => setForm({ ...form, assigneeUserIds: members.map((member) => member.userId) })}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Assigned team members"
+                  helperText="Assigned members receive project notifications when this project changes."
+                />
+              )}
+              renderOption={(props, option) => (
+                <Box component="li" {...props} key={option.userId}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{option.name}</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12 }}>{option.role} · {option.email || "No email"}</Typography>
+                  </Box>
+                </Box>
+              )}
+            />
+          ) : null}
           <IntegrationLinkManager
             title="Project Integrations"
             subtitle="Attach service links that belong only to this project."
@@ -3320,12 +4138,12 @@ function DeleteProjectDialog({ project, onCancel, onConfirm }: { project: WorkIt
   );
 }
 
-function DialogSelect({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function DialogSelect({ label, value, options, labels, onChange }: { label: string; value: string; options: string[]; labels?: Record<string, string>; onChange: (value: string) => void }) {
   return (
     <FormControl fullWidth>
       <InputLabel>{label}</InputLabel>
       <Select label={label} value={value} onChange={(event: SelectChangeEvent) => onChange(event.target.value)}>
-        {options.map((option) => <MenuItem key={option} value={option}>{option}</MenuItem>)}
+        {options.map((option) => <MenuItem key={option} value={option}>{labels?.[option] ?? option}</MenuItem>)}
       </Select>
     </FormControl>
   );
