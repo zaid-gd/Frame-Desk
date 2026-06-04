@@ -365,13 +365,16 @@ async function deleteProjectComments(
     projectId: string;
   }
 ) {
-  const comments = await ctx.db
-    .query("projectComments")
-    .withIndex("by_teamId_and_projectId", (q) =>
-      q.eq("teamId", args.teamId).eq("projectId", args.projectId)
-    )
-    .take(50);
-  await Promise.all(comments.map((comment) => ctx.db.delete(comment._id)));
+  while (true) {
+    const comments = await ctx.db
+      .query("projectComments")
+      .withIndex("by_teamId_and_projectId", (q) =>
+        q.eq("teamId", args.teamId).eq("projectId", args.projectId)
+      )
+      .take(100);
+    if (comments.length === 0) break;
+    await Promise.all(comments.map((comment) => ctx.db.delete(comment._id)));
+  }
 }
 
 async function notifyProjectAssignees(

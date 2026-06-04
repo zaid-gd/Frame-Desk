@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -103,10 +103,22 @@ export default function ClientPortalPage() {
   const [feedback, setFeedback] = useState(initialFeedback);
   const [request, setRequest] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const submittedTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (submittedTimerRef.current !== null) {
+        window.clearTimeout(submittedTimerRef.current);
+      }
+    };
+  }, []);
 
   function submitFeedback() {
     const body = request.trim();
     if (!body) return;
+    if (submittedTimerRef.current !== null) {
+      window.clearTimeout(submittedTimerRef.current);
+    }
     setFeedback((current) => [
       {
         author: "Client",
@@ -118,7 +130,10 @@ export default function ClientPortalPage() {
     ]);
     setRequest("");
     setSubmitted(true);
-    window.setTimeout(() => setSubmitted(false), 1800);
+    submittedTimerRef.current = window.setTimeout(() => {
+      setSubmitted(false);
+      submittedTimerRef.current = null;
+    }, 1800);
   }
 
   return (

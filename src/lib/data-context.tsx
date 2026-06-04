@@ -455,6 +455,18 @@ function normalizeResourceLinks(value: unknown): ResourceLink[] {
   });
 }
 
+function mergeResourceLinks(...groups: ResourceLink[][]): ResourceLink[] {
+  const seen = new Set<string>();
+  const merged: ResourceLink[] = [];
+  for (const resource of groups.flat()) {
+    const key = resource.id || resource.url.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(resource);
+  }
+  return merged;
+}
+
 function readInitialResources(): ResourceLink[] {
   if (typeof window === "undefined") return [];
   return normalizeResourceLinks(readJson<unknown>(RESOURCES_STORAGE_KEY, []));
@@ -780,7 +792,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       let nextItems: WorkItem[] = loadedItems;
       let nextSettings = loadedSettings ? mergeSettings(loadedSettings) : mergedLocalSettings;
       let nextBatches: SalaryBatch[] = loadedBatches;
-      let nextResources: ResourceLink[] = loadedResources;
+      let nextResources: ResourceLink[] = mergeResourceLinks(loadedResources, localResources);
       let syncFailed = false;
 
       if (loadedItems.length === 0 && localItems.length > 0) {
@@ -805,14 +817,13 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      if (loadedResources.length === 0 && localResources.length > 0) {
+      if (localResources.length > 0) {
         try {
-          await replaceAllResources({ resources: localResources });
+          await replaceAllResources({ resources: nextResources });
           removeKey(RESOURCES_STORAGE_KEY);
-          nextResources = localResources;
         } catch {
           syncFailed = true;
-          nextResources = localResources;
+          nextResources = mergeResourceLinks(localResources, loadedResources);
         }
       }
 
@@ -868,9 +879,10 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // Keep signed-in workspaces live after the initial cloud load. Team project
   // changes from other members arrive through Convex subscriptions here.
   useEffect(() => {
-    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !ready || convexItems === undefined) return;
+    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !ready || convexItems === undefined || convexResources === undefined) return;
     setItemsState(normalizeWorkItems(convexItems));
-  }, [clerkLoaded, convexAuthenticated, convexItems, isSignedIn, ready]);
+    setResourceLinksState(normalizeResourceLinks(convexResources));
+  }, [clerkLoaded, convexAuthenticated, convexItems, convexResources, isSignedIn, ready]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;

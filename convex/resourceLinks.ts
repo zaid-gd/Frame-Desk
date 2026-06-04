@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+const RESOURCE_LINK_LIMIT = 500;
+
 const resourceLinkSchema = v.object({
   id: v.string(),
   title: v.string(),
@@ -21,7 +23,7 @@ export const list = query({
       .query("resourceLinks")
       .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
       .order("desc")
-      .take(500);
+      .take(RESOURCE_LINK_LIMIT);
   },
 });
 
@@ -36,9 +38,10 @@ export const replaceAll = mutation({
     const existing = await ctx.db
       .query("resourceLinks")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(500);
+      .take(RESOURCE_LINK_LIMIT);
+    const nextResources = args.resources.slice(0, RESOURCE_LINK_LIMIT);
 
     await Promise.all(existing.map((resource) => ctx.db.delete(resource._id)));
-    await Promise.all(args.resources.map((resource) => ctx.db.insert("resourceLinks", { ...resource, userId })));
+    await Promise.all(nextResources.map((resource) => ctx.db.insert("resourceLinks", { ...resource, userId })));
   },
 });

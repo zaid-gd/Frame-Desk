@@ -1806,6 +1806,15 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
   const [error, setError] = useState("");
   const sortedResources = [...resources].sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
   const linkedToProjects = resources.filter((resource) => resource.projectId).length;
+  const projectOptions = ["General", ...projects.map((project) => project.id)];
+  const projectLabels = Object.fromEntries(projects.map((project) => [project.id, project.title]));
+  const projectSelectValue = form.projectId || "General";
+  const safeProjectOptions = projectSelectValue && !projectOptions.includes(projectSelectValue)
+    ? [projectSelectValue, ...projectOptions]
+    : projectOptions;
+  const safeProjectLabels = projectSelectValue && !projectLabels[projectSelectValue] && projectSelectValue !== "General"
+    ? { ...projectLabels, [projectSelectValue]: "Deleted project" }
+    : projectLabels;
 
   function emptyResourceForm(): ResourceLink {
     const now = new Date().toISOString();
@@ -1943,7 +1952,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
             <TextField label="URL" value={form.url} placeholder="https://..." error={Boolean(error && !isValidIntegrationUrl(form.url))} onChange={(event) => { setForm({ ...form, url: event.target.value }); setError(""); }} fullWidth />
             <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
               <DialogSelect label="Category" value={form.category} options={resourceCategories} onChange={(value) => setForm({ ...form, category: value })} />
-              <DialogSelect label="Project" value={form.projectId || "General"} options={["General", ...projects.map((project) => project.id)]} labels={Object.fromEntries(projects.map((project) => [project.id, project.title]))} onChange={(value) => setForm({ ...form, projectId: value === "General" ? "" : value })} />
+              <DialogSelect label="Project" value={projectSelectValue} options={safeProjectOptions} labels={safeProjectLabels} onChange={(value) => setForm({ ...form, projectId: value === "General" ? "" : value })} />
             </Stack>
             <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
             {error ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{error}</Typography> : null}
