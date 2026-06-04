@@ -20,10 +20,27 @@ export const getBySlug = query({
   handler: async (ctx, args) => {
     const slug = normalizeSlug(args.slug);
     if (!slug) return null;
-    return await ctx.db
+    const profile = await ctx.db
       .query("publicProfiles")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
       .unique();
+    if (!profile) return null;
+    return {
+      slug: profile.slug,
+      studioName: profile.studioName,
+      profileName: profile.profileName,
+      profileUsername: profile.profileUsername,
+      profileTitle: profile.profileTitle,
+      profileBio: profile.profileBio,
+      profileLocation: profile.profileLocation,
+      profileImageUrl: profile.profileImageUrl,
+      timeZone: profile.timeZone,
+      activeProjects: profile.activeProjects,
+      deliveredEdits: profile.deliveredEdits,
+      avgTurnaroundDays: profile.avgTurnaroundDays,
+      projects: profile.projects,
+      updatedAt: profile.updatedAt,
+    };
   },
 });
 

@@ -85,6 +85,7 @@ const TEAM_WORKSPACE_NAME_LIMIT = 80;
 const TEAM_CHAT_MESSAGE_LIMIT = 800;
 const TEAM_PROJECT_COMMENT_LIMIT = 1000;
 const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
+const MIN_PUBLIC_SLUG_LENGTH = 2;
 const sidebarWidth = 264;
 const headingFont = "Georgia, 'Times New Roman', serif";
 const defaultAccent = "#5b3fa0";
@@ -4761,7 +4762,8 @@ function sanitizeUsername(value: string) {
 }
 
 function publicProfileSlug(settings: SettingsState) {
-  return sanitizeUsername(settings.profileUsername || settings.profileName || settings.studioName || "editor").slice(0, 40) || "editor";
+  const slug = sanitizeUsername(settings.profileUsername || settings.profileName || settings.studioName || "editor").slice(0, 40);
+  return slug.length >= MIN_PUBLIC_SLUG_LENGTH ? slug : "editor";
 }
 
 function publicMetric(value: unknown, fallback = 0) {
