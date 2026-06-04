@@ -109,6 +109,9 @@ export type SettingsState = {
   profileBio: string;
   profileLocation: string;
   profileImageUrl: string;
+  publicActiveProjects: number;
+  publicDeliveredEdits: number;
+  publicTurnaroundDays: number;
   timeZone: string;
   dateFormat: string;
   weekStart: string;
