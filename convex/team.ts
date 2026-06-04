@@ -392,7 +392,6 @@ export const joinWorkspace = mutation({
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
     const email = normalizeEmail(identity.email);
-    if (!email) throw new Error("Your account needs an email address to join an invited team");
     const existingMemberships = await ctx.db
       .query("teamMembers")
       .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
@@ -417,7 +416,15 @@ export const joinWorkspace = mutation({
       throw new Error("This team is already full");
     }
 
-    const invitedMember = members.find((member) => member.status === "invited" && member.email === email);
+    const pendingInvites = members.filter((member) => member.status === "invited");
+    const invitedMember = email
+      ? pendingInvites.find((member) => member.email === email)
+      : pendingInvites.length === 1
+        ? pendingInvites[0]
+        : null;
+    if (!email && pendingInvites.length !== 1) {
+      throw new Error("Your account needs an email address to join this team when multiple invites are pending");
+    }
     if (!invitedMember) throw new Error("Your email address is not invited to this team");
     const now = new Date().toISOString();
     await ctx.db.patch(invitedMember._id, {
