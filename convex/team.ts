@@ -422,7 +422,7 @@ export const joinWorkspace = mutation({
       : pendingInvites.length === 1
         ? pendingInvites[0]
         : null;
-    if (!email && pendingInvites.length !== 1) {
+    if (!email && pendingInvites.length > 1) {
       throw new Error("Your account needs an email address to join this team when multiple invites are pending");
     }
     if (!invitedMember) throw new Error("Your email address is not invited to this team");

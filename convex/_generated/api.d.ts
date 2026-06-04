@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as publicProfiles from "../publicProfiles.js";
 import type * as resourceLinks from "../resourceLinks.js";
 import type * as salaryBatches from "../salaryBatches.js";
 import type * as settings from "../settings.js";
@@ -21,6 +22,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  publicProfiles: typeof publicProfiles;
   resourceLinks: typeof resourceLinks;
   salaryBatches: typeof salaryBatches;
   settings: typeof settings;

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
 import { api } from "../../convex/_generated/api";
@@ -85,6 +85,7 @@ const TEAM_WORKSPACE_NAME_LIMIT = 80;
 const TEAM_CHAT_MESSAGE_LIMIT = 800;
 const TEAM_PROJECT_COMMENT_LIMIT = 1000;
 const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
+const MIN_PUBLIC_SLUG_LENGTH = 2;
 const sidebarWidth = 264;
 const headingFont = "Georgia, 'Times New Roman', serif";
 const defaultAccent = "#5b3fa0";
@@ -117,7 +118,7 @@ const outlineButtonSx = {
   "&:hover": { borderColor: accent, bgcolor: hoverBg }
 };
 
-type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "profile" | "profile-edit" | "organization-profile";
+type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "account" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -143,6 +144,9 @@ type SettingsState = {
   profileBio: string;
   profileLocation: string;
   profileImageUrl: string;
+  publicActiveProjects: number;
+  publicDeliveredEdits: number;
+  publicTurnaroundDays: number;
   timeZone: string;
   dateFormat: string;
   weekStart: string;
@@ -262,7 +266,8 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
   { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
   { key: "integrations", href: "/integrations", label: "Integrations", icon: <OpenInNewIcon /> },
   { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon /> },
-  { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> }
+  { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> },
+  { key: "account", href: "/account", label: "Account", icon: <PersonOutlineOutlinedIcon /> }
 ];
 
 const defaultSettings: SettingsState = {
@@ -273,6 +278,9 @@ const defaultSettings: SettingsState = {
   profileBio: "",
   profileLocation: "",
   profileImageUrl: "",
+  publicActiveProjects: 0,
+  publicDeliveredEdits: 0,
+  publicTurnaroundDays: 3,
   timeZone: "UTC",
   dateFormat: "Month Day, Year",
   weekStart: "Mon",
@@ -639,6 +647,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
     <TeamDesignPage projects={projects} settings={settings} setSettings={setSettings} />
   ) : page === "settings" ? (
     <SettingsDesignPage settings={settings} setSettings={setSettings} onNewProject={openNewProject} notify={notify} />
+  ) : page === "account" ? (
+    <AccountSettingsPage />
   ) : page === "profile" ? (
     <ProfileDesignPage projects={projects} stats={stats} settings={settings} />
   ) : page === "profile-edit" ? (
@@ -816,6 +826,13 @@ function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState })
               <Typography sx={{ color: muted, fontSize: 12 }}>Customize your public profile</Typography>
             </Box>
           </MenuItem>
+          <MenuItem component={Link} href="/account" selected={page === "account"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
+            <SettingsOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
+            <Box>
+              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Account Settings</Typography>
+              <Typography sx={{ color: muted, fontSize: 12 }}>Email, password, security</Typography>
+            </Box>
+          </MenuItem>
           <Divider sx={{ borderColor: border, my: 0.5 }} />
           {isAuthEnabled ? (
             <CloudProfileActions onClose={() => setProfileMenuAnchor(null)} />
@@ -875,6 +892,84 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
         Sign In
       </Button>
     </Stack>
+  );
+}
+
+function AccountSettingsPage() {
+  const { isSignedIn, isLoaded, user } = useUser();
+  const { openSignIn, openSignUp } = useClerk();
+  const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses?.[0]?.emailAddress ?? "";
+  const connectedAccounts = user?.externalAccounts?.length ?? 0;
+
+  return (
+    <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public CutLab profile.">
+      {!isLoaded ? (
+        <Paper sx={{ ...panelSx, p: 3, display: "grid", placeItems: "center", minHeight: 280 }}>
+          <Stack alignItems="center" gap={1.2}>
+            <CircularProgress size={28} sx={{ color: accent }} />
+            <Typography sx={{ color: muted, fontSize: 13 }}>Loading account controls...</Typography>
+          </Stack>
+        </Paper>
+      ) : !isSignedIn ? (
+        <Paper sx={{ ...panelSx, p: { xs: 2.2, md: 3 } }}>
+          <Stack gap={1.4} sx={{ maxWidth: 620 }}>
+            <Typography sx={{ color: ink, fontSize: 24, fontWeight: 760 }}>Account required</Typography>
+            <Typography sx={{ color: muted, fontSize: 14, lineHeight: 1.6 }}>
+              Local mode does not have an account record, email, password, or connected login provider. Sign in or create an account to manage private account settings.
+            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1}>
+              <Button variant="contained" onClick={() => openSignUp()} sx={{ bgcolor: accent, color: "#fff", borderRadius: "6px", fontWeight: 760, "&:hover": { bgcolor: accent } }}>Create Account</Button>
+              <Button variant="outlined" onClick={() => openSignIn()} sx={outlineButtonSx}>Sign In</Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      ) : (
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "330px minmax(0, 1fr)" }, gap: 2 }}>
+          <Stack gap={2}>
+            <Paper sx={{ ...panelSx, p: 2.25 }}>
+              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Private Account</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6, lineHeight: 1.55 }}>
+                These details are controlled by Clerk and are not shown on your public profile.
+              </Typography>
+              <Stack gap={1.1} sx={{ mt: 2 }}>
+                <AccountInfoRow label="Signed in as" value={user?.fullName || user?.username || "Account user"} />
+                <AccountInfoRow label="Primary email" value={primaryEmail || "No email on account"} />
+                <AccountInfoRow label="Connected logins" value={connectedAccounts ? `${connectedAccounts} provider${connectedAccounts === 1 ? "" : "s"}` : "Email / password only"} />
+              </Stack>
+            </Paper>
+            <Paper sx={{ ...panelSx, p: 2.25 }}>
+              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Public Profile Is Separate</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6, lineHeight: 1.55 }}>
+                Use Public Profile to change your CutLab display name, username, bio, and portfolio-facing image. Use this Account page for login email, password, connected providers, and security.
+              </Typography>
+              <Button component={Link} href="/profile/edit" variant="outlined" sx={{ ...outlineButtonSx, width: "fit-content", mt: 1.6 }}>Edit Public Profile</Button>
+            </Paper>
+          </Stack>
+          <Paper sx={{ ...panelSx, p: { xs: 1, md: 1.4 }, bgcolor: softPanel }}>
+            <Box
+              sx={{
+                "& .cl-rootBox": { width: "100%" },
+                "& .cl-cardBox": { width: "100%", boxShadow: "none", border: `1px solid ${border}`, borderRadius: "8px" },
+                "& .cl-card": { boxShadow: "none" },
+                "& .cl-navbar": { borderColor: border },
+                "& .cl-pageScrollBox": { paddingBlock: 1 }
+              }}
+            >
+              <UserProfile routing="hash" />
+            </Box>
+          </Paper>
+        </Box>
+      )}
+    </PageFrame>
+  );
+}
+
+function AccountInfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Box sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
+      <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>{label}</Typography>
+      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mt: 0.35, overflowWrap: "anywhere" }}>{value}</Typography>
+    </Box>
   );
 }
 
@@ -3088,26 +3183,58 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
 }
 
 function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]; stats: { active: number; delivered: number; avgTurnaroundDays: number }; settings: SettingsState }) {
+  const { isSignedIn } = useData();
+  const publishPublicProfile = useMutation(api.publicProfiles.publish);
   const timeline = [...projects]
     .sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate))
     .slice(0, 5);
-  const currentTurnaround = stats.avgTurnaroundDays ? `${Math.max(1, stats.avgTurnaroundDays - 1)}-${stats.avgTurnaroundDays + 1}` : "2-3";
+  const publicActiveProjects = publicMetric(settings.publicActiveProjects);
+  const publicDeliveredEdits = publicMetric(settings.publicDeliveredEdits);
+  const publicTurnaroundDays = Math.max(1, publicMetric(settings.publicTurnaroundDays, 3));
+  const currentTurnaround = `${publicTurnaroundDays}`;
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareMessage, setShareMessage] = useState("");
 
   async function shareProfile() {
-    const url = typeof window !== "undefined" ? window.location.href : "/profile";
-    const text = `${settings.profileName} - ${settings.profileTitle}`;
+    const slug = publicProfileSlug(settings);
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/u/${slug}`;
+    const text = `${profileDisplayName(settings)} - ${settings.profileTitle || "Video Editor"}`;
     try {
+      if (!isSignedIn) throw new Error("Sign in to publish a public profile.");
+      setShareMessage("");
+      await publishPublicProfile({
+        slug,
+        studioName: settings.studioName,
+        profileName: profileDisplayName(settings),
+        profileUsername: slug,
+        profileTitle: settings.profileTitle,
+        profileBio: settings.profileBio,
+        profileLocation: settings.profileLocation,
+        profileImageUrl: settings.profileImageUrl,
+        timeZone: settings.timeZone,
+        activeProjects: publicActiveProjects,
+        deliveredEdits: publicDeliveredEdits,
+        avgTurnaroundDays: publicTurnaroundDays,
+        projects: timeline.map((project) => ({
+          title: project.title,
+          status: project.status,
+          workType: project.workType,
+          dueDate: project.dueDate,
+        })),
+      });
       if (navigator.share) {
         await navigator.share({ title: text, text, url });
         return;
       }
       if (await copyText(url)) {
         setShareCopied(true);
+        setShareMessage(`Public profile published: /u/${slug}`);
         window.setTimeout(() => setShareCopied(false), 1400);
       }
-    } catch {
+    } catch (error) {
       setShareCopied(false);
+      setShareMessage(error instanceof Error ? error.message : "Could not publish public profile.");
     }
   }
 
@@ -3125,10 +3252,11 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
         </Stack>
         <Stack direction="row" alignItems="center" gap={1}>
           <Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Back to App</Button>
-          <Button variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} onClick={shareProfile} sx={outlineButtonSx}>{shareCopied ? "Copied" : "Share Profile"}</Button>
+          <Button variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} onClick={shareProfile} sx={outlineButtonSx}>{shareCopied ? "Published + Copied" : "Share Profile"}</Button>
           <Button component={Link} href="/settings" aria-label="Open profile settings" sx={{ minWidth: 36, width: 36, height: 36, color: ink, p: 0 }}><MoreHorizIcon /></Button>
         </Stack>
       </Stack>
+      {shareMessage ? <Typography sx={{ color: shareMessage.startsWith("Public profile") ? accent : "#bd3f37", fontSize: 13, textAlign: "right", mb: 1 }}>{shareMessage}</Typography> : null}
 
       <Paper sx={{ ...panelSx, mt: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "170px minmax(0, 1fr) 560px" }, gap: 4, p: { xs: 2.5, md: 4 }, alignItems: "center" }}>
@@ -3144,8 +3272,8 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
             </Stack>
           </Box>
           <Grid container spacing={1.5}>
-            <Grid size={4}><ProfileMetric icon={<PlayArrowRoundedIcon />} label="Active Projects" sublabel="In progress" value={String(stats.active)} /></Grid>
-            <Grid size={4}><ProfileMetric icon={<CheckCircleOutlineIcon />} label="Delivered Edits" sublabel="This year" value={String(stats.delivered)} /></Grid>
+            <Grid size={4}><ProfileMetric icon={<PlayArrowRoundedIcon />} label="Active Projects" sublabel="Public stat" value={String(publicActiveProjects)} /></Grid>
+            <Grid size={4}><ProfileMetric icon={<CheckCircleOutlineIcon />} label="Delivered Edits" sublabel="Public stat" value={String(publicDeliveredEdits)} /></Grid>
             <Grid size={4}><ProfileMetric icon={<AccessTimeOutlinedIcon />} label="Current Turnaround" sublabel="Average" value={`${currentTurnaround} Days`} /></Grid>
           </Grid>
         </Box>
@@ -3250,6 +3378,38 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
           </Box>
           <TextField label="Profile Bio" value={settings.profileBio} size="small" fullWidth multiline minRows={3} onChange={(event) => setSettings({ ...settings, profileBio: event.target.value })} />
           <TextField label="Profile Location" value={settings.profileLocation} size="small" fullWidth onChange={(event) => setSettings({ ...settings, profileLocation: event.target.value })} />
+          <Paper sx={{ ...panelSx, p: 2, boxShadow: "none" }}>
+            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Public Profile Stats</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.5, mb: 1.5 }}>
+              These are portfolio-facing numbers. They do not need to match your private tracker totals.
+            </Typography>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr 1fr" }, gap: 1.5 }}>
+              <TextField
+                label="Active Projects"
+                type="number"
+                value={publicMetric(settings.publicActiveProjects)}
+                size="small"
+                inputProps={{ min: 0, step: 1 }}
+                onChange={(event) => setSettings({ ...settings, publicActiveProjects: publicMetric(Number(event.target.value)) })}
+              />
+              <TextField
+                label="Delivered Edits"
+                type="number"
+                value={publicMetric(settings.publicDeliveredEdits)}
+                size="small"
+                inputProps={{ min: 0, step: 1 }}
+                onChange={(event) => setSettings({ ...settings, publicDeliveredEdits: publicMetric(Number(event.target.value)) })}
+              />
+              <TextField
+                label="Turnaround Days"
+                type="number"
+                value={Math.max(1, publicMetric(settings.publicTurnaroundDays, 3))}
+                size="small"
+                inputProps={{ min: 1, step: 1 }}
+                onChange={(event) => setSettings({ ...settings, publicTurnaroundDays: Math.max(1, publicMetric(Number(event.target.value), 3)) })}
+              />
+            </Box>
+          </Paper>
           <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
             <DialogSelect label="Time Zone" value={settings.timeZone} options={["Asia/Dubai", "Pacific Time", "Eastern Time", "UTC"]} onChange={(value) => setSettings({ ...settings, timeZone: value })} />
             <DialogSelect label="Date Format" value={settings.dateFormat} options={["Month Day, Year", "Day Month Year", "YYYY-MM-DD"]} onChange={(value) => setSettings({ ...settings, dateFormat: value })} />
@@ -4599,6 +4759,16 @@ function displayUsername(settings: SettingsState) {
 function sanitizeUsername(value: string) {
   const cleaned = value.trim().toLowerCase().replace(/^@+/, "").replace(/\s+/g, "");
   return cleaned.replace(/[^a-z0-9._-]/g, "");
+}
+
+function publicProfileSlug(settings: SettingsState) {
+  const slug = sanitizeUsername(settings.profileUsername || settings.profileName || settings.studioName || "editor").slice(0, 40);
+  return slug.length >= MIN_PUBLIC_SLUG_LENGTH ? slug : "editor";
+}
+
+function publicMetric(value: unknown, fallback = 0) {
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : fallback;
 }
 
 function ProfileAvatar({ settings, size, fontSize }: { settings: SettingsState; size: number; fontSize: number }) {

@@ -101,6 +101,34 @@ export default defineSchema({
     .index("by_teamId_and_userId", ["teamId", "userId"])
     .index("by_teamId_and_userId_and_createdAt", ["teamId", "userId", "createdAt"]),
 
+  publicProfiles: defineTable({
+    ownerUserId: v.string(),
+    slug: v.string(),
+    studioName: v.string(),
+    profileName: v.string(),
+    profileUsername: v.string(),
+    profileTitle: v.string(),
+    profileBio: v.string(),
+    profileLocation: v.string(),
+    profileImageUrl: v.string(),
+    publicActiveProjects: v.optional(v.number()),
+    publicDeliveredEdits: v.optional(v.number()),
+    publicTurnaroundDays: v.optional(v.number()),
+    timeZone: v.string(),
+    activeProjects: v.number(),
+    deliveredEdits: v.number(),
+    avgTurnaroundDays: v.number(),
+    projects: v.array(v.object({
+      title: v.string(),
+      status: v.string(),
+      workType: v.string(),
+      dueDate: v.string(),
+    })),
+    updatedAt: v.string(),
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_slug", ["slug"]),
+
   settings: defineTable({
     userId: v.string(),
     studioName: v.string(),
@@ -110,6 +138,9 @@ export default defineSchema({
     profileBio: v.string(),
     profileLocation: v.string(),
     profileImageUrl: v.string(),
+    publicActiveProjects: v.optional(v.number()),
+    publicDeliveredEdits: v.optional(v.number()),
+    publicTurnaroundDays: v.optional(v.number()),
     timeZone: v.string(),
     dateFormat: v.string(),
     weekStart: v.string(),
