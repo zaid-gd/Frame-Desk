@@ -56,6 +56,8 @@ import Link from "next/link";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
@@ -87,6 +89,8 @@ const TEAM_PROJECT_COMMENT_LIMIT = 1000;
 const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const MIN_PUBLIC_SLUG_LENGTH = 2;
 const sidebarWidth = 264;
+const collapsedSidebarWidth = 76;
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "cutlab-studio:sidebar-collapsed:v1";
 const headingFont = "Georgia, 'Times New Roman', serif";
 const defaultAccent = "#5b3fa0";
 const accent = "var(--app-accent, #5b3fa0)";
@@ -118,7 +122,7 @@ const outlineButtonSx = {
   "&:hover": { borderColor: accent, bgcolor: hoverBg }
 };
 
-type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "settings" | "account" | "profile" | "profile-edit" | "organization-profile";
+type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "team-chat" | "settings" | "account" | "profile" | "profile-edit" | "organization-profile";
 type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -266,6 +270,7 @@ const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: 
   { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
   { key: "integrations", href: "/integrations", label: "Integrations", icon: <OpenInNewIcon /> },
   { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon /> },
+  { key: "team-chat", href: "/team-chat", label: "Team Chat", icon: <ChatBubbleOutlineOutlinedIcon /> },
   { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> },
   { key: "account", href: "/account", label: "Account", icon: <PersonOutlineOutlinedIcon /> }
 ];
@@ -367,6 +372,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const [dueFilter, setDueFilter] = useState<DueFilter>("ALL");
   const [billingFilter, setBillingFilter] = useState<"ALL" | "Paid" | "Unpaid">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt_desc");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     reconcileSalaryBatches(items);
@@ -375,6 +381,11 @@ export function TrackerApp({ page }: { page: PageKey }) {
   useEffect(() => {
     applyRootThemeVariables(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !isAuthLoaded) return;
@@ -389,12 +400,27 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [isAuthLoaded, isSignedIn]);
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
+  const personalProjects = useMemo(() => projects.filter((item) => !item.teamId), [projects]);
   const activeTeamMembers = useMemo(() => teamData?.members.filter((member) => member.status === "active") ?? [], [teamData]);
   const teamDataLoading = Boolean(isSignedIn && (isConvexAuthLoading || (isConvexAuthenticated && teamData === undefined)));
   const teamSyncUnavailable = Boolean(isSignedIn && !isConvexAuthLoading && !isConvexAuthenticated);
   const currentTeamId = teamData?.workspace?._id;
+  const teamProjects = useMemo(
+    () => (currentTeamId ? projects.filter((project) => project.teamId === currentTeamId) : []),
+    [currentTeamId, projects]
+  );
+  const teamStats = useMemo(() => {
+    const deliveredProjects = teamProjects.filter((project) => isDoneStatus(project.status));
+    return {
+      active: teamProjects.length - deliveredProjects.length,
+      delivered: deliveredProjects.length,
+      earned: deliveredProjects.reduce((total, project) => total + safeMoneyValue(project.earnings), 0),
+      salaryEdits: deliveredProjects.filter((project) => isSalaryWorkType(project.workType, settings)).length
+    };
+  }, [settings, teamProjects]);
   const projectPermissions = teamData?.currentMember.permissions;
-  const canCreateProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.createProjects);
+  const canCreateTeamProjects = teamSyncUnavailable || teamDataLoading ? false : Boolean(teamData && projectPermissions?.createProjects);
+  const canCreateProjects = true;
   const canEditProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.editProjects);
   const canUpdateProjectStatus = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.updateStatus);
   const canCommentProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.commentProjects);
@@ -431,18 +457,18 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [billingFilter, clientFilter, dueFilter, kindFilter, projects, query, sortKey, statusFilter]);
 
   const stats = useMemo(() => {
-    const earned = projects.filter((item) => isDoneStatus(item.status)).reduce((total, item) => total + safeMoneyValue(item.earnings), 0);
-    const unpaid = projects.filter((item) => !isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0).length;
-    const active = projects.filter((item) => !isDoneStatus(item.status)).length;
+    const earned = personalProjects.filter((item) => isDoneStatus(item.status)).reduce((total, item) => total + safeMoneyValue(item.earnings), 0);
+    const unpaid = personalProjects.filter((item) => !isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0).length;
+    const active = personalProjects.filter((item) => !isDoneStatus(item.status)).length;
     const salaryBatchSize = normalizedSalaryBatchSize(settings.salaryBatchSize);
-    const salaryEdits = projects.filter((item) => isSalaryWorkType(item.workType, settings) && isDoneStatus(item.status)).length;
+    const salaryEdits = personalProjects.filter((item) => isSalaryWorkType(item.workType, settings) && isDoneStatus(item.status)).length;
     const salaryBatches = Math.floor(salaryEdits / salaryBatchSize);
-    const delivered = projects.filter((item) => isDoneStatus(item.status));
+    const delivered = personalProjects.filter((item) => isDoneStatus(item.status));
     const avgTurnaroundDays = delivered.length
       ? Math.round(delivered.reduce((total, item) => total + daysBetween(item.startDate, item.dueDate), 0) / delivered.length)
       : 0;
     return {
-      total: projects.length,
+      total: personalProjects.length,
       active,
       unpaid,
       earned: earned + salaryBatches * normalizedSalaryBatchAmount(settings.salaryBatchAmount),
@@ -451,15 +477,24 @@ export function TrackerApp({ page }: { page: PageKey }) {
       delivered: delivered.length,
       avgTurnaroundDays
     };
-  }, [projects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
+  }, [personalProjects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
 
-  function openNewProject() {
-    if (!canCreateProjects) {
+  function openNewProject(scope: "personal" | "team" = "personal") {
+    if (scope === "team" && !canCreateTeamProjects) {
       notify("Your team role cannot create projects.", "warning");
       return;
     }
+    if (scope === "team" && !currentTeamId) {
+      notify("Create or join a team workspace before adding team projects.", "warning");
+      return;
+    }
     setEditingId("");
-    setForm({ ...emptyForm(), teamId: currentTeamId, assigneeUserIds: [], notes: defaultProjectNotes(settings) });
+    setForm({
+      ...emptyForm(),
+      teamId: scope === "team" ? currentTeamId : undefined,
+      assigneeUserIds: [],
+      notes: defaultProjectNotes(settings)
+    });
     setFormError("");
     setDialogOpen(true);
   }
@@ -493,7 +528,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
     setEditingId("");
     setForm({
       ...emptyForm(),
-      teamId: currentTeamId,
+      teamId: undefined,
       assigneeUserIds: [],
       title: template.title,
       workType: template.workType,
@@ -567,8 +602,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
       ...normalizedForm,
       title: normalizedForm.title.trim(),
       id: editingId || createId(),
-      teamId: normalizedForm.teamId ?? (editingId ? undefined : currentTeamId),
-      ownerUserId: normalizedForm.ownerUserId ?? (!editingId && (normalizedForm.teamId ?? currentTeamId) ? teamData?.currentMember.userId : undefined),
+      teamId: normalizedForm.teamId,
+      ownerUserId: normalizedForm.ownerUserId ?? (!editingId && normalizedForm.teamId ? teamData?.currentMember.userId : undefined),
       assigneeUserIds: normalizedForm.assigneeUserIds ?? [],
       createdAt: form.createdAt || new Date().toISOString(),
       profileId: profile.id,
@@ -598,7 +633,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const pageContent = page === "dashboard" ? (
     <DashboardPage
       stats={stats}
-      projects={filteredProjects}
+      projects={filteredProjects.filter((project) => !project.teamId)}
       query={query}
       setQuery={setQuery}
       statusFilter={statusFilter}
@@ -615,7 +650,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       setBillingFilter={setBillingFilter}
       sortKey={sortKey}
       setSortKey={setSortKey}
-      onNewProject={openNewProject}
+      onNewProject={() => openNewProject("personal")}
       onViewProject={openProjectDetails}
       onEditProject={openEditProject}
       onDeleteProject={requestDeleteProject}
@@ -624,37 +659,51 @@ export function TrackerApp({ page }: { page: PageKey }) {
       canDeleteProject={canDeleteProject}
     />
   ) : page === "projects" ? (
-    <ProjectDirectoryPage projects={projects} onNewProject={openNewProject} onViewProject={openProjectDetails} onEditProject={openEditProject} onDeleteProject={requestDeleteProject} canCreateProjects={canCreateProjects} canEditProjects={canEditProjects} canDeleteProject={canDeleteProject} />
+    <ProjectDirectoryPage
+      personalProjects={personalProjects}
+      teamProjects={teamProjects}
+      teamName={teamData?.workspace?.name}
+      onNewProject={openNewProject}
+      onViewProject={openProjectDetails}
+      onEditProject={openEditProject}
+      onDeleteProject={requestDeleteProject}
+      canCreateProjects={canCreateProjects}
+      canCreateTeamProjects={canCreateTeamProjects}
+      canEditProjects={canEditProjects}
+      canDeleteProject={canDeleteProject}
+    />
   ) : page === "clients" ? (
-    <ClientsDesignPage projects={projects} projectTagOptions={projectTagOptions} settings={settings} onAddClient={handleAddClient} />
+    <ClientsDesignPage projects={personalProjects} projectTagOptions={projectTagOptions} settings={settings} onAddClient={handleAddClient} />
   ) : page === "timeline" ? (
-    <TimelineDesignPage projects={projects} />
+    <TimelineDesignPage projects={personalProjects} />
   ) : page === "calendar" ? (
-    <CalendarDesignPage projects={projects} settings={settings} />
+    <CalendarDesignPage projects={personalProjects} settings={settings} />
   ) : page === "media" ? (
-    <MediaDesignPage projects={projects} />
+    <MediaDesignPage projects={personalProjects} />
   ) : page === "resources" ? (
-    <ResourcesDesignPage resources={resourceLinks} projects={projects} setResources={setResourceLinks} notify={notify} />
+    <ResourcesDesignPage resources={resourceLinks} projects={personalProjects} setResources={setResourceLinks} notify={notify} />
   ) : page === "feedback" ? (
-    <FeedbackDesignPage projects={projects} />
+    <FeedbackDesignPage projects={personalProjects} />
   ) : page === "templates" ? (
     <TemplatesDesignPage onUseTemplate={openTemplateProject} />
   ) : page === "reports" ? (
-    <ReportsDesignPage projects={projects} stats={stats} />
+    <ReportsDesignPage projects={personalProjects} stats={stats} />
   ) : page === "integrations" ? (
-    <IntegrationsDesignPage projects={projects} settings={settings} setSettings={setSettings} notify={notify} onEditProject={openEditProject} />
+    <IntegrationsDesignPage projects={personalProjects} settings={settings} setSettings={setSettings} notify={notify} onEditProject={openEditProject} />
   ) : page === "team" ? (
     <TeamDesignPage projects={projects} settings={settings} setSettings={setSettings} />
+  ) : page === "team-chat" ? (
+    <TeamChatPage />
   ) : page === "settings" ? (
     <SettingsDesignPage settings={settings} setSettings={setSettings} onNewProject={openNewProject} notify={notify} />
   ) : page === "account" ? (
     <AccountSettingsPage />
   ) : page === "profile" ? (
-    <ProfileDesignPage projects={projects} stats={stats} settings={settings} />
+    <ProfileDesignPage projects={personalProjects} stats={stats} settings={settings} />
   ) : page === "profile-edit" ? (
     <ProfileEditPage settings={settings} setSettings={setSettings} />
   ) : (
-    <OrganizationProfilePage projects={projects} settings={settings} stats={stats} />
+    <OrganizationProfilePage projects={teamProjects} settings={settings} stats={teamStats} />
   );
 
   const projectDialog = (
@@ -722,15 +771,25 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
   return (
     <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink, display: "flex" }}>
-      <Sidebar page={page} settings={settings} />
+    <Sidebar
+      page={page}
+      settings={settings}
+      collapsed={sidebarCollapsed}
+      onToggle={() => {
+        const next = !sidebarCollapsed;
+        setSidebarCollapsed(next);
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+      }}
+    />
       <MobileNav page={page} settings={settings} />
       <Box
         component="main"
         sx={{
-          ml: { xs: 0, lg: `${sidebarWidth}px` },
-          width: { xs: "100%", lg: `calc(100% - ${sidebarWidth}px)` },
+          ml: { xs: 0, lg: `${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px` },
+          width: { xs: "100%", lg: `calc(100% - ${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px)` },
           minHeight: "100dvh",
-          pt: { xs: "88px", lg: 0 }
+          pt: { xs: "88px", lg: 0 },
+          transition: "margin-left 180ms ease, width 180ms ease"
         }}
       >
         <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
@@ -750,40 +809,103 @@ export function TrackerApp({ page }: { page: PageKey }) {
   );
 }
 
-function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState }) {
+function Sidebar({
+  page,
+  settings,
+  collapsed,
+  onToggle
+}: {
+  page: PageKey;
+  settings: SettingsState;
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
   const profileMenuOpen = Boolean(profileMenuAnchor);
   const { isAuthEnabled } = useData();
+  const width = collapsed ? collapsedSidebarWidth : sidebarWidth;
 
   return (
-    <Box sx={{ display: { xs: "none", lg: "block" }, position: "fixed", inset: "0 auto 0 0", width: sidebarWidth, bgcolor: panel, borderRight: `1px solid ${border}`, px: 2.5, py: 3 }}>
-      <Stack direction="row" alignItems="center" gap={1.2} sx={{ mb: 0.6 }}>
-        <Box sx={{ width: 34, height: 34, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px" }}>
-          <MovieCreationOutlinedIcon sx={{ fontSize: 20, color: ink }} />
-        </Box>
-        <Typography noWrap sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>{settings.studioName}</Typography>
+    <Box
+      component="aside"
+      sx={{
+        display: { xs: "none", lg: "block" },
+        position: "fixed",
+        zIndex: 15,
+        inset: "0 auto 0 0",
+        width,
+        bgcolor: panel,
+        borderRight: `1px solid ${border}`,
+        px: collapsed ? 1.25 : 2.5,
+        py: 2.5,
+        transition: "width 180ms ease, padding 180ms ease"
+      }}
+    >
+      <Stack direction="row" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} gap={1}>
+        <Tooltip title={collapsed ? "Dashboard" : ""} placement="right">
+          <Stack
+            component={Link}
+            href="/"
+            direction="row"
+            alignItems="center"
+            gap={1.2}
+            aria-label="Go to dashboard"
+            sx={{ minWidth: 0, color: "inherit", textDecoration: "none" }}
+          >
+            <Box sx={{ width: 34, height: 34, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px", flexShrink: 0 }}>
+              <MovieCreationOutlinedIcon sx={{ fontSize: 20, color: ink }} />
+            </Box>
+            {!collapsed ? <Typography noWrap sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>{settings.studioName}</Typography> : null}
+          </Stack>
+        </Tooltip>
+        {!collapsed ? (
+          <Tooltip title="Collapse sidebar">
+            <Button aria-label="Collapse sidebar" onClick={onToggle} sx={{ minWidth: 32, width: 32, height: 32, p: 0, color: muted }}>
+              <ChevronLeftIcon sx={{ fontSize: 19 }} />
+            </Button>
+          </Tooltip>
+        ) : null}
       </Stack>
-      <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mb: 5 }}>Video editing tracker</Typography>
-      <Stack gap="8px">
-        {navigationItems.map((item) => (
-          <NavButton key={item.key} active={page === item.key} href={item.href} icon={item.icon}>{item.label}</NavButton>
-        ))}
-      </Stack>
-      <Box sx={{ position: "absolute", left: 24, right: 24, bottom: 28, pt: 2, borderTop: `1px solid ${border}` }}>
-        <Stack direction="row" gap={1.2} sx={{ mb: 1.2 }}>
+      {!collapsed ? (
+        <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mt: 0.6, mb: 4 }}>Video editing tracker</Typography>
+      ) : (
+        <Tooltip title="Expand sidebar" placement="right">
+          <Button aria-label="Expand sidebar" onClick={onToggle} sx={{ minWidth: 40, width: 40, height: 34, p: 0, color: muted, mx: "auto", my: 1.5, display: "flex" }}>
+            <ChevronRightIcon sx={{ fontSize: 19 }} />
+          </Button>
+        </Tooltip>
+      )}
+      <Box
+        sx={{
+          maxHeight: collapsed ? "calc(100dvh - 170px)" : "calc(100dvh - 190px)",
+          overflowY: "auto",
+          pb: 10,
+          scrollbarWidth: "thin"
+        }}
+      >
+        <Stack gap="8px">
+          {navigationItems.map((item) => (
+            <NavButton key={item.key} active={page === item.key} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
+          ))}
+        </Stack>
+      </Box>
+      <Box sx={{ position: "absolute", left: collapsed ? 10 : 24, right: collapsed ? 10 : 24, bottom: 24, pt: 2, borderTop: `1px solid ${border}` }}>
+        {!collapsed ? <Stack direction="row" gap={1.2} sx={{ mb: 1.2 }}>
           <Link href="/privacy" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Privacy</Link>
           <Typography component="span" sx={{ color: muted, fontSize: 12 }}>·</Typography>
           <Link href="/terms" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Terms</Link>
-        </Stack>
+        </Stack> : null}
         <Button
-          fullWidth
+          fullWidth={!collapsed}
           aria-label="Open profile menu"
           aria-haspopup="menu"
           aria-expanded={profileMenuOpen ? "true" : undefined}
           onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
           sx={{
-            justifyContent: "space-between",
+            justifyContent: collapsed ? "center" : "space-between",
             p: 0.75,
+            minWidth: collapsed ? 44 : undefined,
+            width: collapsed ? 44 : "100%",
             borderRadius: "8px",
             color: ink,
             textAlign: "left",
@@ -792,12 +914,12 @@ function Sidebar({ page, settings }: { page: PageKey; settings: SettingsState })
         >
           <Stack direction="row" alignItems="center" gap={1.1} sx={{ minWidth: 0 }}>
             <ProfileAvatar settings={settings} size={34} fontSize={12} />
-            <Box sx={{ minWidth: 0, flex: 1 }}>
+            {!collapsed ? <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{profileDisplayName(settings)}</Typography>
               <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.2 }}>{displayUsername(settings) || settings.teamRole}</Typography>
-            </Box>
+            </Box> : null}
           </Stack>
-          <ExpandMoreIcon sx={{ color: muted, fontSize: 18, flexShrink: 0 }} />
+          {!collapsed ? <ExpandMoreIcon sx={{ color: muted, fontSize: 18, flexShrink: 0 }} /> : null}
         </Button>
         <Menu
           anchorEl={profileMenuAnchor}
@@ -896,10 +1018,8 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
 }
 
 function AccountSettingsPage() {
-  const { isSignedIn, isLoaded, user } = useUser();
+  const { isSignedIn, isLoaded } = useUser();
   const { openSignIn, openSignUp } = useClerk();
-  const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses?.[0]?.emailAddress ?? "";
-  const connectedAccounts = user?.externalAccounts?.length ?? 0;
 
   return (
     <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public CutLab profile.">
@@ -924,27 +1044,7 @@ function AccountSettingsPage() {
           </Stack>
         </Paper>
       ) : (
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "330px minmax(0, 1fr)" }, gap: 2 }}>
-          <Stack gap={2}>
-            <Paper sx={{ ...panelSx, p: 2.25 }}>
-              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Private Account</Typography>
-              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6, lineHeight: 1.55 }}>
-                These details are controlled by Clerk and are not shown on your public profile.
-              </Typography>
-              <Stack gap={1.1} sx={{ mt: 2 }}>
-                <AccountInfoRow label="Signed in as" value={user?.fullName || user?.username || "Account user"} />
-                <AccountInfoRow label="Primary email" value={primaryEmail || "No email on account"} />
-                <AccountInfoRow label="Connected logins" value={connectedAccounts ? `${connectedAccounts} provider${connectedAccounts === 1 ? "" : "s"}` : "Email / password only"} />
-              </Stack>
-            </Paper>
-            <Paper sx={{ ...panelSx, p: 2.25 }}>
-              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Public Profile Is Separate</Typography>
-              <Typography sx={{ color: muted, fontSize: 13, mt: 0.6, lineHeight: 1.55 }}>
-                Use Public Profile to change your CutLab display name, username, bio, and portfolio-facing image. Use this Account page for login email, password, connected providers, and security.
-              </Typography>
-              <Button component={Link} href="/profile/edit" variant="outlined" sx={{ ...outlineButtonSx, width: "fit-content", mt: 1.6 }}>Edit Public Profile</Button>
-            </Paper>
-          </Stack>
+        <Stack gap={1.5}>
           <Paper sx={{ ...panelSx, p: { xs: 1, md: 1.4 }, bgcolor: softPanel }}>
             <Box
               sx={{
@@ -958,18 +1058,18 @@ function AccountSettingsPage() {
               <UserProfile routing="hash" />
             </Box>
           </Paper>
-        </Box>
+          <Button
+            component={Link}
+            href="/profile/edit"
+            variant="outlined"
+            startIcon={<EditOutlinedIcon />}
+            sx={{ ...outlineButtonSx, width: "fit-content", alignSelf: "flex-end" }}
+          >
+            Edit Public Profile
+          </Button>
+        </Stack>
       )}
     </PageFrame>
-  );
-}
-
-function AccountInfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
-      <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>{label}</Typography>
-      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mt: 0.35, overflowWrap: "anywhere" }}>{value}</Typography>
-    </Box>
   );
 }
 
@@ -977,7 +1077,7 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
   return (
     <Box sx={{ display: { xs: "block", lg: "none" }, position: "fixed", zIndex: 20, top: 0, left: 0, right: 0, bgcolor: panel, borderBottom: `1px solid ${border}` }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.4 }}>
-        <Stack direction="row" alignItems="center" gap={1}>
+        <Stack component={Link} href="/" aria-label="Go to dashboard" direction="row" alignItems="center" gap={1} sx={{ color: "inherit", textDecoration: "none", minWidth: 0 }}>
           <Box sx={{ width: 30, height: 30, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px" }}>
             <MovieCreationOutlinedIcon sx={{ fontSize: 18, color: ink }} />
           </Box>
@@ -1051,29 +1151,35 @@ function AppToast({ toast, onClose }: { toast: ToastState | null; onClose: () =>
   );
 }
 
-function NavButton({ active, href, icon, children }: { active: boolean; href: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
+function NavButton({ active, href, icon, children, collapsed = false }: { active: boolean; href: string; icon: React.ReactNode; children: React.ReactNode; collapsed?: boolean }) {
+  const button = (
     <Button
-      fullWidth
+      fullWidth={!collapsed}
       component={Link}
       href={href}
       startIcon={icon}
+      aria-label={collapsed ? String(children) : undefined}
       sx={{
-        justifyContent: "flex-start",
+        justifyContent: collapsed ? "center" : "flex-start",
         height: 42,
-        px: 1.5,
+        minWidth: collapsed ? 48 : undefined,
+        width: collapsed ? 48 : "100%",
+        px: collapsed ? 0 : 1.5,
+        mx: collapsed ? "auto" : 0,
         borderRadius: "6px",
         color: active ? accent : muted,
         bgcolor: active ? activeBg : "transparent",
         fontSize: 14,
         fontWeight: active ? 760 : 600,
+        "& .MuiButton-startIcon": { mr: collapsed ? 0 : 1 },
         "& .MuiButton-startIcon svg": { fontSize: 19 },
         "&:hover": { bgcolor: hoverBg }
       }}
     >
-      {children}
+      {collapsed ? null : children}
     </Button>
   );
+  return collapsed ? <Tooltip title={children} placement="right">{button}</Tooltip> : button;
 }
 
 function AppLoadingStatus() {
@@ -1311,16 +1417,98 @@ function DashboardPage(props: {
   );
 }
 
-function ProjectDirectoryPage({ projects, onNewProject, onViewProject, onEditProject, onDeleteProject, canCreateProjects, canEditProjects, canDeleteProject }: { projects: WorkItem[]; onNewProject: () => void; onViewProject: (item: WorkItem) => void; onEditProject: (item: WorkItem) => void; onDeleteProject: (id: string) => void; canCreateProjects: boolean; canEditProjects: boolean; canDeleteProject: (project: WorkItem) => boolean }) {
+function ProjectDirectoryPage({
+  personalProjects,
+  teamProjects,
+  teamName,
+  onNewProject,
+  onViewProject,
+  onEditProject,
+  onDeleteProject,
+  canCreateProjects,
+  canCreateTeamProjects,
+  canEditProjects,
+  canDeleteProject
+}: {
+  personalProjects: WorkItem[];
+  teamProjects: WorkItem[];
+  teamName?: string;
+  onNewProject: (scope: "personal" | "team") => void;
+  onViewProject: (item: WorkItem) => void;
+  onEditProject: (item: WorkItem) => void;
+  onDeleteProject: (id: string) => void;
+  canCreateProjects: boolean;
+  canCreateTeamProjects: boolean;
+  canEditProjects: boolean;
+  canDeleteProject: (project: WorkItem) => boolean;
+}) {
+  const [workspace, setWorkspace] = useState<"personal" | "team">("personal");
+  const projects = workspace === "personal" ? personalProjects : teamProjects;
+  const hasTeam = Boolean(teamName);
+
+  useEffect(() => {
+    if (!hasTeam && workspace === "team") setWorkspace("personal");
+  }, [hasTeam, workspace]);
+
   return (
     <PageFrame
       title="Projects"
-      subtitle="A focused index for every tracked edit, handoff, and salary batch item."
-      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} disabled={!canCreateProjects} sx={outlineButtonSx}>New Project</Button>}
+      subtitle="Keep private work separate from projects shared with your team workspace."
+      action={
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={() => onNewProject(workspace)}
+          disabled={(workspace === "personal" && !canCreateProjects) || (workspace === "team" && (!hasTeam || !canCreateTeamProjects))}
+          sx={outlineButtonSx}
+        >
+          {workspace === "team" ? "New Team Project" : "New Personal Project"}
+        </Button>
+      }
     >
+      <Paper sx={{ ...panelSx, p: 0.75, mb: 1.5, width: "fit-content", maxWidth: "100%" }}>
+        <Stack direction="row" gap={0.5}>
+          <Button
+            onClick={() => setWorkspace("personal")}
+            sx={{
+              minHeight: 42,
+              px: 1.6,
+              color: workspace === "personal" ? accent : muted,
+              bgcolor: workspace === "personal" ? activeBg : "transparent",
+              fontWeight: workspace === "personal" ? 780 : 650,
+              "&:hover": { bgcolor: workspace === "personal" ? activeBg : hoverBg }
+            }}
+          >
+            My Projects
+            <Chip label={personalProjects.length} size="small" sx={{ ml: 1, height: 21, bgcolor: panel, color: workspace === "personal" ? accent : muted, borderRadius: "4px" }} />
+          </Button>
+          <Tooltip title={hasTeam ? `Shared projects in ${teamName}` : "Join or create a team workspace first"}>
+            <span>
+              <Button
+                disabled={!hasTeam}
+                onClick={() => setWorkspace("team")}
+                sx={{
+                  minHeight: 42,
+                  px: 1.6,
+                  color: workspace === "team" ? accent : muted,
+                  bgcolor: workspace === "team" ? activeBg : "transparent",
+                  fontWeight: workspace === "team" ? 780 : 650,
+                  "&:hover": { bgcolor: workspace === "team" ? activeBg : hoverBg }
+                }}
+              >
+                Team Projects
+                <Chip label={teamProjects.length} size="small" sx={{ ml: 1, height: 21, bgcolor: panel, color: workspace === "team" ? accent : muted, borderRadius: "4px" }} />
+              </Button>
+            </span>
+          </Tooltip>
+        </Stack>
+      </Paper>
       <Paper sx={panelSx}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Project Library</Typography>
+          <Box>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>{workspace === "team" ? teamName : "Personal Workspace"}</Typography>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{workspace === "team" ? "Visible to members based on their team permissions." : "Private projects visible only in your account."}</Typography>
+          </Box>
           <Typography sx={{ color: muted, fontSize: 13 }}>{projects.length} records</Typography>
         </Stack>
         <ProjectTableHeader />
@@ -1328,7 +1516,10 @@ function ProjectDirectoryPage({ projects, onNewProject, onViewProject, onEditPro
           {projects.length ? projects.map((project) => (
             <ProjectRow key={project.id} project={project} canEdit={canEditProjects || !project.teamId} canDelete={canDeleteProject(project)} onView={() => onViewProject(project)} onEdit={() => onEditProject(project)} onDelete={() => onDeleteProject(project.id)} />
           )) : (
-            <Typography sx={{ color: muted, fontSize: 14, p: 2 }}>No projects saved yet.</Typography>
+            <EmptyPanel
+              title={workspace === "team" ? "No team projects yet" : "No personal projects yet"}
+              body={workspace === "team" ? "Create a shared project for assignments, comments, and team activity." : "Create a private project for your own editing work."}
+            />
           )}
         </Stack>
       </Paper>
@@ -2202,14 +2393,12 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   const updateMemberRole = useMutation(api.team.updateMemberRole);
   const removeMember = useMutation(api.team.removeMember);
   const leaveWorkspace = useMutation(api.team.leaveWorkspace);
-  const sendChatMessage = useMutation(api.team.sendChatMessage);
   const addProjectComment = useMutation(api.team.addProjectComment);
   const markNotificationRead = useMutation(api.team.markNotificationRead);
   const markAllNotificationsRead = useMutation(api.team.markAllNotificationsRead);
   const [workspaceName, setWorkspaceName] = useState(settings.studioName || "CutLab Studio Team");
   const [inviteCode, setInviteCode] = useState("");
   const [inviteForm, setInviteForm] = useState({ email: "", role: "Editor" });
-  const [chatBody, setChatBody] = useState("");
   const [commentBody, setCommentBody] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [teamError, setTeamError] = useState("");
@@ -2228,7 +2417,6 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   const pendingInvites = teamData?.members.filter((member) => member.status === "invited") ?? [];
   const unreadNotifications = teamData?.notifications.filter((notification) => !notification.read).length ?? 0;
   const canManageTeam = Boolean(teamData?.currentMember.permissions.manageTeam);
-  const canUseChat = Boolean(teamData?.currentMember.permissions.useChat);
   const canCommentProjects = Boolean(teamData?.currentMember.permissions.commentProjects);
   const canLeaveWorkspace = Boolean(teamData && teamData.currentMember.role !== "Owner");
   const inviteCodeIsValid = TEAM_INVITE_CODE_PATTERN.test(inviteCode.trim());
@@ -2277,7 +2465,11 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   }
 
   return (
-    <PageFrame title="Team" subtitle="Small-team workspace for shared projects, comments, chat, and activity.">
+    <PageFrame
+      title="Team"
+      subtitle="Manage members, shared project comments, notifications, and workspace activity."
+      action={<Button component={Link} href="/team-chat" variant="outlined" startIcon={<ChatBubbleOutlineOutlinedIcon />} sx={outlineButtonSx}>Open Team Chat</Button>}
+    >
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Team Members" value={String(activeMembers.length)} helper={`${pendingInvites.length} pending invite${pendingInvites.length === 1 ? "" : "s"} · 5 max`} /></Grid>
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Client Contacts" value={String(clients.length)} helper="Generated from project client names" /></Grid>
@@ -2480,35 +2672,6 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
           <Grid size={{ xs: 12, lg: 5 }}>
             <Stack gap={1.5}>
               <Paper sx={{ ...panelSx, p: 2 }}>
-                <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Team Chat</Typography>
-                <Typography sx={{ color: muted, fontSize: 13, mt: 0.35 }}>Quick workspace messages for small editing teams.</Typography>
-                <Stack gap={1} sx={{ mt: 1.4, maxHeight: 310, overflow: "auto" }}>
-                  {!canUseChat ? (
-                    <EmptyPanel title="Chat unavailable for your role" body="Your team role can use project comments and notifications, but cannot view or send team chat messages." />
-                  ) : teamData.chat.length ? teamData.chat.map((message) => (
-                    <Box key={message._id} sx={{ p: 1.1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
-                      <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{message.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatActivityTime(message.createdAt)}</Box></Typography>
-                      <Typography sx={{ color: ink, fontSize: 13, mt: 0.45, whiteSpace: "pre-wrap" }}>{message.body}</Typography>
-                    </Box>
-                  )) : <EmptyPanel title="No chat messages yet" body="Use chat for quick handoffs, blockers, and delivery updates." />}
-                </Stack>
-                {canUseChat ? (
-                  <Stack direction={{ xs: "column", md: "row" }} gap={1} sx={{ mt: 1.2 }}>
-                    <TextField
-                      label="Message"
-                      value={chatBody}
-                      size="small"
-                      fullWidth
-                      slotProps={{ htmlInput: { maxLength: TEAM_CHAT_MESSAGE_LIMIT } }}
-                      helperText={`${chatBody.length}/${TEAM_CHAT_MESSAGE_LIMIT} characters`}
-                      onChange={(event) => setChatBody(event.target.value)}
-                    />
-                    <Button variant="outlined" sx={outlineButtonSx} disabled={Boolean(busyAction) || !chatBody.trim()} onClick={() => runTeamAction("chat", async () => { await sendChatMessage({ teamId: teamData.workspace._id, body: chatBody }); setChatBody(""); })}>Send</Button>
-                  </Stack>
-                ) : null}
-              </Paper>
-
-              <Paper sx={{ ...panelSx, p: 2 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
                   <Typography sx={{ color: ink, fontSize: 20, fontWeight: 780 }}>Notifications</Typography>
                   {unreadNotifications ? (
@@ -2572,6 +2735,135 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
             </Stack>
           </Grid>
         </Grid>
+      )}
+    </PageFrame>
+  );
+}
+
+function TeamChatPage() {
+  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const { openSignIn } = useClerk();
+  const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
+  const sendChatMessage = useMutation(api.team.sendChatMessage);
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [chatError, setChatError] = useState("");
+  const canUseChat = Boolean(teamData?.currentMember.permissions.useChat);
+
+  function formatChatTime(value: string) {
+    return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+  }
+
+  async function submitMessage() {
+    const body = message.trim();
+    if (!body || !teamData?.workspace || !canUseChat) return;
+    setSending(true);
+    setChatError("");
+    try {
+      await sendChatMessage({ teamId: teamData.workspace._id, body });
+      setMessage("");
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : "Message could not be sent.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <PageFrame
+      title="Team Chat"
+      subtitle="Quick handoffs and production updates for your current team workspace."
+      action={<Button component={Link} href="/team" variant="outlined" startIcon={<PeopleAltOutlinedIcon />} sx={outlineButtonSx}>Manage Team</Button>}
+    >
+      {!isUserLoaded ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Checking account status...</Typography></Stack></Paper>
+      ) : !isSignedIn ? (
+        <Paper sx={{ ...panelSx, p: 3 }}>
+          <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>Sign in to open Team Chat</Typography>
+          <Typography sx={{ color: muted, fontSize: 13, mt: 0.65 }}>Chat is tied to your authenticated team workspace and is not available in local mode.</Typography>
+          <Button variant="contained" onClick={() => openSignIn()} sx={{ mt: 1.8, bgcolor: accent, "&:hover": { bgcolor: accent } }}>Sign In</Button>
+        </Paper>
+      ) : isConvexAuthLoading ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Connecting Team Chat...</Typography></Stack></Paper>
+      ) : !isConvexAuthenticated ? (
+        <Paper sx={{ ...panelSx, p: 3, borderColor: "#d9675d", bgcolor: "#fff7f5" }}>
+          <Typography sx={{ color: "#9f3029", fontSize: 18, fontWeight: 780 }}>Team Chat is not connected</Typography>
+          <Typography sx={{ color: "#9f3029", fontSize: 13, mt: 0.6 }}>Convex has not received your Clerk session. Sign out and back in, then retry.</Typography>
+        </Paper>
+      ) : teamData === undefined ? (
+        <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Loading messages...</Typography></Stack></Paper>
+      ) : !teamData ? (
+        <Paper sx={{ ...panelSx, p: 3 }}>
+          <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>No team workspace yet</Typography>
+          <Typography sx={{ color: muted, fontSize: 13, mt: 0.65 }}>Create or join a workspace before using Team Chat.</Typography>
+          <Button component={Link} href="/team" variant="outlined" sx={{ ...outlineButtonSx, mt: 1.8 }}>Open Team Setup</Button>
+        </Paper>
+      ) : !canUseChat ? (
+        <Paper sx={{ ...panelSx, p: 3 }}>
+          <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>Chat unavailable for your role</Typography>
+          <Typography sx={{ color: muted, fontSize: 13, mt: 0.65 }}>Your current role can access the workspace but does not have permission to view or send chat messages.</Typography>
+        </Paper>
+      ) : (
+        <Paper sx={{ ...panelSx, minHeight: { xs: 560, md: "calc(100dvh - 170px)" }, display: "flex", flexDirection: "column" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1} sx={{ px: 2, py: 1.7, borderBottom: `1px solid ${border}` }}>
+            <Box>
+              <Typography sx={{ color: ink, fontSize: 18, fontWeight: 780 }}>{teamData.workspace.name}</Typography>
+              <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>{teamData.members.filter((member) => member.status === "active").length} active members · Use @name to notify someone</Typography>
+            </Box>
+            <Chip label={`${teamData.currentMember.role} access`} size="small" sx={{ alignSelf: { xs: "flex-start", sm: "center" }, bgcolor: activeBg, color: accent, borderRadius: "5px", fontWeight: 760 }} />
+          </Stack>
+
+          <Stack gap={1.1} sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 1.4, md: 2 }, py: 2 }}>
+            {teamData.chat.length ? teamData.chat.map((chatMessage) => {
+              const isOwnMessage = chatMessage.authorUserId === teamData.currentMember.userId;
+              return (
+                <Box key={chatMessage._id} sx={{ alignSelf: isOwnMessage ? "flex-end" : "flex-start", width: "min(680px, 88%)" }}>
+                  <Stack direction="row" justifyContent={isOwnMessage ? "flex-end" : "space-between"} gap={1} sx={{ mb: 0.45 }}>
+                    {!isOwnMessage ? <Typography sx={{ color: ink, fontSize: 12, fontWeight: 780 }}>{chatMessage.authorName}</Typography> : null}
+                    <Typography sx={{ color: muted, fontSize: 10.5 }}>{formatChatTime(chatMessage.createdAt)}</Typography>
+                  </Stack>
+                  <Box sx={{ px: 1.4, py: 1.1, bgcolor: isOwnMessage ? activeBg : softPanel, border: `1px solid ${isOwnMessage ? accent : border}`, borderRadius: "8px" }}>
+                    <Typography sx={{ color: ink, fontSize: 13.5, lineHeight: 1.55, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{chatMessage.body}</Typography>
+                  </Box>
+                </Box>
+              );
+            }) : (
+              <Box sx={{ m: "auto", width: "100%" }}>
+                <EmptyPanel title="No messages yet" body="Start with a handoff, blocker, review update, or delivery note." />
+              </Box>
+            )}
+          </Stack>
+
+          <Box sx={{ p: 1.5, borderTop: `1px solid ${border}`, bgcolor: softPanel }}>
+            {chatError ? <Typography role="alert" sx={{ color: "#9f3029", fontSize: 12, fontWeight: 700, mb: 0.8 }}>{chatError}</Typography> : null}
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1} alignItems="flex-start">
+              <TextField
+                label="Message"
+                value={message}
+                size="small"
+                fullWidth
+                multiline
+                maxRows={4}
+                slotProps={{ htmlInput: { maxLength: TEAM_CHAT_MESSAGE_LIMIT } }}
+                helperText={`${message.length}/${TEAM_CHAT_MESSAGE_LIMIT} characters`}
+                onChange={(event) => {
+                  setMessage(event.target.value);
+                  if (chatError) setChatError("");
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void submitMessage();
+                  }
+                }}
+              />
+              <Button variant="contained" disabled={sending || !message.trim()} onClick={() => void submitMessage()} sx={{ bgcolor: accent, color: "#fff", minWidth: 110, height: 40, "&:hover": { bgcolor: accent } }}>
+                {sending ? "Sending..." : "Send"}
+              </Button>
+            </Stack>
+          </Box>
+        </Paper>
       )}
     </PageFrame>
   );
