@@ -7,12 +7,13 @@ import { setTimeout as delay } from "node:timers/promises";
 
 const routes = [
   { path: "/", label: "dashboard", expectedText: ["Dashboard"] },
-  { path: "/projects", label: "projects", expectedText: ["Projects", "Project Library"] },
+  { path: "/projects", label: "projects", expectedText: ["Projects", "My Projects", "Team Projects"] },
   {
     path: "/team",
     label: "team",
     expectedText: ["Team", "Team Members", "Loading workspace"],
   },
+  { path: "/team-chat", label: "team-chat", expectedText: ["Team Chat", "Manage Team"] },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
   { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },
 ];
