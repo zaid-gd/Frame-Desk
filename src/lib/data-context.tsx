@@ -19,7 +19,7 @@ const defaultSalaryBatchAmount = 10000;
 type ToastState = { message: string; tone: "success" | "info" | "warning" };
 type ClerkGetToken = ReturnType<typeof useAuth>["getToken"];
 
-const teamRoleOptions = ["Owner", "Editor", "Reviewer", "Client"];
+const teamRoleOptions = ["Owner", "Editor", "Reviewer"];
 const LEGACY_DEMO_SETTINGS = {
   studioName: "CutLab Studio",
   profileName: "Jordan Lee",
@@ -41,7 +41,6 @@ const defaultRolePermissions: Record<string, Record<string, boolean>> = {
   Owner: Object.fromEntries(permissionKeys.map((k) => [k, true])),
   Editor: Object.fromEntries(permissionKeys.map((k) => [k, ["Create and edit projects", "Upload media and assets"].includes(k)])),
   Reviewer: Object.fromEntries(permissionKeys.map((k) => [k, false])),
-  Client: Object.fromEntries(permissionKeys.map((k) => [k, false])),
 };
 
 const emptyIntegrationConfig: IntegrationConfig = {
@@ -113,8 +112,8 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false,
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Light",
-  accentColor: "#5b3fa0",
+  theme: "Dark",
+  accentColor: "#2D8C97",
   density: "Comfortable",
 };
 
@@ -733,6 +732,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const convexBatches = useQuery(api.salaryBatches.list, {});
   const convexResources = useQuery(api.resourceLinks.list, {});
   const replaceAllItems = useMutation(api.workItems.replaceAll);
+  const deleteWorkItem = useMutation(api.workItems.deleteOne);
   const upsertSettings = useMutation(api.settings.upsert);
   const replaceAllBatches = useMutation(api.salaryBatches.replaceAll);
   const replaceAllResources = useMutation(api.resourceLinks.replaceAll);
@@ -942,7 +942,22 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setItemsState((prev: WorkItem[]) => {
         const next = normalizeWorkItems(typeof updater === "function" ? updater(prev) : updater);
         if (isSignedIn && convexAuthenticated) {
-          replaceAllItems({ items: next }).catch((error) => {
+          const previousById = new Map(prev.map((item) => [item.id, item]));
+          const nextIds = new Set(next.map((item) => item.id));
+          const changedItems = next.filter((item) => JSON.stringify(previousById.get(item.id)) !== JSON.stringify(item));
+          const removedIds = [
+            ...new Set(prev.filter((item) => !nextIds.has(item.id)).map((item) => item.id)),
+          ];
+          const writes = [
+            ...(changedItems.length ? [replaceAllItems({ items: changedItems, deleteMissing: false })] : []),
+            ...removedIds.map((projectId) => deleteWorkItem({ projectId })),
+          ];
+          Promise.allSettled(writes).then((results) => {
+            const failure = results.find(
+              (result): result is PromiseRejectedResult => result.status === "rejected"
+            );
+            if (failure) throw failure.reason;
+          }).catch((error) => {
             if (isProjectAuthorizationError(error)) {
               setItemsState(prev);
               setToast({
@@ -963,7 +978,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
         return next;
       });
     },
-    [convexAuthenticated, isSignedIn, replaceAllItems],
+    [convexAuthenticated, deleteWorkItem, isSignedIn, replaceAllItems],
   );
 
   // Unified settings setter

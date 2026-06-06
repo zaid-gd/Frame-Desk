@@ -8,6 +8,9 @@
  * @module
  */
 
+import type * as clientPortals from "../clientPortals.js";
+import type * as projectActivity from "../projectActivity.js";
+import type * as projectFiles from "../projectFiles.js";
 import type * as publicProfiles from "../publicProfiles.js";
 import type * as resourceLinks from "../resourceLinks.js";
 import type * as salaryBatches from "../salaryBatches.js";
@@ -22,6 +25,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  clientPortals: typeof clientPortals;
+  projectActivity: typeof projectActivity;
+  projectFiles: typeof projectFiles;
   publicProfiles: typeof publicProfiles;
   resourceLinks: typeof resourceLinks;
   salaryBatches: typeof salaryBatches;

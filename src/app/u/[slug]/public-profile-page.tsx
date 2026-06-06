@@ -15,22 +15,24 @@ import {
 } from "@mui/material";
 import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
-import MovieCreationOutlinedIcon from "@mui/icons-material/MovieCreationOutlined";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import { CutLabLockup } from "../../cutlab-brand";
+import { cutlab, cutlabPanelSx } from "../../design-system";
+import { emptyStateAssets } from "../../brand-assets";
 
-const headingFont = "Georgia, 'Times New Roman', serif";
-const accent = "var(--app-accent, #5b3fa0)";
-const ink = "var(--app-ink, #19171f)";
-const muted = "var(--app-muted, #6f6a78)";
-const border = "var(--app-border, #dedbe5)";
-const panel = "var(--app-panel, #ffffff)";
-const canvas = "var(--app-canvas, #fbfaf8)";
-const softPanel = "var(--app-soft-panel, #fbfafc)";
-const headerPanel = "var(--app-header-panel, #f6f3f8)";
-const avatarSurface = "var(--app-avatar-surface, #dfe7ef)";
-const panelSx = { bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden", boxShadow: "none" };
+const headingFont = cutlab.font.heading;
+const accent = `var(--app-accent, ${cutlab.color.teal})`;
+const ink = `var(--app-ink, ${cutlab.color.softWhite})`;
+const muted = "var(--app-muted, #A5ADB4)";
+const border = "var(--app-border, #2A3138)";
+const panel = `var(--app-panel, ${cutlab.color.graphite})`;
+const canvas = `var(--app-canvas, ${cutlab.color.charcoal})`;
+const softPanel = "var(--app-soft-panel, #151B20)";
+const headerPanel = "var(--app-header-panel, #20272D)";
+const avatarSurface = `var(--app-avatar-surface, ${cutlab.color.slate})`;
+const panelSx = cutlabPanelSx;
 
 export function PublicProfilePage() {
   const params = useParams<{ slug: string }>();
@@ -108,7 +110,8 @@ export function PublicProfilePage() {
                 </Box>
               </Box>
             )) : (
-              <Box sx={{ p: 2, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: softPanel }}>
+              <Box sx={{ p: 3, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: softPanel, textAlign: "center" }}>
+                <Box component="img" src={emptyStateAssets.projects} alt="" aria-hidden="true" sx={{ width: 180, height: 126, objectFit: "contain", mx: "auto", mb: 1.5 }} />
                 <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>No public projects shared yet</Typography>
                 <Typography sx={{ color: muted, fontSize: 12, mt: 0.4 }}>The editor can publish updated public work from their CutLab profile.</Typography>
               </Box>
@@ -123,15 +126,7 @@ export function PublicProfilePage() {
 function PublicShell({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ minHeight: "100dvh", bgcolor: canvas, color: ink, px: { xs: 2, md: 4 }, py: 3 }}>
-      <Stack direction="row" alignItems="center" gap={1.2} sx={{ pb: 2.5 }}>
-        <Box sx={{ width: 32, height: 32, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px" }}>
-          <MovieCreationOutlinedIcon sx={{ fontSize: 19, color: ink }} />
-        </Box>
-        <Box>
-          <Typography sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>CutLab</Typography>
-          <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mt: 0.3 }}>Public editor profile</Typography>
-        </Box>
-      </Stack>
+      <CutLabLockup subtitle="Public editor profile" sx={{ pb: 2.5 }} />
       {children}
     </Box>
   );

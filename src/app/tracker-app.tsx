@@ -5,7 +5,11 @@ import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Chip,
@@ -23,8 +27,11 @@ import {
   MenuItem,
   Paper,
   Select,
+  Skeleton,
   Stack,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -44,6 +51,8 @@ import InsertChartOutlinedIcon from "@mui/icons-material/InsertChartOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import CollectionsOutlinedIcon from "@mui/icons-material/CollectionsOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import MovieCreationOutlinedIcon from "@mui/icons-material/MovieCreationOutlined";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
@@ -63,6 +72,7 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
 import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink } from "@/lib/types";
 import type { IntegrationLink, IntegrationLinks, IntegrationServiceId } from "@/lib/integrations";
@@ -77,6 +87,9 @@ import {
   isValidIntegrationUrl,
   normalizeIntegrationLink
 } from "@/lib/integrations";
+import { cutlab, cutlabOutlineButtonSx, cutlabPanelSx, cutlabThemeVariables } from "./design-system";
+import { CutLabLockup, CutLabMark } from "./cutlab-brand";
+import { emptyStateAssetFor, emptyStateAssets } from "./brand-assets";
 
 const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
 const defaultSalaryWorkType = "Job / Salary";
@@ -88,42 +101,47 @@ const TEAM_CHAT_MESSAGE_LIMIT = 800;
 const TEAM_PROJECT_COMMENT_LIMIT = 1000;
 const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const MIN_PUBLIC_SLUG_LENGTH = 2;
-const sidebarWidth = 264;
+const sidebarWidth = 248;
 const collapsedSidebarWidth = 76;
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "cutlab-studio:sidebar-collapsed:v1";
-const headingFont = "Georgia, 'Times New Roman', serif";
-const defaultAccent = "#5b3fa0";
-const accent = "var(--app-accent, #5b3fa0)";
-const ink = "var(--app-ink, #19171f)";
-const muted = "var(--app-muted, #6f6a78)";
-const border = "var(--app-border, #dedbe5)";
-const panel = "var(--app-panel, #ffffff)";
-const canvas = "var(--app-canvas, #fbfaf8)";
-const activeBg = "var(--app-active, #f0eafa)";
-const hoverBg = "var(--app-hover, #f7f4fc)";
-const softPanel = "var(--app-soft-panel, #fbfafc)";
-const headerPanel = "var(--app-header-panel, #f6f3f8)";
-const controlPanel = "var(--app-control, #ffffff)";
-const progressTrack = "var(--app-progress-track, #ece8f4)";
-const avatarSurface = "var(--app-avatar-surface, #dfe7ef)";
-const thumbIcon = "var(--app-thumb-icon, rgba(25,23,31,0.34))";
-const panelSx = { bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" };
+const LOCAL_PROJECT_ACTIVITY_STORAGE_KEY = "cutlab-studio:project-activity:v1";
+const headingFont = cutlab.font.heading;
+const defaultAccent = cutlab.color.teal;
+const accent = `var(--app-accent, ${cutlab.color.teal})`;
+const ink = `var(--app-ink, ${cutlab.color.softWhite})`;
+const muted = "var(--app-muted, #A5ADB4)";
+const border = "var(--app-border, #2A3138)";
+const panel = `var(--app-panel, ${cutlab.color.graphite})`;
+const canvas = `var(--app-canvas, ${cutlab.color.charcoal})`;
+const activeBg = "var(--app-active, rgba(45,140,151,0.18))";
+const hoverBg = "var(--app-hover, rgba(105,196,206,0.09))";
+const softPanel = "var(--app-soft-panel, #151B20)";
+const headerPanel = "var(--app-header-panel, #20272D)";
+const controlPanel = "var(--app-control, #11161A)";
+const progressTrack = "var(--app-progress-track, #293139)";
+const avatarSurface = `var(--app-avatar-surface, ${cutlab.color.slate})`;
+const thumbIcon = "var(--app-thumb-icon, rgba(230,229,227,0.42))";
+const successColor = `var(--app-success, ${cutlab.color.success})`;
+const warningColor = `var(--app-warning, ${cutlab.color.warning})`;
+const dangerColor = `var(--app-danger, ${cutlab.color.error})`;
+const panelSx = cutlabPanelSx;
 const tableHeadingSx = { color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" };
-const outlineButtonSx = {
-  borderColor: border,
-  color: accent,
-  bgcolor: panel,
-  height: 44,
-  px: 2,
-  borderRadius: "6px",
-  fontSize: 14,
-  fontWeight: 720,
-  whiteSpace: "nowrap",
-  "&:hover": { borderColor: accent, bgcolor: hoverBg }
-};
+const outlineButtonSx = cutlabOutlineButtonSx;
 
 type PageKey = "dashboard" | "projects" | "clients" | "timeline" | "calendar" | "media" | "resources" | "feedback" | "templates" | "reports" | "integrations" | "team" | "team-chat" | "settings" | "account" | "profile" | "profile-edit" | "organization-profile";
-type ProjectStatus = "Planned" | "In Progress" | "Delivered" | "Cancelled";
+type NavigationItem = {
+  key: PageKey;
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  pages: PageKey[];
+};
+type SubNavigationItem = {
+  key: PageKey;
+  href: string;
+  label: string;
+};
+type ProjectStatus = "Planned" | "In Progress" | "Review" | "Revision" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
 type SortKey = "createdAt_desc" | "createdAt_asc" | "dueDate_asc" | "earnings_desc" | "earnings_asc";
@@ -178,14 +196,37 @@ type ToastState = {
   message: string;
   tone: "success" | "info" | "warning";
 };
+type DashboardActivity = {
+  id: string;
+  kind: "created" | "updated" | "status" | "delivered" | "team";
+  message: string;
+  projectId?: string;
+  actor?: string;
+  createdAt: string;
+};
+type ProjectActivityEvent = {
+  id: string;
+  projectId: string;
+  actorName: string;
+  kind: string;
+  message: string;
+  detail?: string;
+  createdAt: string;
+};
+type DashboardPipelineStage = "Planning" | "In Progress" | "Review" | "Delivered";
+type DashboardPipelineItem = {
+  key: DashboardPipelineStage;
+  count: number;
+  percent: number;
+};
 
 const profile = getProfile(DEFAULT_PROFILE_ID);
 
-const statusOptions: ProjectStatus[] = ["Planned", "In Progress", "Delivered", "Cancelled"];
+const statusOptions: ProjectStatus[] = ["Planned", "In Progress", "Review", "Revision", "Delivered", "Cancelled"];
 const billingOptions = ["ALL", "Paid", "Unpaid"];
 const dueOptions: DueFilter[] = ["ALL", "This Week", "Overdue", "Delivered"];
 const sortOptions: SortKey[] = ["createdAt_desc", "createdAt_asc", "dueDate_asc", "earnings_desc", "earnings_asc"];
-const teamRoleOptions = ["Owner", "Editor", "Reviewer", "Client"];
+const teamRoleOptions = ["Owner", "Editor", "Reviewer"];
 const currencyOptions = ["USD", "EUR", "GBP", "INR", "AED", "SAR"];
 const currencyLabels: Record<string, string> = {
   USD: "USD ($)",
@@ -216,7 +257,6 @@ const defaultRolePermissions: Record<string, Record<string, boolean>> = {
   Owner: Object.fromEntries(permissionKeys.map((k) => [k, true])),
   Editor: Object.fromEntries(permissionKeys.map((k) => [k, ["Create and edit projects", "Upload media and assets"].includes(k)])),
   Reviewer: Object.fromEntries(permissionKeys.map((k) => [k, false])),
-  Client: Object.fromEntries(permissionKeys.map((k) => [k, false]))
 };
 
 const emptyIntegrationConfig: IntegrationConfig = {
@@ -257,23 +297,44 @@ const integrationColors: Record<string, string> = {
   "Frame.io": "#8b5cf6"
 };
 
-const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: React.ReactNode }> = [
-  { key: "dashboard", href: "/", label: "Dashboard", icon: <GridViewOutlinedIcon /> },
-  { key: "projects", href: "/projects", label: "Projects", icon: <FolderOpenOutlinedIcon /> },
-  { key: "clients", href: "/clients", label: "Clients", icon: <PeopleAltOutlinedIcon /> },
-  { key: "timeline", href: "/timeline", label: "Timeline", icon: <ViewTimelineOutlinedIcon /> },
-  { key: "calendar", href: "/calendar", label: "Calendar", icon: <CalendarMonthOutlinedIcon /> },
-  { key: "media", href: "/media", label: "Media", icon: <CollectionsOutlinedIcon /> },
-  { key: "resources", href: "/resources", label: "Resources", icon: <OpenInNewIcon /> },
-  { key: "feedback", href: "/feedback", label: "Feedback", icon: <ChatBubbleOutlineOutlinedIcon /> },
-  { key: "templates", href: "/templates", label: "Templates", icon: <InsertDriveFileOutlinedIcon /> },
-  { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
-  { key: "integrations", href: "/integrations", label: "Integrations", icon: <OpenInNewIcon /> },
-  { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon /> },
-  { key: "team-chat", href: "/team-chat", label: "Team Chat", icon: <ChatBubbleOutlineOutlinedIcon /> },
-  { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> },
-  { key: "account", href: "/account", label: "Account", icon: <PersonOutlineOutlinedIcon /> }
+const navigationItems: NavigationItem[] = [
+  { key: "dashboard", href: "/", label: "Dashboard", icon: <GridViewOutlinedIcon />, pages: ["dashboard"] },
+  { key: "projects", href: "/projects", label: "Projects", icon: <FolderOpenOutlinedIcon />, pages: ["projects", "timeline", "calendar"] },
+  { key: "clients", href: "/clients", label: "Clients", icon: <PeopleAltOutlinedIcon />, pages: ["clients", "feedback"] },
+  { key: "media", href: "/media", label: "Library", icon: <CollectionsOutlinedIcon />, pages: ["media", "resources", "templates", "integrations"] },
+  { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon />, pages: ["reports"] },
+  { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon />, pages: ["team", "team-chat"] },
+  { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon />, pages: ["settings", "account"] }
 ];
+
+const subNavigationGroups: PageKey[][] = [
+  ["projects", "timeline", "calendar"],
+  ["clients", "feedback"],
+  ["media", "resources", "templates", "integrations"],
+  ["team", "team-chat"],
+  ["settings", "account"]
+];
+
+const subNavigationItems: Record<PageKey, SubNavigationItem> = {
+  dashboard: { key: "dashboard", href: "/", label: "Dashboard" },
+  projects: { key: "projects", href: "/projects", label: "Projects" },
+  timeline: { key: "timeline", href: "/timeline", label: "Timeline" },
+  calendar: { key: "calendar", href: "/calendar", label: "Calendar" },
+  clients: { key: "clients", href: "/clients", label: "Clients" },
+  feedback: { key: "feedback", href: "/feedback", label: "Feedback" },
+  media: { key: "media", href: "/media", label: "Media" },
+  resources: { key: "resources", href: "/resources", label: "Resources" },
+  templates: { key: "templates", href: "/templates", label: "Templates" },
+  integrations: { key: "integrations", href: "/integrations", label: "Integrations" },
+  reports: { key: "reports", href: "/reports", label: "Reports" },
+  team: { key: "team", href: "/team", label: "Members & Activity" },
+  "team-chat": { key: "team-chat", href: "/team-chat", label: "Chat" },
+  settings: { key: "settings", href: "/settings", label: "Workspace" },
+  account: { key: "account", href: "/account", label: "Account" },
+  profile: { key: "profile", href: "/profile", label: "Public Profile" },
+  "profile-edit": { key: "profile-edit", href: "/profile/edit", label: "Edit Profile" },
+  "organization-profile": { key: "organization-profile", href: "/organization", label: "Organization" }
+};
 
 const defaultSettings: SettingsState = {
   studioName: "",
@@ -327,12 +388,13 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Light",
+  theme: "Dark",
   accentColor: defaultAccent,
   density: "Comfortable"
 };
 
 const SettingsContext = createContext<SettingsState>(defaultSettings);
+const PageContext = createContext<PageKey>("dashboard");
 
 function useTrackerSettings() {
   return useContext(SettingsContext);
@@ -373,6 +435,16 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const [billingFilter, setBillingFilter] = useState<"ALL" | "Paid" | "Unpaid">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt_desc");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [dashboardActivity, setDashboardActivity] = useState<DashboardActivity[]>([]);
+  const [localProjectActivity, setLocalProjectActivity] = useState<ProjectActivityEvent[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const value = JSON.parse(window.localStorage.getItem(LOCAL_PROJECT_ACTIVITY_STORAGE_KEY) ?? "[]");
+      return Array.isArray(value) ? value.slice(0, 500) : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     reconcileSalaryBatches(items);
@@ -386,6 +458,11 @@ export function TrackerApp({ page }: { page: PageKey }) {
     if (typeof window === "undefined") return;
     setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(LOCAL_PROJECT_ACTIVITY_STORAGE_KEY, JSON.stringify(localProjectActivity.slice(0, 500)));
+  }, [localProjectActivity]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !isAuthLoaded) return;
@@ -503,6 +580,15 @@ export function TrackerApp({ page }: { page: PageKey }) {
     setToast({ message, tone });
   }
 
+  function logLocalProjectActivity(event: Omit<ProjectActivityEvent, "id" | "actorName" | "createdAt"> & { actorName?: string; createdAt?: string }) {
+    setLocalProjectActivity((current) => [{
+      ...event,
+      id: createId(),
+      actorName: event.actorName ?? (settings.profileName || "Local user"),
+      createdAt: event.createdAt ?? new Date().toISOString()
+    }, ...current].slice(0, 500));
+  }
+
   function chooseLocalMode() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, "local");
@@ -577,12 +663,28 @@ export function TrackerApp({ page }: { page: PageKey }) {
       return;
     }
     setItems((current) => current.map((item) => (item.id === project.id ? { ...item, status } : item)));
+    setDashboardActivity((current) => {
+      const activity: DashboardActivity = {
+        id: createId(),
+        kind: isDoneStatus(status) ? "delivered" : "status",
+        message: isDoneStatus(status) ? `${project.title} was delivered` : `${project.title} moved to ${status}`,
+        projectId: project.id,
+        createdAt: new Date().toISOString()
+      };
+      return [activity, ...current].slice(0, 20);
+    });
+    logLocalProjectActivity({
+      projectId: project.id,
+      kind: "status_changed",
+      message: `${project.title} status changed from ${project.status} to ${status}.`
+    });
     notify(`${project.title} status updated.`);
   }
 
   function confirmDeleteProject() {
     if (!deleteTarget) return;
     setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
+    setLocalProjectActivity((current) => current.filter((event) => event.projectId !== deleteTarget.id));
     if (detailProjectId === deleteTarget.id) setDetailProjectId("");
     setDeleteTarget(null);
     notify("Project deleted.", "warning");
@@ -613,6 +715,22 @@ export function TrackerApp({ page }: { page: PageKey }) {
       integrationLinks: normalizedForm.integrationLinks
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
+    setDashboardActivity((current) => {
+      const activity: DashboardActivity = {
+        id: createId(),
+        kind: editingId ? "updated" : "created",
+        message: editingId ? `${payload.title} was updated` : `${payload.title} was created`,
+        projectId: payload.id,
+        createdAt: new Date().toISOString()
+      };
+      return [activity, ...current].slice(0, 20);
+    });
+    logLocalProjectActivity({
+      projectId: payload.id,
+      kind: editingId ? "project_updated" : "project_created",
+      message: editingId ? `${payload.title} was updated.` : `${payload.title} was created.`,
+      createdAt: editingId ? undefined : payload.createdAt
+    });
     setDialogOpen(false);
     setEditingId("");
     setForm(emptyForm());
@@ -633,7 +751,12 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const pageContent = page === "dashboard" ? (
     <DashboardPage
       stats={stats}
-      projects={filteredProjects.filter((project) => !project.teamId)}
+      projects={personalProjects}
+      visibleProjects={filteredProjects.filter((project) => !project.teamId)}
+      sessionActivity={dashboardActivity}
+      teamActivity={teamData?.activity ?? []}
+      teamName={teamData?.workspace?.name}
+      teamLoading={teamDataLoading}
       query={query}
       setQuery={setQuery}
       statusFilter={statusFilter}
@@ -740,6 +863,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       canUpdateStatus={canUpdateProjectStatus || canEditProjects || !detailProject?.teamId}
       canComment={canCommentProjects}
       teamMembers={activeTeamMembers}
+      localActivity={localProjectActivity.filter((event) => event.projectId === detailProject?.id)}
       onClose={() => setDetailProjectId("")}
       onEdit={(project) => openEditProject(project)}
       onDelete={(project) => {
@@ -754,7 +878,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
   if (page === "profile") {
     return (
       <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink }}>
-      <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+      <PageContext.Provider value={page}>
+        <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+      </PageContext.Provider>
       {projectDialog}
       {deleteDialog}
       {detailDialog}
@@ -792,7 +918,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
           transition: "margin-left 180ms ease, width 180ms ease"
         }}
       >
-        <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+        <PageContext.Provider value={page}>
+          <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+        </PageContext.Provider>
       </Box>
       <AppToast toast={toast} onClose={() => setToast(null)} />
       {projectDialog}
@@ -841,7 +969,7 @@ function Sidebar({
         transition: "width 180ms ease, padding 180ms ease"
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} gap={1}>
+      <Stack direction="row" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} gap={1.5}>
         <Tooltip title={collapsed ? "Dashboard" : ""} placement="right">
           <Stack
             component={Link}
@@ -850,12 +978,9 @@ function Sidebar({
             alignItems="center"
             gap={1.2}
             aria-label="Go to dashboard"
-            sx={{ minWidth: 0, color: "inherit", textDecoration: "none" }}
+            sx={{ minWidth: 0, flex: collapsed ? "0 0 auto" : 1, color: "inherit", textDecoration: "none" }}
           >
-            <Box sx={{ width: 34, height: 34, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px", flexShrink: 0 }}>
-              <MovieCreationOutlinedIcon sx={{ fontSize: 20, color: ink }} />
-            </Box>
-            {!collapsed ? <Typography noWrap sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>{settings.studioName}</Typography> : null}
+            <CutLabMark size={collapsed ? 18 : 48} />
           </Stack>
         </Tooltip>
         {!collapsed ? (
@@ -885,7 +1010,7 @@ function Sidebar({
       >
         <Stack gap="8px">
           {navigationItems.map((item) => (
-            <NavButton key={item.key} active={page === item.key} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
+            <NavButton key={item.key} active={item.pages.includes(page)} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
           ))}
         </Stack>
       </Box>
@@ -982,7 +1107,7 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
         }}
         sx={{ gap: 1.2, color: ink }}
       >
-        <Button fullWidth variant="outlined" sx={{ borderColor: border, color: "#bd3f37", fontSize: 13, fontWeight: 720 }}>
+        <Button fullWidth variant="outlined" sx={{ borderColor: border, color: dangerColor, fontSize: 13, fontWeight: 720 }}>
           Sign Out
         </Button>
       </MenuItem>
@@ -1078,10 +1203,7 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
     <Box sx={{ display: { xs: "block", lg: "none" }, position: "fixed", zIndex: 20, top: 0, left: 0, right: 0, bgcolor: panel, borderBottom: `1px solid ${border}` }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.4 }}>
         <Stack component={Link} href="/" aria-label="Go to dashboard" direction="row" alignItems="center" gap={1} sx={{ color: "inherit", textDecoration: "none", minWidth: 0 }}>
-          <Box sx={{ width: 30, height: 30, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px" }}>
-            <MovieCreationOutlinedIcon sx={{ fontSize: 18, color: ink }} />
-          </Box>
-          <Typography noWrap sx={{ fontSize: 22, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont, maxWidth: 180 }}>{settings.studioName}</Typography>
+          <CutLabMark size={34} />
         </Stack>
         <NotificationBell settings={settings} />
       </Stack>
@@ -1098,10 +1220,10 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
                 px: 1.2,
                 flexShrink: 0,
                 borderRadius: "6px",
-                color: page === item.key ? accent : muted,
-                bgcolor: page === item.key ? activeBg : "transparent",
+                color: item.pages.includes(page) ? accent : muted,
+                bgcolor: item.pages.includes(page) ? activeBg : "transparent",
                 fontSize: 12,
-                fontWeight: page === item.key ? 760 : 650,
+                fontWeight: item.pages.includes(page) ? 760 : 650,
                 "& .MuiButton-startIcon": { mr: 0.7 },
                 "& .MuiButton-startIcon svg": { fontSize: 17 }
               }}
@@ -1118,10 +1240,10 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
 function AppToast({ toast, onClose }: { toast: ToastState | null; onClose: () => void }) {
   if (!toast) return null;
   const palette = toast.tone === "warning"
-    ? { bg: "var(--app-warning-bg, #fff4dc)", fg: "#b27616", border }
+    ? { bg: "var(--app-warning-bg, rgba(245,166,35,0.14))", fg: warningColor, border }
     : toast.tone === "info"
       ? { bg: activeBg, fg: accent, border }
-      : { bg: "var(--app-success-bg, #e9f5e9)", fg: "#3c8c4b", border };
+      : { bg: "var(--app-success-bg, rgba(35,181,142,0.14))", fg: successColor, border };
 
   return (
     <Paper
@@ -1266,6 +1388,11 @@ function WelcomeChoiceDialog({
 function DashboardPage(props: {
   stats: { total: number; active: number; unpaid: number; earned: number; salaryEdits: number; salaryBatchProgress: number };
   projects: WorkItem[];
+  visibleProjects: WorkItem[];
+  sessionActivity: DashboardActivity[];
+  teamActivity: Array<{ _id: string; actorName: string; kind: string; projectId?: string; message: string; createdAt: string }>;
+  teamName?: string;
+  teamLoading: boolean;
   query: string;
   setQuery: (value: string) => void;
   statusFilter: ProjectStatus | "All";
@@ -1291,6 +1418,28 @@ function DashboardPage(props: {
   canDeleteProject: (project: WorkItem) => boolean;
 }) {
   const settings = useTrackerSettings();
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [pipelineFilter, setPipelineFilter] = useState<DashboardPipelineStage | "All">("All");
+  const [activityTab, setActivityTab] = useState<"recent" | "team">("recent");
+  const activeFilterCount = [
+    props.statusFilter !== "All",
+    props.kindFilter !== "ALL",
+    props.clientFilter !== "ALL",
+    props.dueFilter !== "ALL",
+    props.billingFilter !== "ALL"
+  ].filter(Boolean).length;
+  const pipeline = dashboardPipeline(props.projects);
+  const upcomingDeliveries = dashboardUpcomingDeliveries(props.projects);
+  const pendingFeedback = pipeline.find((stage) => stage.key === "Review")?.count ?? 0;
+  const salaryBatchSize = normalizedSalaryBatchSize(settings.salaryBatchSize);
+  const salaryProgress = props.stats.salaryEdits > 0 && props.stats.salaryBatchProgress === 0 ? salaryBatchSize : props.stats.salaryBatchProgress;
+  const salaryPercent = Math.min(100, Math.round((salaryProgress / salaryBatchSize) * 100));
+  const recentProjectActivity = dashboardProjectActivity(props.projects, props.sessionActivity);
+  const activeProjectCount = props.projects.filter((project) => !isDoneStatus(project.status) && project.status !== "Cancelled").length;
+  const tableProjects = pipelineFilter === "All"
+    ? props.visibleProjects
+    : props.visibleProjects.filter((project) => dashboardProjectStage(project) === pipelineFilter);
+  const projectsCreatedThisWeek = props.projects.filter((project) => createdTime(project) >= addDays(todayDate(), -7).getTime()).length;
 
   function clearFilters() {
     props.setQuery("");
@@ -1300,14 +1449,15 @@ function DashboardPage(props: {
     props.setDueFilter("ALL");
     props.setBillingFilter("ALL");
     props.setSortKey("createdAt_desc");
+    setPipelineFilter("All");
   }
 
   return (
-    <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: 3 }}>
+    <Box sx={{ px: { xs: 2, md: 4, xl: 5 }, pt: { xs: 2.5, md: 3 }, pb: 4 }}>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={1.5} sx={{ mb: 1.75 }}>
         <Box>
-          <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Dashboard</Typography>
-          <Typography sx={{ fontSize: 15, color: muted, mt: 1 }}>Overview of your editing pipeline and salary edit progress.</Typography>
+          <Typography sx={{ fontSize: { xs: 30, md: 34 }, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Dashboard</Typography>
+          <Typography sx={{ fontSize: 13.5, color: muted, mt: 0.55 }}>Production priorities, workflow health, and current workload.</Typography>
         </Box>
         <Stack direction="row" alignItems="center" justifyContent={{ xs: "space-between", sm: "flex-end" }} gap={1.5}>
           <Button
@@ -1336,23 +1486,23 @@ function DashboardPage(props: {
         </Stack>
       </Stack>
 
-      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", p: 2, mb: 2.5 }}>
+      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", p: 1.25, mb: 1.5 }}>
         <Box
           sx={{
             display: "grid",
             gridTemplateColumns: {
               xs: "1fr",
-              lg: "minmax(240px, 1.15fr) repeat(6, minmax(130px, 1fr)) auto"
+              md: "minmax(260px, 1fr) minmax(160px, 220px) auto"
             },
-            gap: 2,
+            gap: 1.25,
             alignItems: "end"
           }}
         >
-          <LabeledControl label="Search">
+          <LabeledControl label="Find a project">
             <TextField
               value={props.query}
               onChange={(event) => props.setQuery(event.target.value)}
-              placeholder="Search projects..."
+              placeholder="Search title, client, or notes..."
               size="small"
               InputProps={{
                 startAdornment: <SearchIcon sx={{ color: muted, fontSize: 19, mr: 1 }} />
@@ -1363,54 +1513,163 @@ function DashboardPage(props: {
               }}
             />
           </LabeledControl>
-          <LabeledControl label="Project status">
-            <CompactSelect value={props.statusFilter} options={["All", ...statusOptions]} onChange={(value) => props.setStatusFilter(value as ProjectStatus | "All")} width="100%" />
-          </LabeledControl>
-          <LabeledControl label="Tag">
-            <CompactSelect value={props.kindFilter} options={props.projectTagOptions} labels={{ ALL: "All Tags", [settings.salaryWorkType]: "Salary Queue" }} onChange={(value) => props.setKindFilter(value as ProjectKind)} width="100%" />
-          </LabeledControl>
-          <LabeledControl label="Client">
-            <CompactSelect value={props.clientFilter} options={props.clientOptions} labels={{ ALL: "All Clients" }} onChange={props.setClientFilter} width="100%" />
-          </LabeledControl>
-          <LabeledControl label="Due date">
-            <CompactSelect value={props.dueFilter} options={dueOptions} labels={{ ALL: "Any Date" }} onChange={(value) => props.setDueFilter(value as DueFilter)} width="100%" />
-          </LabeledControl>
-          <LabeledControl label="Payment">
-            <CompactSelect value={props.billingFilter} options={billingOptions} labels={{ ALL: "All Payments", Paid: "Collected", Unpaid: "Needs Action" }} onChange={(value) => props.setBillingFilter(value as "ALL" | "Paid" | "Unpaid")} width="100%" />
-          </LabeledControl>
           <LabeledControl label="Sort">
             <CompactSelect value={props.sortKey} options={sortOptions} labels={sortLabels} onChange={(value) => props.setSortKey(value as SortKey)} width="100%" />
           </LabeledControl>
-          <Button size="small" onClick={clearFilters} sx={{ color: muted, height: 42, whiteSpace: "nowrap" }}>
-            Clear Filters
+          <Button
+            variant={activeFilterCount ? "contained" : "outlined"}
+            startIcon={<TuneOutlinedIcon />}
+            onClick={() => setFiltersExpanded((value) => !value)}
+            sx={{ ...outlineButtonSx, height: 42, whiteSpace: "nowrap", bgcolor: activeFilterCount ? activeBg : undefined }}
+          >
+            Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </Button>
         </Box>
+        <Accordion
+          expanded={filtersExpanded}
+          onChange={(_, expanded) => setFiltersExpanded(expanded)}
+          disableGutters
+          elevation={0}
+          sx={{ bgcolor: "transparent", "&::before": { display: "none" }, "& .MuiAccordionSummary-root": { display: "none" } }}
+        >
+          <AccordionSummary />
+          <AccordionDetails sx={{ px: 0, pt: 1.5, pb: 0 }}>
+            <Divider sx={{ borderColor: border, mb: 1.5 }} />
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr) auto" }, gap: 1.25, alignItems: "end" }}>
+              <LabeledControl label="Status">
+                <CompactSelect value={props.statusFilter} options={["All", ...statusOptions]} onChange={(value) => props.setStatusFilter(value as ProjectStatus | "All")} width="100%" />
+              </LabeledControl>
+              <LabeledControl label="Tag">
+                <CompactSelect value={props.kindFilter} options={props.projectTagOptions} labels={{ ALL: "All Tags", [settings.salaryWorkType]: "Salary Queue" }} onChange={(value) => props.setKindFilter(value as ProjectKind)} width="100%" />
+              </LabeledControl>
+              <LabeledControl label="Client">
+                <CompactSelect value={props.clientFilter} options={props.clientOptions} labels={{ ALL: "All Clients" }} onChange={props.setClientFilter} width="100%" />
+              </LabeledControl>
+              <LabeledControl label="Due date">
+                <CompactSelect value={props.dueFilter} options={dueOptions} labels={{ ALL: "Any Date" }} onChange={(value) => props.setDueFilter(value as DueFilter)} width="100%" />
+              </LabeledControl>
+              <LabeledControl label="Payment">
+                <CompactSelect value={props.billingFilter} options={billingOptions} labels={{ ALL: "All Payments", Paid: "Collected", Unpaid: "Needs Action" }} onChange={(value) => props.setBillingFilter(value as "ALL" | "Paid" | "Unpaid")} width="100%" />
+              </LabeledControl>
+              <Button size="small" onClick={clearFilters} disabled={!activeFilterCount && !props.query} sx={{ color: muted, height: 42, whiteSpace: "nowrap" }}>
+                Clear
+              </Button>
+            </Box>
+          </AccordionDetails>
+        </Accordion>
       </Paper>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(5, minmax(0, 1fr))" }, gap: 1.5, mb: 2.5 }}>
-        <StatCard label="Active Projects" value={String(props.stats.active)} helper={`${props.stats.total} projects stored`} tone="purple" icon={<PlayArrowRoundedIcon />} />
-        <StatCard label="Deadlines This Week" value={String(props.projects.filter((project) => dueBucket(project) === "This Week").length)} helper={`${props.projects.filter((project) => dueBucket(project) === "Overdue").length} overdue`} icon={<CalendarMonthOutlinedIcon />} />
-        <StatCard label="Awaiting Feedback" value={String(props.projects.filter((project) => project.status === "In Progress").length)} helper="Active review queue" icon={<ChatBubbleOutlineOutlinedIcon />} />
-        <StatCard label="Salary Edits Done" value={String(props.stats.salaryEdits)} helper={`${props.stats.salaryBatchProgress}/${normalizedSalaryBatchSize(settings.salaryBatchSize)} toward next batch`} progress={(props.stats.salaryBatchProgress / normalizedSalaryBatchSize(settings.salaryBatchSize)) * 100} icon={<FileDownloadOutlinedIcon />} />
-        <StatCard label="Collected" value={money(props.stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" icon={<AccessTimeOutlinedIcon />} />
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(360px, 0.85fr) minmax(0, 1.45fr)" }, gap: 1.5, mb: 1.5 }}>
+        <DashboardSection
+          title="Upcoming Deliveries"
+          subtitle="Next deadlines"
+          compact
+          action={<Button component={Link} href="/calendar" size="small" sx={{ color: accent, fontWeight: 720, minWidth: 0 }}>Calendar</Button>}
+        >
+          <UpcomingDeliveries projects={upcomingDeliveries} settings={settings} onViewProject={props.onViewProject} onNewProject={props.onNewProject} compact />
+        </DashboardSection>
+        <DashboardSection title="Workflow Pipeline" subtitle="Click a stage to filter projects" compact>
+          <WorkflowPipeline
+            stages={pipeline}
+            activeStage={pipelineFilter}
+            onSelect={(stage) => setPipelineFilter((current) => current === stage ? "All" : stage)}
+            compact
+          />
+        </DashboardSection>
       </Box>
 
+      <DashboardSection
+        title="Performance Overview & Salary Batch Progress"
+        subtitle={projectsCreatedThisWeek ? `${projectsCreatedThisWeek} project${projectsCreatedThisWeek === 1 ? "" : "s"} created this week` : "Live production metrics"}
+        compact
+        sx={{ mb: 1.5 }}
+      >
+        <UnifiedOperationsMetrics
+          metrics={[
+            { label: "Active Projects", value: String(activeProjectCount), helper: `${props.stats.total} total`, icon: <PlayArrowRoundedIcon />, accent: true },
+            { label: "Delivered Projects", value: String(props.projects.filter((project) => isDoneStatus(project.status)).length), helper: "Completed", icon: <CheckCircleOutlineIcon /> },
+            { label: "Pending Feedback", value: String(pendingFeedback), helper: "In review", icon: <ChatBubbleOutlineOutlinedIcon /> },
+            { label: "Revenue / Earnings", value: money(props.stats.earned, settings.currencyCode), helper: "Delivered work", icon: <InsertChartOutlinedIcon /> }
+          ]}
+          progress={salaryProgress}
+          size={salaryBatchSize}
+          percentage={salaryPercent}
+          amount={normalizedSalaryBatchAmount(settings.salaryBatchAmount)}
+          currency={settings.currencyCode}
+        />
+      </DashboardSection>
+
+      <DashboardSection
+        title="Activity"
+        subtitle={activityTab === "recent" ? "Latest project changes" : props.teamName ? `Latest actions in ${props.teamName}` : "Shared workspace activity"}
+        compact
+        sx={{ mb: 1.75 }}
+        action={activityTab === "team" && props.teamName ? <Button component={Link} href="/team" size="small" sx={{ color: accent, fontWeight: 720 }}>Open Team</Button> : undefined}
+      >
+        <Tabs
+          value={activityTab}
+          onChange={(_, value: "recent" | "team") => setActivityTab(value)}
+          sx={{ minHeight: 32, mb: 1, borderBottom: `1px solid ${border}`, "& .MuiTabs-indicator": { bgcolor: accent }, "& .MuiTab-root": { minHeight: 32, py: 0.5, px: 1.25, minWidth: 0, fontSize: 12, textTransform: "none" } }}
+        >
+          <Tab value="recent" label="Recent Activity" />
+          <Tab value="team" label="Team Activity" />
+        </Tabs>
+        {activityTab === "recent" ? (
+          <DashboardActivityFeed activity={recentProjectActivity} projects={props.projects} emptyAsset="projects" compact />
+        ) : props.teamLoading ? (
+          <DashboardActivitySkeleton />
+        ) : props.teamName ? (
+          <DashboardActivityFeed
+            activity={props.teamActivity.map((activity) => ({
+              id: activity._id,
+              kind: "team",
+              message: activity.message,
+              projectId: activity.projectId,
+              actor: activity.actorName,
+              createdAt: activity.createdAt
+            }))}
+            projects={props.projects}
+            emptyAsset="team"
+            compact
+          />
+        ) : (
+          <CompactDashboardEmpty
+            title="No team activity"
+            body="Create or join a workspace to see shared updates."
+            assetKey="team"
+            action={<Button component={Link} href="/team" size="small" sx={{ color: accent, fontWeight: 720 }}>Set Up Team</Button>}
+          />
+        )}
+      </DashboardSection>
+
       <Box sx={{ width: "100%" }}>
-        {props.projects.length ? (
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-end" sx={{ mb: 1.2 }}>
+          <Box>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>All Projects</Typography>
+            {pipelineFilter !== "All" ? <Typography sx={{ color: accent, fontSize: 12, mt: 0.25 }}>{pipelineFilter} stage selected</Typography> : null}
+          </Box>
+          <Typography sx={{ color: muted, fontSize: 13 }}>{tableProjects.length} shown</Typography>
+        </Stack>
+        {tableProjects.length ? (
           <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", overflow: "hidden" }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
-              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Projects</Typography>
-              <Typography sx={{ color: muted, fontSize: 13 }}>{props.projects.length} shown</Typography>
-            </Stack>
             <ProjectTableHeader />
             <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-              {props.projects.map((project) => (
+              {tableProjects.map((project) => (
                 <ProjectRow key={project.id} project={project} canEdit={props.canEditProjects || !project.teamId} canDelete={props.canDeleteProject(project)} onView={() => props.onViewProject(project)} onEdit={() => props.onEditProject(project)} onDelete={() => props.onDeleteProject(project.id)} />
               ))}
             </Stack>
           </Paper>
         ) : (
-          <Typography sx={{ color: muted, fontSize: 14 }}>No projects found. Add a project or clear filters.</Typography>
+          <Paper sx={panelSx}>
+            <EmptyPanel
+              title={props.projects.length ? "No projects match this view" : "No projects yet"}
+              body={props.projects.length ? "Clear filters or select another pipeline stage to return to the full project list." : "Create your first project to start the production pipeline."}
+              assetKey="projects"
+              action={props.projects.length
+                ? <Button variant="outlined" onClick={clearFilters} sx={outlineButtonSx}>Clear Dashboard Filters</Button>
+                : <Button variant="contained" startIcon={<AddIcon />} onClick={props.onNewProject} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>Create Project</Button>}
+            />
+          </Paper>
         )}
       </Box>
     </Box>
@@ -1617,6 +1876,16 @@ function ClientsDesignPage({
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Clients" value={String(clients.length)} helper="Named clients from projects" /></Grid>
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Delivered" value={String(deliveredProjects)} helper="Completed projects in storage" /></Grid>
       </Grid>
+      {!clients.length ? (
+        <Paper sx={panelSx}>
+          <EmptyPanel
+            title="No clients yet"
+            body="Create a client directly or add a client name while creating your first project."
+            assetKey="clients"
+            action={<Button variant="contained" startIcon={<AddIcon />} onClick={() => { setAddClientError(""); setAddClientOpen(true); }} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>Create Client</Button>}
+          />
+        </Paper>
+      ) : (
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 390px" }, gap: 2 }}>
         <Paper sx={panelSx}>
           <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "end" }} gap={1.2} sx={{ px: 2, py: 2 }}>
@@ -1682,7 +1951,7 @@ function ClientsDesignPage({
                     <Typography sx={{ color: ink, fontSize: 13 }}>{client.activeCount ? "Active" : "Inactive"}</Typography>
                   </Stack>
                   <Typography sx={{ display: { xs: "none", lg: "block" }, color: muted, fontSize: 13 }}>{client.nextDue ? formatDate(client.nextDue, settings.dateFormat) : "-"}</Typography>
-                  <Stack direction="row" alignItems="center" gap={0.7} sx={{ display: { xs: "none", lg: "flex" }, color: feedback === "Approved" ? "#3c8c4b" : "#6f6a78" }}>
+                  <Stack direction="row" alignItems="center" gap={0.7} sx={{ display: { xs: "none", lg: "flex" }, color: feedback === "Approved" ? successColor : muted }}>
                     {feedback === "Approved" ? <CheckCircleOutlineIcon sx={{ fontSize: 17 }} /> : <ChatBubbleOutlineOutlinedIcon sx={{ fontSize: 17 }} />}
                     <Typography sx={{ color: ink, fontSize: 13 }}>{feedback}</Typography>
                   </Stack>
@@ -1697,14 +1966,7 @@ function ClientsDesignPage({
               );
             }) : clients.length ? (
               <EmptyPanel title="No clients match these filters" body="Clear filters or edit a project client name to change this list." />
-            ) : (
-              <Box sx={{ px: 2, py: 5, textAlign: "center" }}>
-                <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>No client names yet</Typography>
-                <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 520, mx: "auto" }}>
-                  Create a client here, or type a new client name from the project form.
-                </Typography>
-              </Box>
-            )}
+            ) : null}
           </Stack>
         </Paper>
         <Paper sx={{ ...panelSx, p: 2 }}>
@@ -1749,18 +2011,19 @@ function ClientsDesignPage({
           )}
         </Paper>
       </Box>
+      )}
       <Dialog open={addClientOpen} onClose={() => setAddClientOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
         <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>New Client</DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ mt: 1.5 }}>
             <TextField label="Client Name" placeholder="e.g. Acme Corp" value={newClientName} onChange={(e) => { setNewClientName(e.target.value); setAddClientError(""); }} fullWidth />
             <Typography sx={{ color: muted, fontSize: 12 }}>This creates a client option without creating a project. You can attach it to a project later.</Typography>
-            {addClientError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{addClientError}</Typography> : null}
+            {addClientError ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{addClientError}</Typography> : null}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setAddClientOpen(false)} sx={{ color: muted }}>Cancel</Button>
-          <Button onClick={handleSaveClient} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Client</Button>
+          <Button onClick={handleSaveClient} variant="contained" sx={{ bgcolor: accent, color: cutlab.color.softWhite, "&:hover": { bgcolor: "var(--app-highlight)", color: cutlab.color.charcoal } }}>Save Client</Button>
         </DialogActions>
       </Dialog>
     </PageFrame>
@@ -2220,7 +2483,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
                   </Button>
                 </Tooltip>
                 <Tooltip title="Delete resource">
-                  <Button aria-label={`Delete ${resource.title}`} onClick={() => removeResource(resource.id)} sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}>
+                  <Button aria-label={`Delete ${resource.title}`} onClick={() => removeResource(resource.id)} sx={{ minWidth: 34, width: 34, height: 34, color: dangerColor, p: 0 }}>
                     <DeleteOutlineIcon sx={{ fontSize: 18 }} />
                   </Button>
                 </Tooltip>
@@ -2241,7 +2504,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
               <DialogSelect label="Project" value={projectSelectValue} options={safeProjectOptions} labels={safeProjectLabels} onChange={(value) => setForm({ ...form, projectId: value === "General" ? "" : value })} />
             </Stack>
             <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
-            {error ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{error}</Typography> : null}
+            {error ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{error}</Typography> : null}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -2259,6 +2522,19 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
 
   return (
     <PageFrame title="Feedback" subtitle="Track review notes, revisions, and approval states.">
+      {!projects.length ? (
+        <Paper sx={panelSx}>
+          <Box sx={{ px: 2, pt: 2 }}>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Review Queue</Typography>
+          </Box>
+          <EmptyPanel
+            title="No feedback items"
+            body="Feedback and revision activity will appear here after you create a project and move it into review."
+            assetKey="feedback"
+            action={<Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Open Projects</Button>}
+          />
+        </Paper>
+      ) : (
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 360px" }, gap: 2 }}>
         <Paper sx={panelSx}>
           <Stack sx={{ px: 2, py: 2 }}>
@@ -2287,6 +2563,7 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
           <Typography sx={{ color: muted, fontSize: 13, mt: 2 }}>Project notes serve as the review log for client comments and revision context.</Typography>
         </Paper>
       </Box>
+      )}
     </PageFrame>
   );
 }
@@ -2354,6 +2631,20 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
 
   return (
     <PageFrame title="Reports" subtitle="A compact view of production volume, delivery, and earnings.">
+      {!projects.length ? (
+        <Paper sx={panelSx}>
+          <Box sx={{ px: 2, pt: 2 }}>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
+          </Box>
+          <EmptyPanel
+            title="No reports available"
+            body="Create and track a project to start building production, delivery, and earnings reports."
+            assetKey="reports"
+            action={<Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Open Projects</Button>}
+          />
+        </Paper>
+      ) : (
+      <>
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Active" value={String(stats.active)} helper="Projects in motion" /></Grid>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Delivered" value={String(stats.delivered)} helper={`${deliveredRate}% completion rate`} /></Grid>
@@ -2378,6 +2669,8 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
           })}
         </Stack>
       </Paper>
+      </>
+      )}
     </PageFrame>
   );
 }
@@ -2391,6 +2684,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   const joinWorkspace = useMutation(api.team.joinWorkspace);
   const inviteMember = useMutation(api.team.inviteMember);
   const updateMemberRole = useMutation(api.team.updateMemberRole);
+  const normalizeLegacyRoles = useMutation(api.team.normalizeLegacyRoles);
   const removeMember = useMutation(api.team.removeMember);
   const leaveWorkspace = useMutation(api.team.leaveWorkspace);
   const addProjectComment = useMutation(api.team.addProjectComment);
@@ -2431,6 +2725,13 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
       setSelectedProjectId(teamProjects[0].id);
     }
   }, [selectedProjectId, teamProjects]);
+
+  useEffect(() => {
+    if (!teamData?.workspace || !canManageTeam || !teamData.members.some((member) => member.role === "Client")) return;
+    void normalizeLegacyRoles({ teamId: teamData.workspace._id }).catch((error) => {
+      setTeamError(error instanceof Error ? error.message : "Legacy team roles could not be updated.");
+    });
+  }, [canManageTeam, normalizeLegacyRoles, teamData]);
 
   async function runTeamAction(label: string, action: () => Promise<unknown>) {
     setBusyAction(label);
@@ -2476,7 +2777,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
         <Grid size={{ xs: 12, md: 4 }}><StatCard label="Notifications" value={String(unreadNotifications)} helper="Unread mentions and project updates" /></Grid>
       </Grid>
 
-      {teamError ? <Paper sx={{ ...panelSx, p: 1.5, mb: 1.5, borderColor: "#d9675d", bgcolor: "#fff7f5" }}><Typography sx={{ color: "#9f3029", fontSize: 13, fontWeight: 700 }}>{teamError}</Typography></Paper> : null}
+      {teamError ? <Paper sx={{ ...panelSx, p: 1.5, mb: 1.5, borderColor: dangerColor, bgcolor: "var(--app-danger-bg)" }}><Typography sx={{ color: dangerColor, fontSize: 13, fontWeight: 700 }}>{teamError}</Typography></Paper> : null}
 
       {!isUserLoaded ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Checking account status...</Typography></Stack></Paper>
@@ -2496,9 +2797,9 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
       ) : isConvexAuthLoading ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Connecting your account to Team sync...</Typography></Stack></Paper>
       ) : !isConvexAuthenticated ? (
-        <Paper sx={{ ...panelSx, p: { xs: 2.25, md: 3 }, borderColor: "#d9675d", bgcolor: "#fff7f5" }}>
-          <Typography sx={{ color: "#9f3029", fontSize: 20, fontWeight: 780 }}>Team sync is not connected</Typography>
-          <Typography sx={{ color: "#9f3029", fontSize: 13, mt: 0.8, lineHeight: 1.55 }}>
+        <Paper sx={{ ...panelSx, p: { xs: 2.25, md: 3 }, borderColor: dangerColor, bgcolor: "var(--app-danger-bg)" }}>
+          <Typography sx={{ color: dangerColor, fontSize: 20, fontWeight: 780 }}>Team sync is not connected</Typography>
+          <Typography sx={{ color: dangerColor, fontSize: 13, mt: 0.8, lineHeight: 1.55 }}>
             Clerk sign-in is loaded, but Convex did not receive an authenticated token. Check `convex/auth.config.ts`, the Clerk JWT template audience, and the Clerk issuer environment variables before running the two-account Team smoke test.
           </Typography>
         </Paper>
@@ -2506,6 +2807,15 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Loading team workspace...</Typography></Stack></Paper>
       ) : !teamData ? (
         <Grid container spacing={1.5}>
+          <Grid size={12}>
+            <Paper sx={panelSx}>
+              <EmptyPanel
+                title="Invite your team"
+                body="Create a shared workspace or join one with an invite code to start collaborating."
+                assetKey="team"
+              />
+            </Paper>
+          </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper sx={{ ...panelSx, p: 2.25, height: "100%" }}>
               <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>Create a workspace</Typography>
@@ -2567,7 +2877,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                         variant="outlined"
                         disabled={Boolean(busyAction)}
                         onClick={() => runTeamAction("leave", () => leaveWorkspace({ teamId: teamData.workspace._id }))}
-                        sx={{ ...outlineButtonSx, height: 32, color: "#bd3f37", borderColor: "#e4b4ae", fontSize: 11 }}
+                        sx={{ ...outlineButtonSx, height: 32, color: dangerColor, borderColor: dangerColor, fontSize: 11 }}
                       >
                         Leave Workspace
                       </Button>
@@ -2593,7 +2903,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                               label="Role"
                               value={member.role}
                               options={teamRoleOptions.filter((role) => role !== "Owner")}
-                              onChange={(role) => runTeamAction("role", () => updateMemberRole({ teamId: teamData.workspace._id, memberId: member._id, role: role as "Editor" | "Reviewer" | "Client" }))}
+                              onChange={(role) => runTeamAction("role", () => updateMemberRole({ teamId: teamData.workspace._id, memberId: member._id, role: role as "Editor" | "Reviewer" }))}
                             />
                           </Box>
                         ) : Object.entries(member.permissions).filter(([, enabled]) => enabled).slice(0, 4).map(([permission]) => (
@@ -2604,7 +2914,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                             size="small"
                             disabled={Boolean(busyAction)}
                             onClick={() => runTeamAction("remove", () => removeMember({ teamId: teamData.workspace._id, memberId: member._id }))}
-                            sx={{ color: "#bd3f37", fontSize: 12, fontWeight: 760 }}
+                            sx={{ color: dangerColor, fontSize: 12, fontWeight: 760 }}
                           >
                             {member.status === "invited" ? "Cancel Invite" : "Remove"}
                           </Button>
@@ -2619,7 +2929,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1fr) 150px 120px" }, gap: 1, mt: 1 }}>
                       <TextField label="Email" value={inviteForm.email} size="small" error={Boolean(inviteForm.email.trim() && !isValidEmail(inviteForm.email))} onChange={(event) => setInviteForm({ ...inviteForm, email: event.target.value })} />
                       <DialogSelect label="Role" value={inviteForm.role} options={teamRoleOptions.filter((role) => role !== "Owner")} onChange={(value) => setInviteForm({ ...inviteForm, role: value })} />
-                      <Button variant="outlined" sx={outlineButtonSx} disabled={Boolean(busyAction) || !inviteEmailIsValid} onClick={() => runTeamAction("invite", async () => { await inviteMember({ teamId: teamData.workspace._id, email: inviteForm.email, role: inviteForm.role as "Editor" | "Reviewer" | "Client" }); setInviteForm({ email: "", role: "Editor" }); })}>Invite</Button>
+                      <Button variant="outlined" sx={outlineButtonSx} disabled={Boolean(busyAction) || !inviteEmailIsValid} onClick={() => runTeamAction("invite", async () => { await inviteMember({ teamId: teamData.workspace._id, email: inviteForm.email, role: inviteForm.role as "Editor" | "Reviewer" }); setInviteForm({ email: "", role: "Editor" }); })}>Invite</Button>
                     </Box>
                   </Box>
                 ) : null}
@@ -2787,17 +3097,20 @@ function TeamChatPage() {
       ) : isConvexAuthLoading ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Connecting Team Chat...</Typography></Stack></Paper>
       ) : !isConvexAuthenticated ? (
-        <Paper sx={{ ...panelSx, p: 3, borderColor: "#d9675d", bgcolor: "#fff7f5" }}>
-          <Typography sx={{ color: "#9f3029", fontSize: 18, fontWeight: 780 }}>Team Chat is not connected</Typography>
-          <Typography sx={{ color: "#9f3029", fontSize: 13, mt: 0.6 }}>Convex has not received your Clerk session. Sign out and back in, then retry.</Typography>
+        <Paper sx={{ ...panelSx, p: 3, borderColor: dangerColor, bgcolor: "var(--app-danger-bg)" }}>
+          <Typography sx={{ color: dangerColor, fontSize: 18, fontWeight: 780 }}>Team Chat is not connected</Typography>
+          <Typography sx={{ color: dangerColor, fontSize: 13, mt: 0.6 }}>Convex has not received your Clerk session. Sign out and back in, then retry.</Typography>
         </Paper>
       ) : teamData === undefined ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Loading messages...</Typography></Stack></Paper>
       ) : !teamData ? (
-        <Paper sx={{ ...panelSx, p: 3 }}>
-          <Typography sx={{ color: ink, fontSize: 22, fontWeight: 780 }}>No team workspace yet</Typography>
-          <Typography sx={{ color: muted, fontSize: 13, mt: 0.65 }}>Create or join a workspace before using Team Chat.</Typography>
-          <Button component={Link} href="/team" variant="outlined" sx={{ ...outlineButtonSx, mt: 1.8 }}>Open Team Setup</Button>
+        <Paper sx={panelSx}>
+          <EmptyPanel
+            title="No team workspace yet"
+            body="Create or join a workspace before using Team Chat."
+            assetKey="team"
+            action={<Button component={Link} href="/team" variant="outlined" sx={outlineButtonSx}>Open Team Setup</Button>}
+          />
         </Paper>
       ) : !canUseChat ? (
         <Paper sx={{ ...panelSx, p: 3 }}>
@@ -2836,7 +3149,7 @@ function TeamChatPage() {
           </Stack>
 
           <Box sx={{ p: 1.5, borderTop: `1px solid ${border}`, bgcolor: softPanel }}>
-            {chatError ? <Typography role="alert" sx={{ color: "#9f3029", fontSize: 12, fontWeight: 700, mb: 0.8 }}>{chatError}</Typography> : null}
+            {chatError ? <Typography role="alert" sx={{ color: dangerColor, fontSize: 12, fontWeight: 700, mb: 0.8 }}>{chatError}</Typography> : null}
             <Stack direction={{ xs: "column", sm: "row" }} gap={1} alignItems="flex-start">
               <TextField
                 label="Message"
@@ -3020,7 +3333,7 @@ function IntegrationLinkManager({
                         height: 20,
                         borderRadius: "5px",
                         bgcolor: linked ? "var(--app-success-bg, #e9f5e9)" : softPanel,
-                        color: linked ? "#3c8c4b" : muted,
+                        color: linked ? successColor : muted,
                         fontSize: 11,
                         fontWeight: 720
                       }}
@@ -3036,7 +3349,7 @@ function IntegrationLinkManager({
                   <Button variant="outlined" startIcon={<OpenInNewIcon sx={{ fontSize: 17 }} />} onClick={() => openLink(link.url)} sx={outlineButtonSx}>Open</Button>
                 ) : null}
                 {linked ? (
-                  <Button variant="outlined" onClick={() => removeLink(service.id)} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>Remove</Button>
+                  <Button variant="outlined" onClick={() => removeLink(service.id)} sx={{ ...outlineButtonSx, color: dangerColor }}>Remove</Button>
                 ) : null}
                 <Button variant="outlined" onClick={() => openEditor(service.id)} sx={outlineButtonSx}>{linked ? "Edit" : "Add Link"}</Button>
               </Stack>
@@ -3079,13 +3392,13 @@ function IntegrationLinkManager({
               minRows={2}
               placeholder="Optional context for this link"
             />
-            {error ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{error}</Typography> : null}
+            {error ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{error}</Typography> : null}
             <Typography sx={{ color: muted, fontSize: 12 }}>This stores a link only. CutLab will not authenticate, browse files, sync data, or call this service.</Typography>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
           <Button onClick={() => setEditing(null)} sx={{ color: muted }}>Cancel</Button>
-          <Button onClick={saveLink} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save Link</Button>
+          <Button onClick={saveLink} variant="contained" sx={{ bgcolor: accent, color: cutlab.color.softWhite, "&:hover": { bgcolor: "var(--app-highlight)", color: cutlab.color.charcoal } }}>Save Link</Button>
         </DialogActions>
       </Dialog>
     </Paper>
@@ -3096,27 +3409,15 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   const stageColors = ["#6c4db3", "#7eadea", "#d39a27", "#9a75d1", "#6dab55", "#d65f59"];
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
-  const activeRole = settings.teamRole || "Owner";
-  const activePerms = settings.rolePermissions[activeRole] ?? {};
-  const roleCounts = ["Owner", "Editor", "Reviewer", "Client"].map((role) => ({
-    role,
-    members: settings.teamMembers.filter((member) => member.role === role).length
-  }));
+  const rolePolicy = [
+    { role: "Owner", permissions: ["Create and edit projects", "Update project stages", "Leave project notes", "Assign work", "Mention teammates", "Use team chat", "Manage members and roles"] },
+    { role: "Editor", permissions: ["Create and edit projects", "Update project stages", "Leave project notes", "Assign work", "Mention teammates", "Use team chat"] },
+    { role: "Reviewer", permissions: ["View team projects", "Leave project notes", "Mention teammates", "Use team chat"] }
+  ];
 
   function updateNotification(name: string, enabled: boolean) {
     setSettings({ ...settings, notifications: { ...settings.notifications, [name]: enabled } });
     notify(`${name} notifications ${enabled ? "enabled" : "disabled"}.`, "info");
-  }
-
-  function selectRole(role: string) {
-    setSettings({ ...settings, teamRole: role });
-  }
-
-  function updateRolePermission(perm: string, enabled: boolean) {
-    const updated = { ...settings.rolePermissions };
-    updated[activeRole] = { ...(updated[activeRole] ?? {}), [perm]: enabled };
-    setSettings({ ...settings, rolePermissions: updated });
-    notify(`${perm} ${enabled ? "enabled" : "disabled"} for ${activeRole}.`, "info");
   }
 
   function updateStage(index: number, value: string) {
@@ -3175,7 +3476,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
       subtitle="Manage profile, workflow, notifications, and display preferences."
       action={
         <Stack direction="row" gap={1} flexWrap="wrap" justifyContent="flex-end">
-          <Button variant="outlined" onClick={resetSettings} sx={{ ...outlineButtonSx, color: "#bd3f37" }}>Reset</Button>
+          <Button variant="outlined" onClick={resetSettings} sx={{ ...outlineButtonSx, color: dangerColor }}>Reset</Button>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} sx={outlineButtonSx}>New Project</Button>
         </Stack>
       }
@@ -3200,7 +3501,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                       aria-label={`Remove project tag ${index + 1}`}
                       disabled={settings.projectTags.length <= 1}
                       onClick={() => removeProjectTag(index)}
-                      sx={{ minWidth: 34, width: { xs: "100%", sm: 34 }, height: 34, color: "#bd3f37", p: 0 }}
+                      sx={{ minWidth: 34, width: { xs: "100%", sm: 34 }, height: 34, color: dangerColor, p: 0 }}
                     >
                       <DeleteOutlineIcon sx={{ fontSize: 18 }} />
                     </Button>
@@ -3210,7 +3511,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               <Button variant="outlined" startIcon={<AddIcon sx={{ fontSize: 18 }} />} onClick={addProjectTag} sx={outlineButtonSx}>
                 Add Tag
               </Button>
-              {tagIssues ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{tagIssues}</Typography> : null}
+              {tagIssues ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{tagIssues}</Typography> : null}
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.2, pt: 0.8 }}>
                 <DialogSelect
                   label="Salary Tag"
@@ -3257,7 +3558,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                     aria-label={`Remove workflow stage ${index + 1}`}
                     disabled={settings.projectStages.length <= 1}
                     onClick={() => removeStage(index)}
-                    sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}
+                    sx={{ minWidth: 34, width: 34, height: 34, color: dangerColor, p: 0 }}
                   >
                     <DeleteOutlineIcon sx={{ fontSize: 18 }} />
                   </Button>
@@ -3272,7 +3573,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             >
               Add Stage
             </Button>
-            {stageIssues ? <Typography sx={{ color: "#bd3f37", fontSize: 13 }}>{stageIssues}</Typography> : null}
+            {stageIssues ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{stageIssues}</Typography> : null}
           </SettingsPanel>
         <SettingsPanel title="Notifications" subtitle="Choose when project and team events should surface.">
             {Object.keys(defaultSettings.notifications).map((item) => (
@@ -3286,35 +3587,26 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             ))}
             <SettingsLink label="Toggle weekly summary" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
-        <SettingsPanel title="Team Roles & Permissions" subtitle="Select a role to configure what team members with that role can access.">
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
-              <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-                {roleCounts.map(({ role, members }) => (
-                  <Stack key={role} component="button" type="button" direction="row" justifyContent="space-between" aria-label={`Select ${role} role permissions`} onClick={() => selectRole(role)} sx={{ width: "100%", border: 0, font: "inherit", textAlign: "left", px: 1, py: 1, borderRadius: "5px", cursor: "pointer", color: "inherit", bgcolor: activeRole === role ? activeBg : "transparent", transition: "background-color 150ms ease" }}>
-                    <Stack direction="row" alignItems="center" gap={0.8}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: activeRole === role ? accent : "#c7c3cc" }} />
-                      <Typography sx={{ color: activeRole === role ? accent : ink, fontSize: 13, fontWeight: 720 }}>{role}</Typography>
-                    </Stack>
-                    <Typography sx={{ color: muted, fontSize: 12 }}>{members} {members === 1 ? "member" : "members"}</Typography>
+        <SettingsPanel title="Team Roles & Permissions" subtitle="Convex enforces these fixed workspace roles on every shared action.">
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" }, gap: 1.2 }}>
+              {rolePolicy.map(({ role, permissions }) => (
+                <Paper key={role} sx={{ ...panelSx, p: 1.5, bgcolor: softPanel }}>
+                  <Stack direction="row" alignItems="center" gap={0.8}>
+                    <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: role === "Owner" ? accent : role === "Editor" ? warningColor : successColor }} />
+                    <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{role}</Typography>
                   </Stack>
-                ))}
-              </Stack>
-              <Stack gap={0.8}>
-                <Stack direction="row" alignItems="center" gap={0.8}>
-                  <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{activeRole} Permissions</Typography>
-                  <Chip label={activeRole} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontSize: 11, height: 20 }} />
-                </Stack>
-                {permissionKeys.map((perm) => {
-                  const enabled = activePerms[perm] ?? false;
-                  return (
-                    <Stack key={perm} component="button" type="button" direction="row" alignItems="center" gap={0.8} aria-label={`${enabled ? "Disable" : "Enable"} ${perm} permission for ${activeRole}`} onClick={() => updateRolePermission(perm, !enabled)} sx={{ border: 0, font: "inherit", textAlign: "left", color: "inherit", bgcolor: "transparent", p: 0.4, cursor: "pointer", borderRadius: "4px", "&:hover": { bgcolor: hoverBg } }}>
-                      <CheckCircleOutlineIcon sx={{ color: enabled ? accent : "#c7c3cc", fontSize: 17, transition: "color 150ms ease" }} />
-                      <Typography sx={{ color: enabled ? ink : muted, fontSize: 12 }}>{perm}</Typography>
-                    </Stack>
-                  );
-                })}
-              </Stack>
+                  <Stack gap={0.7} sx={{ mt: 1.2 }}>
+                    {permissions.map((permission) => (
+                      <Stack key={permission} direction="row" alignItems="flex-start" gap={0.7}>
+                        <CheckCircleOutlineIcon sx={{ color: accent, fontSize: 16, mt: 0.05 }} />
+                        <Typography sx={{ color: muted, fontSize: 11.8, lineHeight: 1.4 }}>{permission}</Typography>
+                      </Stack>
+                    ))}
+                  </Stack>
+                </Paper>
+              ))}
             </Box>
+            <Typography sx={{ color: muted, fontSize: 12 }}>Clients collaborate through private Client Portal links and are not workspace members.</Typography>
             <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
           </SettingsPanel>
         <IntegrationLinkManager
@@ -3336,8 +3628,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               <Box>
                 <Typography sx={{ color: muted, fontSize: 12, fontWeight: 680, mb: 1 }}>Accent Color</Typography>
                 <Stack direction="row" gap={1.2}>
-                  {[defaultAccent, "#2f6edb", "#4c9a5a", "#d99b20", "#c43d85", "#8b8c92"].map((color) => (
-                    <Box key={color} component="button" type="button" aria-label={`Use accent color ${color}`} onClick={() => setSettings({ ...settings, accentColor: color })} sx={{ width: 26, height: 26, borderRadius: "50%", bgcolor: color, cursor: "pointer", border: settings.accentColor === color ? `3px solid #d8cef0` : `1px solid ${border}`, p: 0 }} />
+                  {[cutlab.color.teal, cutlab.color.cyan, cutlab.color.deepTeal, cutlab.color.aqua, cutlab.color.slate, cutlab.color.steel].map((color) => (
+                    <Box key={color} component="button" type="button" aria-label={`Use accent color ${color}`} onClick={() => setSettings({ ...settings, accentColor: color })} sx={{ width: 26, height: 26, borderRadius: "50%", bgcolor: color, cursor: "pointer", border: settings.accentColor === color ? `3px solid ${cutlab.color.softWhite}` : `1px solid ${border}`, p: 0 }} />
                   ))}
                 </Stack>
               </Box>
@@ -3533,28 +3825,20 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
   return (
     <Box sx={{ px: { xs: 2, md: 4 }, py: 3, bgcolor: canvas, minHeight: "100dvh" }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ pb: 2.5 }}>
-        <Stack direction="row" alignItems="center" gap={1.2}>
-          <Box sx={{ width: 32, height: 32, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px" }}>
-            <MovieCreationOutlinedIcon sx={{ fontSize: 19, color: ink }} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>CutLab</Typography>
-            <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mt: 0.3 }}>Video editing tracker</Typography>
-          </Box>
-        </Stack>
+        <CutLabLockup compact subtitle="Video editing tracker" />
         <Stack direction="row" alignItems="center" gap={1}>
           <Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Back to App</Button>
           <Button variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} onClick={shareProfile} sx={outlineButtonSx}>{shareCopied ? "Published + Copied" : "Share Profile"}</Button>
           <Button component={Link} href="/settings" aria-label="Open profile settings" sx={{ minWidth: 36, width: 36, height: 36, color: ink, p: 0 }}><MoreHorizIcon /></Button>
         </Stack>
       </Stack>
-      {shareMessage ? <Typography sx={{ color: shareMessage.startsWith("Public profile") ? accent : "#bd3f37", fontSize: 13, textAlign: "right", mb: 1 }}>{shareMessage}</Typography> : null}
+      {shareMessage ? <Typography sx={{ color: shareMessage.startsWith("Public profile") ? accent : dangerColor, fontSize: 13, textAlign: "right", mb: 1 }}>{shareMessage}</Typography> : null}
 
       <Paper sx={{ ...panelSx, mt: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "170px minmax(0, 1fr) 560px" }, gap: 4, p: { xs: 2.5, md: 4 }, alignItems: "center" }}>
           <ProfileAvatar settings={settings} size={148} fontSize={40} />
           <Box>
-            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, lineHeight: 1.1 }}>{profileDisplayName(settings)}</Typography>
+            <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>{profileDisplayName(settings)}</Typography>
             {displayUsername(settings) ? <Typography sx={{ color: accent, fontSize: 14, fontWeight: 720, mt: 0.6 }}>{displayUsername(settings)}</Typography> : null}
             <Typography sx={{ color: ink, fontSize: 15, mt: 0.8 }}>{settings.profileTitle}</Typography>
             <Typography sx={{ color: muted, fontSize: 14, mt: 1.5, maxWidth: 420 }}>{settings.profileBio}</Typography>
@@ -3728,9 +4012,11 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
 
 function PageFrame({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
   const settings = useTrackerSettings();
+  const page = useContext(PageContext);
+  const group = subNavigationGroups.find((pages) => pages.includes(page));
   return (
     <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: 3 }}>
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: group ? 2 : 3 }}>
         <Box>
           <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>{title}</Typography>
           <Typography sx={{ fontSize: 15, color: muted, mt: 1 }}>{subtitle}</Typography>
@@ -3740,7 +4026,34 @@ function PageFrame({ title, subtitle, action, children }: { title: string; subti
           <NotificationBell settings={settings} />
         </Stack>
       </Stack>
+      {group ? <ContextNavigation page={page} items={group.map((key) => subNavigationItems[key])} /> : null}
       {children}
+    </Box>
+  );
+}
+
+function ContextNavigation({ page, items }: { page: PageKey; items: SubNavigationItem[] }) {
+  return (
+    <Box sx={{ mb: 3, borderBottom: `1px solid ${border}`, overflowX: "auto", scrollbarWidth: "none" }}>
+      <Tabs
+        component="nav"
+        aria-label="Section navigation"
+        value={page}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{ minHeight: 42, "& .MuiTabs-indicator": { bgcolor: accent, height: 2 } }}
+      >
+        {items.map((item) => (
+          <Tab
+            key={item.key}
+            component={Link}
+            href={item.href}
+            value={item.key}
+            label={item.label}
+            sx={{ minHeight: 42, minWidth: 0, px: 1.5, color: muted, fontSize: 13, fontWeight: 680, textTransform: "none", "&.Mui-selected": { color: ink, bgcolor: softPanel } }}
+          />
+        ))}
+      </Tabs>
     </Box>
   );
 }
@@ -3769,7 +4082,30 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
           sx={{ minWidth: 36, width: 36, height: 36, p: 0, color: ink, borderRadius: "6px", position: "relative" }}
         >
           <NotificationsNoneOutlinedIcon sx={{ color: ink }} />
-          {unreadCount || enabledNotifications.length ? (
+          {unreadCount ? (
+            <Box
+              component="span"
+              sx={{
+                position: "absolute",
+                top: unreadCount > 9 ? 1 : 4,
+                right: unreadCount > 9 ? -4 : 2,
+                minWidth: unreadCount > 9 ? 24 : 17,
+                height: 17,
+                px: unreadCount > 9 ? 0.5 : 0,
+                borderRadius: 9,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: dangerColor,
+                color: cutlab.color.softWhite,
+                border: `2px solid ${panel}`,
+                fontSize: 9,
+                fontWeight: 800,
+                lineHeight: 1
+              }}
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Box>
+          ) : enabledNotifications.length ? (
             <Box sx={{ position: "absolute", top: 6, right: 7, width: 8, height: 8, borderRadius: "50%", bgcolor: accent, border: `1px solid ${panel}` }} />
           ) : null}
         </Button>
@@ -3807,7 +4143,7 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
           </Box>
         ) : teamNotificationSyncUnavailable ? (
           <Box sx={{ px: 1.5, py: 1.2 }}>
-            <Typography sx={{ color: "#9f3029", fontSize: 12, lineHeight: 1.45 }}>Clerk is signed in, but Convex auth is not connected. Check Team sync before relying on shared notifications.</Typography>
+            <Typography sx={{ color: dangerColor, fontSize: 12, lineHeight: 1.45 }}>Clerk is signed in, but Convex auth is not connected. Check Team sync before relying on shared notifications.</Typography>
           </Box>
         ) : teamNotifications.length ? teamNotifications.slice(0, 8).map((notification) => (
           <MenuItem key={notification._id} sx={{ display: "block", color: ink, py: 1, bgcolor: notification.read ? panel : activeBg }}>
@@ -3924,10 +4260,10 @@ function profileStatusLabel(status: string) {
 }
 
 function projectTimelineColor(status: string) {
-  if (isDoneStatus(status)) return "#5aa35d";
+  if (isDoneStatus(status)) return successColor;
   if (status === "In Progress") return accent;
-  if (status === "Planned") return "#3f6fb2";
-  return "#d28a20";
+  if (status === "Planned") return "var(--app-highlight)";
+  return warningColor;
 }
 
 function profileThumbColor(index: number) {
@@ -3936,18 +4272,38 @@ function profileThumbColor(index: number) {
 
 function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <Box sx={{ p: 1.3, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
-      <Typography sx={{ color: ink, fontSize: 22, fontWeight: 680, lineHeight: 1 }}>{value}</Typography>
+    <Box sx={{ p: 1.3, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, bgcolor: softPanel }}>
+      <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 22, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
       <Typography sx={{ color: muted, fontSize: 12, mt: 0.5 }}>{label}</Typography>
     </Box>
   );
 }
 
-function EmptyPanel({ title, body }: { title: string; body: string }) {
+function EmptyPanel({
+  title,
+  body,
+  assetKey,
+  action
+}: {
+  title: string;
+  body: string;
+  assetKey?: keyof typeof emptyStateAssets;
+  action?: React.ReactNode;
+}) {
+  const inferredAsset = emptyStateAssets[emptyStateAssetFor(title)];
+  const asset = assetKey ? emptyStateAssets[assetKey] : inferredAsset;
   return (
-    <Box sx={{ px: 2, py: 5, textAlign: "center" }}>
-      <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>{title}</Typography>
-      <Typography sx={{ color: muted, fontSize: 13, mt: 1 }}>{body}</Typography>
+    <Box sx={{ px: 2, py: { xs: 4, md: 5 }, textAlign: "center", display: "grid", justifyItems: "center" }}>
+      <Box
+        component="img"
+        src={asset}
+        alt=""
+        aria-hidden="true"
+        sx={{ width: { xs: 176, sm: 216 }, height: 144, objectFit: "contain", mb: 2, filter: "drop-shadow(0 12px 24px rgba(0,8,12,0.16))" }}
+      />
+      <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 16, fontWeight: 700 }}>{title}</Typography>
+      <Typography sx={{ color: muted, fontSize: 13, lineHeight: 1.55, mt: 0.8, maxWidth: 440 }}>{body}</Typography>
+      {action ? <Box sx={{ mt: 2 }}>{action}</Box> : null}
     </Box>
   );
 }
@@ -4016,10 +4372,10 @@ function projectPriority(project: WorkItem) {
 
 function priorityColor(project: WorkItem) {
   const priority = projectPriority(project);
-  if (priority === "High") return "#bd3f37";
-  if (priority === "Med") return "#b27616";
-  if (priority === "Done") return "#3c8c4b";
-  return "#5b7f4a";
+  if (priority === "High") return dangerColor;
+  if (priority === "Med") return warningColor;
+  if (priority === "Done") return successColor;
+  return muted;
 }
 
 function projectThumbColor(seed: string) {
@@ -4046,24 +4402,347 @@ function LabeledControl({ label, children }: { label: string; children: React.Re
   );
 }
 
-function StatCard({ label, value, helper, progress, tone, icon }: { label: string; value: string; helper: string; progress?: number; tone?: "purple"; icon?: React.ReactNode }) {
+function StatCard({ label, value, helper, progress, tone, icon }: { label: string; value: string; helper: string; progress?: number; tone?: "accent"; icon?: React.ReactNode }) {
   return (
-    <Paper sx={{ minHeight: 108, bgcolor: tone === "purple" ? activeBg : panel, border: `1px solid ${border}`, borderRadius: "6px", px: 2, py: 1.75 }}>
+    <Paper sx={{ minHeight: 108, bgcolor: tone === "accent" ? activeBg : panel, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, px: 2, py: 1.75 }}>
       <Stack direction="row" alignItems="center" gap={1.4}>
         {icon ? (
-          <Box sx={{ width: 52, height: 52, borderRadius: "6px", display: "grid", placeItems: "center", color: tone === "purple" ? "#ffffff" : ink, bgcolor: tone === "purple" ? accent : panel, border: tone === "purple" ? "none" : `1px solid ${border}`, flexShrink: 0, "& svg": { fontSize: 28 } }}>
+          <Box sx={{ width: 52, height: 52, borderRadius: `${cutlab.radius.sm}px`, display: "grid", placeItems: "center", color: tone === "accent" ? cutlab.color.charcoal : accent, bgcolor: tone === "accent" ? "var(--app-highlight)" : softPanel, border: `1px solid ${tone === "accent" ? "var(--app-highlight)" : border}`, flexShrink: 0, "& svg": { fontSize: 28 } }}>
             {icon}
           </Box>
         ) : null}
         <Box sx={{ minWidth: 0 }}>
           <Typography noWrap sx={{ color: muted, fontSize: 13, fontWeight: 700, mb: 0.6 }}>{label}</Typography>
-          <Typography sx={{ color: ink, fontSize: 30, fontWeight: 620, lineHeight: 1 }}>{value}</Typography>
+          <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 30, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{value}</Typography>
           <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.7 }}>{helper}</Typography>
         </Box>
       </Stack>
       {typeof progress === "number" ? (
         <LinearProgress variant="determinate" value={progress} sx={{ mt: 1.5, height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
       ) : null}
+    </Paper>
+  );
+}
+
+function DashboardSection({
+  title,
+  subtitle,
+  action,
+  children,
+  sx,
+  compact = false
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  sx?: Record<string, unknown>;
+  compact?: boolean;
+}) {
+  return (
+    <Paper component="section" sx={{ ...panelSx, overflow: "hidden", ...sx }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ px: compact ? 1.5 : 2, pt: compact ? 1.15 : 1.8, pb: compact ? 1 : 1.4, borderBottom: `1px solid ${border}` }}>
+        <Box>
+          <Typography sx={{ color: ink, fontSize: compact ? 15 : 18, fontWeight: 760 }}>{title}</Typography>
+          <Typography sx={{ color: muted, fontSize: compact ? 11.5 : 12.5, mt: compact ? 0.15 : 0.35 }}>{subtitle}</Typography>
+        </Box>
+        {action}
+      </Stack>
+      <Box sx={{ p: compact ? 1.25 : 2 }}>{children}</Box>
+    </Paper>
+  );
+}
+
+function WorkflowPipeline({
+  stages,
+  activeStage,
+  onSelect,
+  compact = false
+}: {
+  stages: DashboardPipelineItem[];
+  activeStage: DashboardPipelineStage | "All";
+  onSelect: (stage: DashboardPipelineStage) => void;
+  compact?: boolean;
+}) {
+  return (
+    <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.4, scrollbarWidth: "thin" }}>
+      {stages.map((stage, index) => {
+        const active = activeStage === stage.key;
+        return (
+          <Box key={stage.key} sx={{ display: "flex", alignItems: "center", minWidth: { xs: compact ? 150 : 210, md: 0 }, flex: { md: 1 } }}>
+            <Button
+              onClick={() => onSelect(stage.key)}
+              aria-pressed={active}
+              sx={{
+                width: "100%",
+                minHeight: compact ? 72 : 112,
+                display: "block",
+                textAlign: "left",
+                p: compact ? 1.05 : 1.5,
+                border: `1px solid ${active ? accent : border}`,
+                bgcolor: active ? activeBg : softPanel,
+                color: ink,
+                borderRadius: `${cutlab.radius.sm}px`,
+                "&:hover": { bgcolor: active ? activeBg : hoverBg, borderColor: accent }
+              }}
+            >
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography sx={{ color: active ? accent : muted, fontSize: 10, fontWeight: 800, letterSpacing: 0.7, textTransform: "uppercase" }}>0{index + 1}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11 }}>{stage.percent}%</Typography>
+              </Stack>
+              <Stack direction="row" alignItems="baseline" gap={0.8} sx={{ mt: compact ? 0.55 : 1 }}>
+                <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: compact ? 23 : 30, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{stage.count}</Typography>
+                <Typography sx={{ color: ink, fontSize: compact ? 11.5 : 13, fontWeight: 720 }}>{stage.key}</Typography>
+              </Stack>
+              <LinearProgress variant="determinate" value={stage.percent} sx={{ height: 3, mt: compact ? 0.7 : 1.2, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: active ? accent : muted } }} />
+            </Button>
+            {index < stages.length - 1 ? <ChevronRightIcon sx={{ color: border, mx: 0.2, flexShrink: 0 }} /> : null}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+function UpcomingDeliveries({
+  projects,
+  settings,
+  onViewProject,
+  onNewProject,
+  compact = false
+}: {
+  projects: WorkItem[];
+  settings: SettingsState;
+  onViewProject: (project: WorkItem) => void;
+  onNewProject: () => void;
+  compact?: boolean;
+}) {
+  if (!projects.length) {
+    return compact ? (
+      <CompactDashboardEmpty
+        title="No upcoming deliveries"
+        body="Active project deadlines will appear here."
+        assetKey="schedule"
+        action={<Button size="small" onClick={onNewProject} sx={{ color: accent, fontWeight: 720 }}>Add Project</Button>}
+      />
+    ) : (
+      <EmptyPanel title="No upcoming deliveries" body="Projects with active due dates will appear here in deadline order." assetKey="schedule" action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onNewProject} sx={outlineButtonSx}>Add Project</Button>} />
+    );
+  }
+
+  return (
+    <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+      {projects.slice(0, compact ? 3 : 6).map((project) => {
+        const urgency = deliveryUrgency(project.dueDate);
+        return (
+          <Stack key={project.id} direction="row" alignItems="center" gap={compact ? 0.8 : 1.2} sx={{ py: compact ? 0.65 : 1.2, "&:first-of-type": { pt: 0 }, "&:last-of-type": { pb: 0 } }}>
+            <Box sx={{ width: compact ? 64 : 82, flexShrink: 0 }}>
+              <Typography sx={{ color: urgency.color, fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.45 }}>{urgency.label}</Typography>
+              <Typography noWrap sx={{ color: muted, fontSize: 10.5, mt: 0.1 }}>{formatDate(project.dueDate, settings.dateFormat)}</Typography>
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography noWrap sx={{ color: ink, fontSize: compact ? 12.5 : 14, fontWeight: 760 }}>{project.title}</Typography>
+              <Typography noWrap sx={{ color: muted, fontSize: compact ? 10.5 : 12, mt: 0.1 }}>{project.client || project.workType}</Typography>
+            </Box>
+            {!compact ? <StatusChip status={project.status} /> : null}
+            <Button size="small" onClick={() => onViewProject(project)} sx={{ color: accent, fontWeight: 720, minWidth: 0, px: 0.6 }}>View</Button>
+          </Stack>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function SalaryBatchProgress({
+  progress,
+  size,
+  percentage,
+  amount,
+  currency
+}: {
+  progress: number;
+  size: number;
+  percentage: number;
+  amount: number;
+  currency: string;
+}) {
+  const complete = progress >= size;
+  const remaining = Math.max(0, size - progress);
+  return (
+    <Stack sx={{ minHeight: 200, justifyContent: "space-between" }}>
+      <Box>
+        <Typography sx={{ color: muted, fontSize: 11, fontWeight: 800, letterSpacing: 0.55, textTransform: "uppercase", mb: 0.8 }}>Salary Edits Done</Typography>
+        <Stack direction="row" alignItems="baseline" gap={0.7}>
+          <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 42, fontWeight: 700, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{progress}</Typography>
+          <Typography sx={{ color: muted, fontSize: 17, fontWeight: 650 }}>/ {size} edits</Typography>
+        </Stack>
+        <Typography sx={{ color: complete ? successColor : muted, fontSize: 13, mt: 1 }}>{complete ? "Batch ready for payout" : `${remaining} edit${remaining === 1 ? "" : "s"} remaining`}</Typography>
+      </Box>
+      <Box>
+        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.8 }}>
+          <Typography sx={{ color: muted, fontSize: 12 }}>Current batch</Typography>
+          <Typography sx={{ color: ink, fontSize: 12, fontWeight: 760 }}>{percentage}%</Typography>
+        </Stack>
+        <LinearProgress variant="determinate" value={percentage} sx={{ height: 8, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: complete ? successColor : accent } }} />
+        <Stack direction="row" justifyContent="space-between" sx={{ mt: 1.4 }}>
+          <Typography sx={{ color: muted, fontSize: 12 }}>Payout</Typography>
+          <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{money(amount, currency)}</Typography>
+        </Stack>
+      </Box>
+    </Stack>
+  );
+}
+
+function UnifiedOperationsMetrics({
+  metrics,
+  progress,
+  size,
+  percentage,
+  amount,
+  currency
+}: {
+  metrics: Array<{ label: string; value: string; helper: string; icon: React.ReactNode; accent?: boolean }>;
+  progress: number;
+  size: number;
+  percentage: number;
+  amount: number;
+  currency: string;
+}) {
+  const complete = progress >= size;
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr)) minmax(250px, 1.35fr)" }, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, overflow: "hidden" }}>
+      {metrics.map((metric) => (
+        <Box key={metric.label} sx={{ minWidth: 0, px: 1.35, py: 1.15, bgcolor: metric.accent ? activeBg : softPanel, borderRight: { md: `1px solid ${border}` }, borderBottom: { xs: `1px solid ${border}`, md: 0 } }}>
+          <Stack direction="row" alignItems="center" gap={0.65}>
+            <Box sx={{ color: metric.accent ? accent : muted, display: "grid", "& svg": { fontSize: 16 } }}>{metric.icon}</Box>
+            <Typography noWrap sx={{ color: muted, fontSize: 10.5, fontWeight: 760 }}>{metric.label}</Typography>
+          </Stack>
+          <Typography noWrap sx={{ color: ink, fontFamily: headingFont, fontSize: 22, fontWeight: 700, lineHeight: 1, mt: 0.7, fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
+          <Typography noWrap sx={{ color: muted, fontSize: 10.5, mt: 0.4 }}>{metric.helper}</Typography>
+        </Box>
+      ))}
+      <Box sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1", xl: "auto" }, px: 1.5, py: 1.15, bgcolor: panel }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+          <Box>
+            <Typography sx={{ color: muted, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.45, textTransform: "uppercase" }}>Salary Edits Done</Typography>
+            <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 22, fontWeight: 700, mt: 0.35, lineHeight: 1 }}>
+              {progress} <Box component="span" sx={{ color: muted, fontFamily: "inherit", fontSize: 12, fontWeight: 650 }}>/ {size}</Box>
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: "right" }}>
+            <Typography sx={{ color: complete ? successColor : accent, fontSize: 12, fontWeight: 780 }}>{percentage}%</Typography>
+            <Typography sx={{ color: muted, fontSize: 10.5, mt: 0.2 }}>{money(amount, currency)} payout</Typography>
+          </Box>
+        </Stack>
+        <LinearProgress variant="determinate" value={percentage} sx={{ height: 5, borderRadius: 99, mt: 0.9, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: complete ? successColor : accent } }} />
+        <Typography sx={{ color: complete ? successColor : muted, fontSize: 10.5, mt: 0.55 }}>{complete ? "Batch ready" : `${Math.max(0, size - progress)} remaining`}</Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function CompactDashboardEmpty({
+  title,
+  body,
+  assetKey,
+  action
+}: {
+  title: string;
+  body: string;
+  assetKey: keyof typeof emptyStateAssets;
+  action?: React.ReactNode;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" gap={1.2} sx={{ minHeight: 74 }}>
+      <Box component="img" src={emptyStateAssets[assetKey]} alt="" aria-hidden="true" sx={{ width: 78, height: 62, objectFit: "contain", flexShrink: 0 }} />
+      <Box sx={{ minWidth: 0, flex: 1 }}>
+        <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 760 }}>{title}</Typography>
+        <Typography sx={{ color: muted, fontSize: 10.5, lineHeight: 1.35, mt: 0.2 }}>{body}</Typography>
+      </Box>
+      {action ? <Box sx={{ flexShrink: 0 }}>{action}</Box> : null}
+    </Stack>
+  );
+}
+
+function DashboardActivityFeed({
+  activity,
+  projects,
+  emptyAsset,
+  compact = false
+}: {
+  activity: DashboardActivity[];
+  projects: WorkItem[];
+  emptyAsset: keyof typeof emptyStateAssets;
+  compact?: boolean;
+}) {
+  if (!activity.length) {
+    return compact
+      ? <CompactDashboardEmpty title="No recent activity" body="Actions will appear here as work moves forward." assetKey={emptyAsset} />
+      : <EmptyPanel title="No recent activity" body="Project and workspace actions will appear here as work moves forward." assetKey={emptyAsset} />;
+  }
+
+  return (
+    <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+      {activity.slice(0, compact ? 4 : 6).map((item) => {
+        const project = item.projectId ? projects.find((candidate) => candidate.id === item.projectId) : undefined;
+        return (
+          <Stack key={item.id} direction="row" gap={compact ? 0.8 : 1.2} sx={{ py: compact ? 0.6 : 1.1, "&:first-of-type": { pt: 0 }, "&:last-of-type": { pb: 0 } }}>
+            <Box sx={{ width: compact ? 26 : 32, height: compact ? 26 : 32, borderRadius: "5px", bgcolor: item.kind === "delivered" ? "var(--app-success-bg)" : activeBg, color: item.kind === "delivered" ? successColor : accent, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              {item.kind === "delivered" ? <CheckCircleOutlineIcon sx={{ fontSize: compact ? 15 : 18 }} /> : item.kind === "team" ? <PeopleAltOutlinedIcon sx={{ fontSize: compact ? 15 : 18 }} /> : item.kind === "updated" ? <EditOutlinedIcon sx={{ fontSize: compact ? 15 : 18 }} /> : <ViewTimelineOutlinedIcon sx={{ fontSize: compact ? 15 : 18 }} />}
+            </Box>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography noWrap={compact} sx={{ color: ink, fontSize: compact ? 12 : 13, fontWeight: 700, lineHeight: 1.3 }}>{item.message}</Typography>
+              <Typography noWrap sx={{ color: muted, fontSize: compact ? 10.5 : 11.5, mt: compact ? 0.15 : 0.35 }}>
+                {[item.actor, project?.title, relativeActivityTime(item.createdAt)].filter(Boolean).join(" · ")}
+              </Typography>
+            </Box>
+          </Stack>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function DashboardActivitySkeleton() {
+  return (
+    <Stack gap={1.4}>
+      {[0, 1, 2].map((item) => (
+        <Stack key={item} direction="row" gap={1.2}>
+          <Skeleton variant="rounded" width={32} height={32} sx={{ bgcolor: softPanel }} />
+          <Box sx={{ flex: 1 }}>
+            <Skeleton width="78%" height={18} sx={{ bgcolor: softPanel }} />
+            <Skeleton width="46%" height={15} sx={{ bgcolor: softPanel }} />
+          </Box>
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+function MetricStrip({ metrics }: { metrics: Array<{ label: string; value: string; helper: string; icon: React.ReactNode; accent?: boolean }> }) {
+  return (
+    <Paper sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: `repeat(${metrics.length}, minmax(0, 1fr))` }, bgcolor: panel, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, overflow: "hidden" }}>
+      {metrics.map((metric, index) => (
+        <Box
+          key={metric.label}
+          sx={{
+            minWidth: 0,
+            px: { xs: 1.5, lg: 2 },
+            py: 1.75,
+            bgcolor: metric.accent ? activeBg : "transparent",
+            borderRight: { md: index === metrics.length - 1 ? 0 : `1px solid ${border}` },
+            borderBottom: { xs: index < metrics.length - 2 ? `1px solid ${border}` : 0, md: 0 },
+            "&:last-of-type": { gridColumn: { xs: metrics.length % 2 ? "1 / -1" : "auto", md: "auto" } }
+          }}
+        >
+          <Stack direction="row" alignItems="center" gap={1}>
+            <Box sx={{ color: metric.accent ? accent : muted, display: "grid", placeItems: "center", "& svg": { fontSize: 20 } }}>{metric.icon}</Box>
+            <Typography noWrap sx={{ color: muted, fontSize: 12, fontWeight: 700 }}>{metric.label}</Typography>
+          </Stack>
+          <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 27, fontWeight: 700, lineHeight: 1, mt: 1, fontVariantNumeric: "tabular-nums" }}>{metric.value}</Typography>
+          <Typography noWrap sx={{ color: muted, fontSize: 11.5, mt: 0.6 }}>{metric.helper}</Typography>
+        </Box>
+      ))}
     </Paper>
   );
 }
@@ -4184,7 +4863,7 @@ function ProjectRow({ project, canEdit, canDelete, onView, onEdit, onDelete }: {
           </Button>
         </Tooltip>
         <Tooltip title={canDelete ? "Delete project" : "Only project owners or team owners can delete this project"}>
-          <Button size="small" aria-label={`Delete ${project.title}`} disabled={!canDelete} onClick={(event) => { event.stopPropagation(); onDelete(); }} onKeyDown={(event) => event.stopPropagation()} sx={{ minWidth: 34, width: 34, height: 34, color: "#bd3f37", p: 0 }}>
+          <Button size="small" aria-label={`Delete ${project.title}`} disabled={!canDelete} onClick={(event) => { event.stopPropagation(); onDelete(); }} onKeyDown={(event) => event.stopPropagation()} sx={{ minWidth: 34, width: 34, height: 34, color: dangerColor, p: 0 }}>
             <DeleteOutlineIcon sx={{ fontSize: 18 }} />
           </Button>
         </Tooltip>
@@ -4196,8 +4875,8 @@ function ProjectRow({ project, canEdit, canDelete, onView, onEdit, onDelete }: {
 
 
 function deadlineColor(status: string) {
-  if (status === "In Progress") return "#d39a27";
-  if (status === "Cancelled") return "#bc3d35";
+  if (status === "In Progress") return warningColor;
+  if (status === "Cancelled") return dangerColor;
   return accent;
 }
 
@@ -4209,6 +4888,72 @@ function dueBucket(project: WorkItem): DueFilter {
   const weekEnd = new Date(today);
   weekEnd.setDate(weekEnd.getDate() + 7);
   return due.getTime() <= weekEnd.getTime() ? "This Week" : "ALL";
+}
+
+function dashboardProjectStage(project: WorkItem): DashboardPipelineStage | null {
+  if (isDoneStatus(project.status)) return "Delivered";
+  if (project.status === "Cancelled") return null;
+  if (project.status === "Planned") return "Planning";
+  const reviewText = `${project.status} ${project.notes}`.toLowerCase();
+  if (["review", "feedback", "revision", "approval", "changes requested"].some((term) => reviewText.includes(term))) return "Review";
+  return "In Progress";
+}
+
+function dashboardPipeline(projects: WorkItem[]): DashboardPipelineItem[] {
+  const stages: DashboardPipelineStage[] = ["Planning", "In Progress", "Review", "Delivered"];
+  const total = Math.max(1, projects.filter((project) => dashboardProjectStage(project) !== null).length);
+  return stages.map((key) => {
+    const count = projects.filter((project) => dashboardProjectStage(project) === key).length;
+    return { key, count, percent: Math.round((count / total) * 100) };
+  });
+}
+
+function dashboardUpcomingDeliveries(projects: WorkItem[]) {
+  return projects
+    .filter((project) => !isDoneStatus(project.status) && project.status !== "Cancelled" && isIsoDate(project.dueDate))
+    .sort((a, b) => dateTime(a.dueDate) - dateTime(b.dueDate));
+}
+
+function deliveryUrgency(dueDate: string) {
+  const due = dateTime(dueDate);
+  const today = todayDate().getTime();
+  const tomorrow = addDays(todayDate(), 1).getTime();
+  if (due < today) return { label: "Overdue", color: dangerColor };
+  if (due === today) return { label: "Today", color: dangerColor };
+  if (due === tomorrow) return { label: "Tomorrow", color: warningColor };
+  return { label: "Upcoming", color: accent };
+}
+
+function dashboardProjectActivity(projects: WorkItem[], sessionActivity: DashboardActivity[]) {
+  const sessionProjectKeys = new Set(sessionActivity.map((item) => `${item.kind}:${item.projectId || ""}`));
+  const savedActivity: DashboardActivity[] = projects
+    .filter((project) => project.createdAt && !sessionProjectKeys.has(`created:${project.id}`))
+    .map((project) => ({
+      id: `created-${project.id}`,
+      kind: "created",
+      message: `${project.title} was created`,
+      projectId: project.id,
+      createdAt: project.createdAt as string
+    }));
+
+  return [...sessionActivity, ...savedActivity]
+    .filter((item) => Number.isFinite(Date.parse(item.createdAt)))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 20);
+}
+
+function relativeActivityTime(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return "";
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(timestamp));
 }
 
 function calendarMonthDays(month: Date, weekStart: string) {
@@ -4240,9 +4985,9 @@ function formatLongDate(value: string) {
 }
 
 function statusPalette(status: string) {
-  if (isDoneStatus(status)) return { fg: "#3c8c4b", bg: "var(--app-success-bg, #e9f5e9)" };
-  if (status === "In Progress") return { fg: "#b27616", bg: "var(--app-warning-bg, #fff4dc)" };
-  if (status === "Cancelled") return { fg: "#bc3d35", bg: "var(--app-danger-bg, #fae8e6)" };
+  if (isDoneStatus(status)) return { fg: "var(--app-success, #23B58E)", bg: "var(--app-success-bg, rgba(35,181,142,0.14))" };
+  if (status === "In Progress") return { fg: "var(--app-warning, #F5A623)", bg: "var(--app-warning-bg, rgba(245,166,35,0.14))" };
+  if (status === "Cancelled") return { fg: "var(--app-danger, #FF5B5B)", bg: "var(--app-danger-bg, rgba(255,91,91,0.14))" };
   return { fg: accent, bg: activeBg };
 }
 
@@ -4274,7 +5019,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: string) => void }) {
+function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, localActivity, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; localActivity: ProjectActivityEvent[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: string) => void }) {
   if (!project) {
     return null;
   }
@@ -4284,6 +5029,7 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
   const configuredLinks = integrationServices
     .map((service) => ({ service, link: project.integrationLinks?.[service.id] }))
     .filter(({ link }) => hasIntegrationLink(link));
+  const assignedMembers = teamMembers.filter((member) => (project.assigneeUserIds ?? []).includes(member.userId));
 
   function openLink(url: string) {
     if (typeof window === "undefined" || !isValidIntegrationUrl(url)) return;
@@ -4291,7 +5037,24 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
   }
 
   return (
-    <Dialog open onClose={onClose} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px", overflow: "hidden" } }}>
+    <Dialog
+      open
+      onClose={onClose}
+      fullWidth
+      maxWidth="xl"
+      PaperProps={{
+        sx: {
+          width: { xs: "calc(100% - 16px)", md: "calc(100% - 48px)" },
+          height: { xs: "calc(100dvh - 16px)", md: "min(920px, calc(100dvh - 48px))" },
+          maxHeight: "none",
+          bgcolor: panel,
+          color: ink,
+          border: `1px solid ${border}`,
+          borderRadius: { xs: "8px", md: "12px" },
+          overflow: "hidden"
+        }
+      }}
+    >
       <DialogTitle sx={{ p: 0 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2} sx={{ px: { xs: 2, md: 3 }, py: 2.2, borderBottom: `1px solid ${border}` }}>
           <Box sx={{ minWidth: 0 }}>
@@ -4308,61 +5071,84 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
           </Button>
         </Stack>
       </DialogTitle>
-      <DialogContent sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 1.2, mb: 2 }}>
-          <ProjectDetailMetric label="Start" value={formatDate(project.startDate, settings.dateFormat)} />
-          <ProjectDetailMetric label="Due" value={formatDate(project.dueDate, settings.dateFormat)} />
-          <ProjectDetailMetric label="Amount" value={amount} />
-        </Box>
-        <Paper sx={{ ...panelSx, p: 2, mb: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Progress</Typography>
-            <Typography sx={{ color: priorityColor(project), fontSize: 13, fontWeight: 760 }}>{projectPriority(project)}</Typography>
-          </Stack>
-          <LinearProgress variant="determinate" value={progress} sx={{ height: 7, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1.2} sx={{ mt: 1 }}>
-            <Typography sx={{ color: muted, fontSize: 12 }}>{progress}% complete</Typography>
-            {canUpdateStatus ? <CompactSelect value={project.status} options={statusOptions} onChange={(status) => onStatusChange(project, status)} width={{ xs: "100%", sm: 170 }} /> : null}
-          </Stack>
-        </Paper>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 320px" }, gap: 2 }}>
-          <Paper sx={{ ...panelSx, p: 2 }}>
-            <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Notes</Typography>
-            <Typography sx={{ color: project.notes ? ink : muted, fontSize: 13, mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
-              {project.notes || "No notes saved for this project yet."}
-            </Typography>
-          </Paper>
-          <Paper sx={{ ...panelSx, p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
-              <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Resources</Typography>
-              <Chip label={configuredIntegrationCount(project.integrationLinks)} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
-            </Stack>
-            <Stack gap={1}>
-              {configuredLinks.length ? configuredLinks.map(({ service, link }) => link ? (
-                <Box key={service.id} sx={{ p: 1.1, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{integrationDisplayText(link, service.name)}</Typography>
-                      <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{service.name}</Typography>
-                    </Box>
-                    <Tooltip title={`Open ${service.name}`}>
-                      <Button aria-label={`Open ${service.name} link`} onClick={() => openLink(link.url)} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}>
-                        <OpenInNewIcon sx={{ fontSize: 18 }} />
-                      </Button>
-                    </Tooltip>
-                  </Stack>
-                  {link.notes ? <Typography sx={{ color: muted, fontSize: 12, mt: 0.8, lineHeight: 1.45 }}>{link.notes}</Typography> : null}
+      <DialogContent sx={{ p: 0, overflow: "hidden" }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 360px" }, height: "100%", minHeight: 0 }}>
+          <Box sx={{ minWidth: 0, overflowY: "auto", px: { xs: 2, md: 3 }, py: 2.5 }}>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" }, gap: 1.2, mb: 2 }}>
+              <ProjectDetailMetric label="Start" value={formatDate(project.startDate, settings.dateFormat)} />
+              <ProjectDetailMetric label="Due" value={formatDate(project.dueDate, settings.dateFormat)} />
+              <ProjectDetailMetric label="Amount" value={amount} />
+              <ProjectDetailMetric label="Project ID" value={project.id} />
+            </Box>
+            <Paper sx={{ ...panelSx, p: 2, mb: 2 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1.2} sx={{ mb: 1.4 }}>
+                <Box>
+                  <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Workflow Progress</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{progress}% complete · {projectPriority(project)}</Typography>
                 </Box>
-              ) : null) : (
-                <Typography sx={{ color: muted, fontSize: 13 }}>No project links saved yet.</Typography>
-              )}
-            </Stack>
-          </Paper>
+                {canUpdateStatus ? <CompactSelect value={project.status} options={statusOptions} onChange={(status) => onStatusChange(project, status)} width={{ xs: "100%", sm: 180 }} /> : <StatusChip status={project.status} />}
+              </Stack>
+              <ProjectStageTracker status={project.status} />
+            </Paper>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.25fr) minmax(260px, 0.75fr)" }, gap: 2 }}>
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Internal Notes</Typography>
+                  {canEdit ? <Button onClick={() => onEdit(project)} size="small" sx={{ color: accent }}>Edit</Button> : null}
+                </Stack>
+                <Typography sx={{ color: project.notes ? ink : muted, fontSize: 13, mt: 1, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                  {project.notes || "No internal notes saved. Add production context, handoff details, or private reminders."}
+                </Typography>
+              </Paper>
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Project Metadata</Typography>
+                <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ mt: 1 }}>
+                  <ProjectMetadataRow label="Client" value={project.client || "Not assigned"} />
+                  <ProjectMetadataRow label="Type" value={project.workType} />
+                  <ProjectMetadataRow label="Workspace" value={project.teamId ? "Team workspace" : "Personal workspace"} />
+                  <ProjectMetadataRow label="Created" value={project.createdAt ? formatShortDateTime(project.createdAt) : "Not recorded"} />
+                  <ProjectMetadataRow label="Team members" value={project.teamId ? (assignedMembers.length ? assignedMembers.map((member) => member.name || member.email).join(", ") : "Unassigned") : "You"} />
+                </Stack>
+              </Paper>
+            </Box>
+            <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
+                <Box>
+                  <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Resources & Assets</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>Working files, review links, exports, and connected folders.</Typography>
+                </Box>
+                <Chip label={configuredIntegrationCount(project.integrationLinks)} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+              </Stack>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+                {configuredLinks.length ? configuredLinks.map(({ service, link }) => link ? (
+                  <Box key={service.id} sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
+                    <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{integrationDisplayText(link, service.name)}</Typography>
+                        <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{service.name}</Typography>
+                      </Box>
+                      <Tooltip title={`Open ${service.name}`}>
+                        <Button aria-label={`Open ${service.name} link`} onClick={() => openLink(link.url)} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}>
+                          <OpenInNewIcon sx={{ fontSize: 18 }} />
+                        </Button>
+                      </Tooltip>
+                    </Stack>
+                    {link.notes ? <Typography sx={{ color: muted, fontSize: 12, mt: 0.8, lineHeight: 1.45 }}>{link.notes}</Typography> : null}
+                  </Box>
+                ) : null) : (
+                  <Typography sx={{ color: muted, fontSize: 13 }}>No project links saved yet. Use Edit Project to connect working files and review links.</Typography>
+                )}
+              </Box>
+            </Paper>
+            <ProjectFileManager project={project} canEdit={canEdit} />
+            <ProjectDetailCollaborationPanel project={project} teamMembers={teamMembers} canComment={canComment} />
+            <ClientPortalManager project={project} canEdit={canEdit} />
+          </Box>
+          <ProjectActivityFeed project={project} localActivity={localActivity} />
         </Box>
-        <ProjectDetailCollaborationPanel project={project} teamMembers={teamMembers} canComment={canComment} />
       </DialogContent>
       <DialogActions sx={{ px: { xs: 2, md: 3 }, py: 2, borderTop: `1px solid ${border}` }}>
-        {canDelete ? <Button onClick={() => onDelete(project)} sx={{ color: "#bd3f37" }}>Delete</Button> : null}
+        {canDelete ? <Button onClick={() => onDelete(project)} sx={{ color: dangerColor }}>Delete</Button> : null}
         {canEdit ? <Button onClick={() => onEdit(project)} variant="outlined" sx={outlineButtonSx}>Edit Project</Button> : <Typography sx={{ color: muted, fontSize: 13 }}>Your team role can view this project but cannot edit it.</Typography>}
       </DialogActions>
     </Dialog>
@@ -4376,6 +5162,738 @@ function ProjectDetailMetric({ label, value }: { label: string; value: string })
       <Typography sx={{ color: ink, fontSize: 15, fontWeight: 760, mt: 0.6 }}>{value}</Typography>
     </Paper>
   );
+}
+
+function ProjectStageTracker({ status }: { status: string }) {
+  const stages = ["Planned", "In Progress", "Review", "Delivered"];
+  const currentStage = clientPortalStage(status);
+  const currentIndex = stages.indexOf(currentStage);
+
+  return (
+    <Box>
+      <LinearProgress variant="determinate" value={Math.max(8, ((currentIndex + 1) / stages.length) * 100)} sx={{ height: 7, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
+      <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 0.7, mt: 1 }}>
+        {stages.map((stage, index) => (
+          <Typography key={stage} sx={{ color: index <= currentIndex ? ink : muted, fontSize: 11.5, fontWeight: index === currentIndex ? 760 : 540, textAlign: index === 0 ? "left" : index === stages.length - 1 ? "right" : "center" }}>
+            {stage}
+          </Typography>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+function ProjectMetadataRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Stack direction="row" justifyContent="space-between" gap={2} sx={{ py: 1 }}>
+      <Typography sx={{ color: muted, fontSize: 12 }}>{label}</Typography>
+      <Typography sx={{ color: ink, fontSize: 12, fontWeight: 700, textAlign: "right", overflowWrap: "anywhere" }}>{value}</Typography>
+    </Stack>
+  );
+}
+
+function ProjectActivityFeed({ project, localActivity }: { project: WorkItem; localActivity: ProjectActivityEvent[] }) {
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const events = useQuery(
+    api.projectActivity.listForProject,
+    isConvexAuthenticated ? { projectId: project.id } : "skip"
+  );
+
+  return (
+    <Box sx={{ borderLeft: { lg: `1px solid ${border}` }, borderTop: { xs: `1px solid ${border}`, lg: "none" }, bgcolor: softPanel, minHeight: 0, overflowY: "auto", p: { xs: 2, md: 2.4 } }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+        <Box>
+          <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Project Activity</Typography>
+          <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>Automatic history across the project lifecycle.</Typography>
+        </Box>
+        <ViewTimelineOutlinedIcon sx={{ color: accent, fontSize: 21 }} />
+      </Stack>
+      <Stack gap={0} sx={{ mt: 2 }}>
+        {isConvexAuthLoading ? (
+          <Typography sx={{ color: muted, fontSize: 13 }}>Connecting activity history...</Typography>
+        ) : !isConvexAuthenticated ? (
+          localActivity.length ? localActivity.map((event, index) => (
+            <ActivityFeedItem key={event.id} actor={event.actorName} message={event.message} detail={event.detail} createdAt={event.createdAt} last={index === localActivity.length - 1} />
+          )) : <ActivityFeedItem actor="Local workspace" message={`${project.title} is ready for its first update.`} createdAt={project.createdAt ?? new Date().toISOString()} last />
+        ) : events === undefined ? (
+          <Stack gap={1}><Skeleton variant="rounded" height={82} /><Skeleton variant="rounded" height={82} /></Stack>
+        ) : events.length ? events.map((event, index) => (
+          <ActivityFeedItem
+            key={event._id}
+            actor={event.actorName}
+            message={event.message}
+            detail={event.detail}
+            createdAt={event.createdAt}
+            last={index === events.length - 1}
+          />
+        )) : (
+          <ActivityFeedItem actor="CutLab" message={`${project.title} is ready for its first update.`} createdAt={project.createdAt ?? new Date().toISOString()} last />
+        )}
+      </Stack>
+    </Box>
+  );
+}
+
+function ActivityFeedItem({ actor, message, detail, createdAt, last }: { actor: string; message: string; detail?: string; createdAt: string; last?: boolean }) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: "18px minmax(0, 1fr)", columnGap: 1.1 }}>
+      <Box sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
+        <Box sx={{ width: 9, height: 9, borderRadius: "50%", bgcolor: accent, border: `2px solid ${softPanel}`, boxShadow: `0 0 0 1px ${accent}`, mt: 0.55, zIndex: 1 }} />
+        {!last ? <Box sx={{ position: "absolute", top: 15, bottom: -4, width: "1px", bgcolor: border }} /> : null}
+      </Box>
+      <Box sx={{ pb: last ? 0 : 2.1, minWidth: 0 }}>
+        <Typography sx={{ color: ink, fontSize: 12.5, lineHeight: 1.45 }}>{message}</Typography>
+        {detail ? <Typography sx={{ color: muted, fontSize: 11.5, lineHeight: 1.5, mt: 0.45, whiteSpace: "pre-wrap" }}>{detail}</Typography> : null}
+        <Typography sx={{ color: muted, fontSize: 10.5, mt: 0.55 }}>{actor} · {formatShortDateTime(createdAt)}</Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: boolean }) {
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const fileData = useQuery(
+    api.projectFiles.listForProject,
+    isConvexAuthenticated ? { projectId: project.id } : "skip"
+  );
+  const generateUploadUrl = useMutation(api.projectFiles.generateUploadUrl);
+  const saveStorageVersion = useMutation(api.projectFiles.saveStorageVersion);
+  const saveExternalVersion = useMutation(api.projectFiles.saveExternalVersion);
+  const updateFile = useMutation(api.projectFiles.updateFile);
+  const removeFile = useMutation(api.projectFiles.removeFile);
+  const [view, setView] = useState<"files" | "history">("files");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [source, setSource] = useState<"upload" | "external">("upload");
+  const [targetFileId, setTargetFileId] = useState<Id<"projectFiles"> | undefined>();
+  const [browserFile, setBrowserFile] = useState<File | null>(null);
+  const [category, setCategory] = useState("Deliverable");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("Working");
+  const [clientVisible, setClientVisible] = useState(false);
+  const [downloadable, setDownloadable] = useState(true);
+  const [notes, setNotes] = useState("");
+  const [provider, setProvider] = useState("external");
+  const [externalUrl, setExternalUrl] = useState("");
+  const [externalId, setExternalId] = useState("");
+  const [externalSize, setExternalSize] = useState(0);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+
+  const files = fileData?.files ?? [];
+  const filteredFiles = categoryFilter === "All" ? files : files.filter((file) => file.category === categoryFilter);
+
+  function resetForm() {
+    setTargetFileId(undefined);
+    setBrowserFile(null);
+    setCategory("Deliverable");
+    setTitle("");
+    setDescription("");
+    setStatus("Working");
+    setClientVisible(false);
+    setDownloadable(true);
+    setNotes("");
+    setProvider("external");
+    setExternalUrl("");
+    setExternalId("");
+    setExternalSize(0);
+    setError("");
+  }
+
+  function openNewFile(nextSource: "upload" | "external") {
+    resetForm();
+    setSource(nextSource);
+    setDialogOpen(true);
+  }
+
+  function openNewVersion(file: NonNullable<typeof fileData>["files"][number], nextSource: "upload" | "external") {
+    resetForm();
+    setTargetFileId(file._id);
+    setCategory(file.category);
+    setTitle(file.title);
+    setDescription(file.description);
+    setStatus(file.status);
+    setClientVisible(file.clientVisible);
+    setDownloadable(file.downloadable);
+    setSource(nextSource);
+    setDialogOpen(true);
+  }
+
+  async function saveFileVersion() {
+    if (!canEdit || !isConvexAuthenticated) return;
+    if (!title.trim()) {
+      setError("File title is required.");
+      return;
+    }
+    setBusy("save");
+    setError("");
+    try {
+      const shared = {
+        projectId: project.id,
+        projectFileId: targetFileId,
+        category: category as "Deliverable" | "Reference" | "Asset",
+        title,
+        description,
+        status: status as "Working" | "In Review" | "Approved" | "Delivered",
+        clientVisible: category === "Deliverable" && clientVisible,
+        downloadable,
+        notes,
+      };
+      if (source === "upload") {
+        if (!browserFile) throw new Error("Choose a file to upload.");
+        const uploadUrl = await generateUploadUrl({ projectId: project.id });
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": browserFile.type || "application/octet-stream" },
+          body: browserFile,
+        });
+        if (!response.ok) throw new Error("File upload failed.");
+        const payload = await response.json() as { storageId: Id<"_storage"> };
+        await saveStorageVersion({
+          ...shared,
+          storageId: payload.storageId,
+          fileName: browserFile.name,
+          mimeType: browserFile.type || "application/octet-stream",
+        });
+      } else {
+        if (!externalUrl.trim()) throw new Error("Enter a file URL.");
+        await saveExternalVersion({
+          ...shared,
+          provider: provider as "external" | "google_drive" | "frame_io",
+          externalUrl,
+          externalId: externalId || undefined,
+          fileName: title.trim(),
+          mimeType: "application/octet-stream",
+          size: Math.max(0, externalSize),
+        });
+      }
+      setDialogOpen(false);
+      resetForm();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save this file.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function changeFileMetadata(
+    file: NonNullable<typeof fileData>["files"][number],
+    overrides: Partial<{ status: string; clientVisible: boolean; downloadable: boolean }>
+  ) {
+    setBusy(`status-${file._id}`);
+    setError("");
+    try {
+      await updateFile({
+        fileId: file._id,
+        category: file.category as "Deliverable" | "Reference" | "Asset",
+        title: file.title,
+        description: file.description,
+        status: (overrides.status ?? file.status) as "Working" | "In Review" | "Approved" | "Delivered",
+        clientVisible: overrides.clientVisible ?? file.clientVisible,
+        downloadable: overrides.downloadable ?? file.downloadable,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update file status.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function deleteProjectFile(fileId: Id<"projectFiles">) {
+    setBusy(`remove-${fileId}`);
+    setError("");
+    try {
+      await removeFile({ fileId });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not remove this file.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <>
+      <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
+        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", md: "center" }} gap={1.4}>
+          <Box>
+            <Stack direction="row" alignItems="center" gap={0.8}>
+              <InsertDriveFileOutlinedIcon sx={{ color: accent, fontSize: 20 }} />
+              <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Project Files</Typography>
+              <Chip label={`${files.length} files`} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+            </Stack>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 0.4 }}>Deliverables, references, assets, uploads, and every saved version in one project model.</Typography>
+          </Box>
+          {canEdit && isConvexAuthenticated ? (
+            <Stack direction="row" gap={0.8}>
+              <Button variant="outlined" startIcon={<OpenInNewIcon />} onClick={() => openNewFile("external")} sx={outlineButtonSx}>Add Link</Button>
+              <Button variant="contained" startIcon={<CloudUploadOutlinedIcon />} onClick={() => openNewFile("upload")} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>Upload File</Button>
+            </Stack>
+          ) : null}
+        </Stack>
+        <Tabs value={view} onChange={(_, value) => setView(value)} sx={{ mt: 1.4, minHeight: 38, "& .MuiTab-root": { minHeight: 38, px: 1.2, color: muted }, "& .Mui-selected": { color: `${accent} !important` } }}>
+          <Tab value="files" label="Files" />
+          <Tab value="history" label="Upload History" />
+        </Tabs>
+        {isConvexAuthLoading ? (
+          <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 1.5 }}><CircularProgress size={17} sx={{ color: accent }} /><Typography sx={{ color: muted, fontSize: 12.5 }}>Connecting project files...</Typography></Stack>
+        ) : !isConvexAuthenticated ? (
+          <Typography sx={{ color: muted, fontSize: 12.5, mt: 1.5 }}>Sign in to upload and synchronize project files. Existing integration links remain available above.</Typography>
+        ) : fileData === undefined ? (
+          <Stack gap={1} sx={{ mt: 1.5 }}><Skeleton variant="rounded" height={76} /><Skeleton variant="rounded" height={76} /></Stack>
+        ) : view === "files" ? (
+          <>
+            <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ mt: 1.4, mb: 1.2 }}>
+              {["All", "Deliverable", "Reference", "Asset"].map((item) => (
+                <Chip key={item} label={item} onClick={() => setCategoryFilter(item)} sx={{ bgcolor: categoryFilter === item ? activeBg : softPanel, color: categoryFilter === item ? accent : muted, borderRadius: "5px", fontWeight: 700 }} />
+              ))}
+            </Stack>
+            <Stack gap={1}>
+              {filteredFiles.length ? filteredFiles.map((file) => {
+                const latest = file.versions[0];
+                return (
+                  <Accordion key={file._id} disableGutters sx={{ bgcolor: softPanel, color: ink, border: `1px solid ${border}`, borderRadius: "6px !important", "&:before": { display: "none" } }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: muted }} />} sx={{ px: 1.4 }}>
+                      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ width: "100%", pr: 1 }}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Stack direction="row" alignItems="center" gap={0.7} flexWrap="wrap">
+                            <Typography noWrap sx={{ color: ink, fontSize: 13.5, fontWeight: 760 }}>{file.title}</Typography>
+                            <Chip label={file.category} size="small" sx={{ height: 20, bgcolor: activeBg, color: accent, borderRadius: "4px", fontSize: 10.5 }} />
+                            {file.clientVisible ? <Chip label="Client visible" size="small" sx={{ height: 20, bgcolor: "var(--app-success-bg)", color: successColor, borderRadius: "4px", fontSize: 10.5 }} /> : null}
+                          </Stack>
+                          <Typography noWrap sx={{ color: muted, fontSize: 11.5, mt: 0.35 }}>
+                            {latest ? `${latest.fileName} · v${latest.versionNumber} · ${formatFileSize(latest.size)} · ${latest.uploadedByName}` : "No versions"}
+                          </Typography>
+                        </Box>
+                        <Stack direction="row" alignItems="center" gap={0.7} onClick={(event) => event.stopPropagation()}>
+                          {canEdit ? <CompactSelect value={file.status} options={["Working", "In Review", "Approved", "Delivered"]} onChange={(nextStatus) => changeFileMetadata(file, { status: nextStatus })} width={126} /> : <StatusChip status={file.status} />}
+                          {latest?.url ? <Button component="a" href={latest.url} target="_blank" rel="noreferrer" aria-label={`Open ${file.title}`} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}><FileDownloadOutlinedIcon sx={{ fontSize: 18 }} /></Button> : null}
+                        </Stack>
+                      </Stack>
+                    </AccordionSummary>
+                    <AccordionDetails sx={{ px: 1.4, pt: 0, pb: 1.4 }}>
+                      {file.description ? <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.5, mb: 1 }}>{file.description}</Typography> : null}
+                      <Stack gap={0.7}>
+                        {file.versions.map((version) => (
+                          <Stack key={version._id} direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={0.8} sx={{ py: 0.8, borderTop: `1px solid ${border}` }}>
+                            <Box>
+                              <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>Version {version.versionNumber} · {version.fileName}</Typography>
+                              <Typography sx={{ color: muted, fontSize: 11, mt: 0.2 }}>{providerLabel(version.provider)} · {formatFileSize(version.size)} · {formatShortDateTime(version.uploadedAt)} · {version.uploadedByName}</Typography>
+                              {version.notes ? <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.45 }}>{version.notes}</Typography> : null}
+                            </Box>
+                            {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewIcon />} sx={{ color: accent, alignSelf: { xs: "flex-start", sm: "center" } }}>Open</Button> : null}
+                          </Stack>
+                        ))}
+                      </Stack>
+                      {canEdit ? (
+                        <Stack direction="row" gap={0.8} alignItems="center" flexWrap="wrap" sx={{ mt: 1 }}>
+                          <Button size="small" startIcon={<CloudUploadOutlinedIcon />} onClick={() => openNewVersion(file, "upload")} sx={{ color: accent }}>Upload Version</Button>
+                          <Button size="small" startIcon={<OpenInNewIcon />} onClick={() => openNewVersion(file, "external")} sx={{ color: accent }}>Link Version</Button>
+                          {file.category === "Deliverable" ? (
+                            <>
+                              <Stack direction="row" alignItems="center" gap={0.35}>
+                                <Switch size="small" checked={file.clientVisible} onChange={(event) => changeFileMetadata(file, { clientVisible: event.target.checked })} />
+                                <Typography sx={{ color: muted, fontSize: 11.5 }}>Client visible</Typography>
+                              </Stack>
+                              <Stack direction="row" alignItems="center" gap={0.35}>
+                                <Switch size="small" checked={file.downloadable} onChange={(event) => changeFileMetadata(file, { downloadable: event.target.checked })} />
+                                <Typography sx={{ color: muted, fontSize: 11.5 }}>Downloadable</Typography>
+                              </Stack>
+                            </>
+                          ) : null}
+                          <Button size="small" onClick={() => deleteProjectFile(file._id)} disabled={busy === `remove-${file._id}`} sx={{ color: dangerColor, ml: { sm: "auto" } }}>Remove File</Button>
+                        </Stack>
+                      ) : null}
+                    </AccordionDetails>
+                  </Accordion>
+                );
+              }) : <Typography sx={{ color: muted, fontSize: 12.5, py: 1 }}>No {categoryFilter === "All" ? "project files" : `${categoryFilter.toLowerCase()} files`} yet.</Typography>}
+            </Stack>
+          </>
+        ) : (
+          <Stack gap={0} sx={{ mt: 1.4 }}>
+            {fileData.uploadHistory.length ? fileData.uploadHistory.map((version, index) => {
+              const file = files.find((item) => item._id === version.projectFileId);
+              return (
+                <Stack key={version._id} direction="row" gap={1.1} sx={{ py: 1.1, borderBottom: index === fileData.uploadHistory.length - 1 ? "none" : `1px solid ${border}` }}>
+                  <HistoryOutlinedIcon sx={{ color: accent, fontSize: 19, mt: 0.15 }} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{file?.title ?? version.fileName} · Version {version.versionNumber}</Typography>
+                    <Typography sx={{ color: muted, fontSize: 11.2, mt: 0.25 }}>{version.fileName} · {formatFileSize(version.size)} · uploaded by {version.uploadedByName} · {formatShortDateTime(version.uploadedAt)}</Typography>
+                  </Box>
+                  {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" sx={{ minWidth: 32, width: 32, height: 32, color: accent, p: 0 }}><OpenInNewIcon sx={{ fontSize: 17 }} /></Button> : null}
+                </Stack>
+              );
+            }) : <Typography sx={{ color: muted, fontSize: 12.5, py: 1 }}>Upload history will appear after the first file or linked version is added.</Typography>}
+          </Stack>
+        )}
+        {error && !dialogOpen ? <Typography sx={{ color: dangerColor, fontSize: 12, mt: 1 }}>{error}</Typography> : null}
+      </Paper>
+
+      <Dialog open={dialogOpen} onClose={() => !busy && setDialogOpen(false)} fullWidth maxWidth="sm" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle>{targetFileId ? "Add File Version" : "Add Project File"}</DialogTitle>
+        <DialogContent>
+          <Stack gap={1.4} sx={{ mt: 1 }}>
+            <Tabs value={source} onChange={(_, value) => setSource(value)} sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36 }, "& .Mui-selected": { color: `${accent} !important` } }}>
+              <Tab value="upload" label="Upload" />
+              <Tab value="external" label="External Link" />
+            </Tabs>
+            {!targetFileId ? (
+              <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
+                <DialogSelect label="Category" value={category} options={["Deliverable", "Reference", "Asset"]} onChange={(value) => { setCategory(value); if (value !== "Deliverable") setClientVisible(false); }} />
+                <DialogSelect label="Status" value={status} options={["Working", "In Review", "Approved", "Delivered"]} onChange={setStatus} />
+              </Stack>
+            ) : null}
+            <TextField label="File title" value={title} onChange={(event) => setTitle(event.target.value)} disabled={Boolean(targetFileId)} />
+            {!targetFileId ? <TextField label="Description" value={description} onChange={(event) => setDescription(event.target.value)} multiline minRows={2} /> : null}
+            {source === "upload" ? (
+              <Button component="label" variant="outlined" startIcon={<CloudUploadOutlinedIcon />} sx={{ ...outlineButtonSx, justifyContent: "flex-start" }}>
+                {browserFile ? browserFile.name : "Choose file"}
+                <input hidden type="file" onChange={(event) => setBrowserFile(event.target.files?.[0] ?? null)} />
+              </Button>
+            ) : (
+              <>
+                <DialogSelect label="Provider" value={provider} options={["external", "google_drive", "frame_io"]} labels={{ external: "External URL", google_drive: "Google Drive", frame_io: "Frame.io" }} onChange={setProvider} />
+                <TextField label="File URL" value={externalUrl} onChange={(event) => setExternalUrl(event.target.value)} placeholder="https://..." />
+                <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
+                  <TextField label="Provider file ID" value={externalId} onChange={(event) => setExternalId(event.target.value)} fullWidth helperText="Optional. Reserved for future API synchronization." />
+                  <TextField label="File size (bytes)" type="number" value={externalSize} onChange={(event) => setExternalSize(Math.max(0, Number(event.target.value) || 0))} fullWidth />
+                </Stack>
+              </>
+            )}
+            <TextField label="Version notes" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} />
+            {!targetFileId && category === "Deliverable" ? (
+              <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
+                <Stack direction="row" alignItems="center" gap={0.6}><Switch checked={clientVisible} onChange={(event) => setClientVisible(event.target.checked)} size="small" /><Typography sx={{ color: muted, fontSize: 12 }}>Show in Client Portal</Typography></Stack>
+                <Stack direction="row" alignItems="center" gap={0.6}><Switch checked={downloadable} onChange={(event) => setDownloadable(event.target.checked)} size="small" /><Typography sx={{ color: muted, fontSize: 12 }}>Allow download</Typography></Stack>
+              </Stack>
+            ) : null}
+            {error ? <Typography sx={{ color: dangerColor, fontSize: 12.5 }}>{error}</Typography> : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDialogOpen(false)} disabled={Boolean(busy)} sx={{ color: muted }}>Cancel</Button>
+          <Button onClick={saveFileVersion} disabled={Boolean(busy)} variant="contained" sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>{busy ? "Saving..." : targetFileId ? "Add Version" : "Save File"}</Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
+}
+
+function formatFileSize(bytes: number) {
+  if (!bytes) return "Size unavailable";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function providerLabel(provider: string) {
+  if (provider === "google_drive") return "Google Drive";
+  if (provider === "frame_io") return "Frame.io";
+  if (provider === "convex") return "CutLab Upload";
+  return "External Link";
+}
+
+function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit: boolean }) {
+  const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
+  const portalData = useQuery(
+    api.clientPortals.getForProject,
+    isConvexAuthenticated ? { projectId: project.id } : "skip"
+  );
+  const publishPortal = useMutation(api.clientPortals.publish);
+  const setPortalPublished = useMutation(api.clientPortals.setPublished);
+  const removeDeliverable = useMutation(api.clientPortals.removeDeliverable);
+  const updateDeliverableStatus = useMutation(api.clientPortals.updateDeliverableStatus);
+  const updateRevisionStatus = useMutation(api.clientPortals.updateRevisionStatus);
+  const [managerOpen, setManagerOpen] = useState(false);
+  const [summary, setSummary] = useState("");
+  const [clientNotes, setClientNotes] = useState("");
+  const [estimatedCompletion, setEstimatedCompletion] = useState(project.dueDate);
+  const [revisionLimit, setRevisionLimit] = useState(2);
+  const [clientStage, setClientStage] = useState("Planning");
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const portal = portalData?.portal;
+
+  function openManager() {
+    setSummary(portal?.clientSummary ?? "");
+    setClientNotes(portal?.clientNotes ?? "");
+    setEstimatedCompletion(portal?.estimatedCompletion ?? project.dueDate);
+    setRevisionLimit(portal?.revisionLimit ?? 2);
+    setClientStage(portal?.status ?? clientPortalStage(project.status));
+    setError("");
+    setManagerOpen(true);
+  }
+
+  function portalUrl(token = portal?.token) {
+    if (!token || typeof window === "undefined") return "";
+    return `${window.location.origin}/client-portal/${token}`;
+  }
+
+  async function savePortal() {
+    if (!canEdit || !isConvexAuthenticated) return;
+    setBusy("publish");
+    setError("");
+    try {
+      const result = await publishPortal({
+        projectId: project.id,
+        clientSummary: summary,
+        clientNotes,
+        estimatedCompletion,
+        revisionLimit,
+        clientStage
+      });
+      if (!portal) {
+        await copyText(portalUrl(result.token));
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not publish the client portal.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function copyPortalLink() {
+    const url = portalUrl();
+    if (!url) return;
+    const copied = await copyText(url);
+    setError(copied ? "" : "Could not copy the portal link.");
+  }
+
+  async function deleteDeliverable(deliverableId: Parameters<typeof removeDeliverable>[0]["deliverableId"]) {
+    setBusy(`remove-${deliverableId}`);
+    setError("");
+    try {
+      await removeDeliverable({ deliverableId });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not remove the deliverable.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function changeDeliverableStatus(deliverableId: Parameters<typeof updateDeliverableStatus>[0]["deliverableId"], status: string) {
+    setBusy(`deliverable-${deliverableId}`);
+    setError("");
+    try {
+      await updateDeliverableStatus({ deliverableId, status });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update the deliverable.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function changeRevisionStatus(revisionId: Parameters<typeof updateRevisionStatus>[0]["revisionId"], status: string) {
+    setBusy(`revision-${revisionId}`);
+    setError("");
+    try {
+      await updateRevisionStatus({ revisionId, status });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update the revision request.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  return (
+    <>
+      <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1.5}>
+          <Box>
+            <Stack direction="row" alignItems="center" gap={0.8}>
+              <PublicOutlinedIcon sx={{ color: accent, fontSize: 20 }} />
+              <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Client Portal</Typography>
+              {portal ? <Chip label={portal.published ? "Published" : "Unpublished"} size="small" sx={{ bgcolor: portal.published ? activeBg : softPanel, color: portal.published ? accent : muted, borderRadius: "5px" }} /> : null}
+            </Stack>
+            <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.45 }}>
+              Share a client-safe project view without exposing internal notes, earnings, or team activity.
+            </Typography>
+          </Box>
+          <Button variant="outlined" onClick={openManager} disabled={isConvexAuthLoading || !isConvexAuthenticated} sx={outlineButtonSx}>
+            {portal ? "Manage Portal" : "Create Portal"}
+          </Button>
+        </Stack>
+        {!isConvexAuthLoading && !isConvexAuthenticated ? (
+          <Typography sx={{ color: muted, fontSize: 12, mt: 1 }}>Sign in with cloud sync enabled to publish a shareable portal.</Typography>
+        ) : null}
+        {portalData === undefined && isConvexAuthenticated ? (
+          <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 1.4 }}><CircularProgress size={16} sx={{ color: accent }} /><Typography sx={{ color: muted, fontSize: 12 }}>Loading client workspace...</Typography></Stack>
+        ) : portal ? (
+          <>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, minmax(0, 1fr))" }, gap: 1.2, mt: 1.6 }}>
+              <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
+                <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>Client Notes</Typography>
+                <Typography sx={{ color: portal.clientNotes ? ink : muted, fontSize: 12.5, lineHeight: 1.5, mt: 0.7, whiteSpace: "pre-wrap" }}>{portal.clientNotes || "No client-facing notes saved."}</Typography>
+              </Box>
+              <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
+                <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>Deliverables</Typography>
+                <Typography sx={{ color: ink, fontSize: 24, fontWeight: 760, mt: 0.35 }}>{portalData.deliverables.length}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5 }}>{portalData.deliverables.filter((item) => item.status === "Delivered").length} delivered · {portalData.deliverables.filter((item) => item.status === "Ready").length} ready</Typography>
+              </Box>
+              <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
+                <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>Revision History</Typography>
+                <Typography sx={{ color: ink, fontSize: 24, fontWeight: 760, mt: 0.35 }}>{portalData.revisions.length} / {portal.revisionLimit}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5 }}>{portalData.revisions.filter((item) => item.status !== "Resolved").length} active requests</Typography>
+              </Box>
+            </Box>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 1.2, mt: 1.2 }}>
+              <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px", minWidth: 0 }}>
+                <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mb: 0.8 }}>Deliverables</Typography>
+                <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ maxHeight: 230, overflowY: "auto" }}>
+                  {portalData.deliverables.length ? portalData.deliverables.map((item) => (
+                    <Stack key={item._id} direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={0.8} sx={{ py: 0.9 }}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography noWrap sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{item.title}</Typography>
+                        <Typography noWrap sx={{ color: muted, fontSize: 11.2, mt: 0.2 }}>{item.detail || item.url}</Typography>
+                      </Box>
+                      {canEdit ? <CompactSelect value={item.status} options={["Pending", "In Progress", "Ready", "Delivered"]} onChange={(status) => changeDeliverableStatus(item._id, status)} width={{ xs: "100%", sm: 138 }} /> : <StatusChip status={item.status} />}
+                    </Stack>
+                  )) : <Typography sx={{ color: muted, fontSize: 12 }}>No deliverables yet.</Typography>}
+                </Stack>
+              </Box>
+              <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px", minWidth: 0 }}>
+                <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mb: 0.8 }}>Revision History</Typography>
+                <Stack gap={0.8} sx={{ maxHeight: 230, overflowY: "auto" }}>
+                  {portalData.revisions.length ? portalData.revisions.map((revision) => (
+                    <Box key={revision._id} sx={{ py: 0.8, borderBottom: `1px solid ${border}` }}>
+                      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={0.7}>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{revision.clientName}</Typography>
+                          <Typography sx={{ color: muted, fontSize: 10.8, mt: 0.2 }}>{formatShortDateTime(revision.createdAt)}</Typography>
+                        </Box>
+                        {canEdit ? <CompactSelect value={revision.status} options={["Submitted", "In Review", "Resolved"]} onChange={(status) => changeRevisionStatus(revision._id, status)} width={{ xs: "100%", sm: 130 }} /> : <StatusChip status={revision.status} />}
+                      </Stack>
+                      <Typography sx={{ color: muted, fontSize: 11.5, lineHeight: 1.45, mt: 0.55, whiteSpace: "pre-wrap" }}>{revision.message}</Typography>
+                    </Box>
+                  )) : <Typography sx={{ color: muted, fontSize: 12 }}>No revision requests yet.</Typography>}
+                </Stack>
+              </Box>
+            </Box>
+          </>
+        ) : null}
+      </Paper>
+
+      <Dialog open={managerOpen} onClose={() => setManagerOpen(false)} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}>
+        <DialogTitle sx={{ borderBottom: `1px solid ${border}`, px: { xs: 2, md: 3 }, py: 2 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+            <Box>
+              <Typography sx={{ color: ink, fontSize: 21, fontWeight: 760 }}>Client Portal</Typography>
+              <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.3 }}>{project.title}</Typography>
+            </Box>
+            <Button aria-label="Close client portal manager" onClick={() => setManagerOpen(false)} sx={{ minWidth: 34, width: 34, height: 34, color: muted, p: 0 }}><CloseIcon /></Button>
+          </Stack>
+        </DialogTitle>
+        <DialogContent sx={{ px: { xs: 2, md: 3 }, py: 2.5 }}>
+          {portalData === undefined ? (
+            <Stack direction="row" alignItems="center" gap={1.2}><CircularProgress size={20} sx={{ color: accent }} /><Typography sx={{ color: muted, fontSize: 13 }}>Loading portal settings...</Typography></Stack>
+          ) : (
+            <Stack gap={2}>
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.5}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Public Link</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>
+                      {portal ? "Anyone with this unguessable link can view the client-safe project snapshot." : "Publish once to generate an unguessable project link."}
+                    </Typography>
+                  </Box>
+                  {portal ? (
+                    <Stack direction="row" gap={0.8} flexWrap="wrap">
+                      <Button onClick={copyPortalLink} variant="outlined" sx={outlineButtonSx}>Copy Link</Button>
+                      <Button component="a" href={portalUrl()} target="_blank" rel="noreferrer" variant="outlined" endIcon={<OpenInNewIcon />} sx={outlineButtonSx}>Open</Button>
+                      <Button
+                        onClick={() => void setPortalPublished({ portalId: portal._id, published: !portal.published })}
+                        sx={{ color: portal.published ? dangerColor : accent }}
+                      >
+                        {portal.published ? "Unpublish" : "Republish"}
+                      </Button>
+                    </Stack>
+                  ) : null}
+                </Stack>
+              </Paper>
+
+              <Paper sx={{ ...panelSx, p: 2 }}>
+                <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760, mb: 1.4 }}>Client-Facing Project Details</Typography>
+                <Stack gap={1.2}>
+                  <TextField label="Project summary" value={summary} onChange={(event) => setSummary(event.target.value)} multiline minRows={3} inputProps={{ maxLength: 800 }} helperText={`${summary.length}/800 characters`} disabled={!canEdit} />
+                  <TextField label="Client-facing notes" value={clientNotes} onChange={(event) => setClientNotes(event.target.value)} multiline minRows={3} inputProps={{ maxLength: 2000 }} helperText="Only notes entered here are visible. Internal project notes are never copied." disabled={!canEdit} />
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 1.2 }}>
+                    <TextField label="Estimated completion" type="date" value={estimatedCompletion} onChange={(event) => setEstimatedCompletion(event.target.value)} InputLabelProps={{ shrink: true }} disabled={!canEdit} />
+                    <TextField label="Included revisions" type="number" value={revisionLimit} onChange={(event) => setRevisionLimit(Math.max(0, Math.min(20, Number(event.target.value) || 0)))} inputProps={{ min: 0, max: 20 }} disabled={!canEdit} />
+                    <Box>
+                      <Typography sx={{ color: muted, fontSize: 11, fontWeight: 700, mb: 0.55 }}>Client workflow stage</Typography>
+                      <CompactSelect value={clientStage} options={["Planning", "In Progress", "Review", "Delivered"]} onChange={setClientStage} width="100%" />
+                    </Box>
+                  </Box>
+                  <Button variant="contained" onClick={savePortal} disabled={!canEdit || busy === "publish"} sx={{ alignSelf: "flex-start", bgcolor: accent, "&:hover": { bgcolor: accent } }}>
+                    {busy === "publish" ? "Saving..." : portal ? "Update Portal" : "Publish Portal"}
+                  </Button>
+                </Stack>
+              </Paper>
+
+              {portal ? (
+                <>
+                  <Paper sx={{ ...panelSx, p: 2 }}>
+                    <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Legacy Deliverable Links</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12, mt: 0.35, mb: 1.4 }}>New deliverables are managed in Project Files. Existing portal links remain editable here for backward compatibility.</Typography>
+                    {portalData.deliverables.length ? (
+                      <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ mb: 1.5 }}>
+                        {portalData.deliverables.map((item) => (
+                          <Stack key={item._id} direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1} sx={{ py: 1 }}>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{item.title}</Typography>
+                              <Typography noWrap sx={{ color: muted, fontSize: 11.5, mt: 0.25 }}>{item.detail || item.url}</Typography>
+                            </Box>
+                            <Stack direction="row" alignItems="center" gap={0.6}>
+                              {canEdit ? (
+                                <CompactSelect value={item.status} options={["Pending", "In Progress", "Ready", "Delivered"]} onChange={(status) => changeDeliverableStatus(item._id, status)} width={145} />
+                              ) : <Chip label={item.status} size="small" />}
+                              {canEdit ? <Button onClick={() => deleteDeliverable(item._id)} disabled={busy === `remove-${item._id}`} sx={{ color: dangerColor, minWidth: 0 }}>Remove</Button> : null}
+                            </Stack>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    ) : <Typography sx={{ color: muted, fontSize: 12.5 }}>No legacy deliverable links remain. Use Project Files for all new deliverables.</Typography>}
+                  </Paper>
+
+                  <Paper sx={{ ...panelSx, p: 2 }}>
+                    <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Client Revision Requests</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12, mt: 0.35, mb: 1.4 }}>Requests submitted through the public link appear here in real time.</Typography>
+                    {portalData.revisions.length ? (
+                      <Stack gap={1}>
+                        {portalData.revisions.map((revision) => (
+                          <Box key={revision._id} sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
+                            <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={1}>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{revision.clientName}</Typography>
+                                <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.2 }}>{formatShortDateTime(revision.createdAt)}</Typography>
+                              </Box>
+                              {canEdit ? <CompactSelect value={revision.status} options={["Submitted", "In Review", "Resolved"]} onChange={(status) => changeRevisionStatus(revision._id, status)} width={{ xs: "100%", sm: 150 }} /> : <Chip label={revision.status} size="small" />}
+                            </Stack>
+                            <Typography sx={{ color: ink, fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", mt: 0.8 }}>{revision.message}</Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                    ) : <Typography sx={{ color: muted, fontSize: 12.5 }}>No revision requests have been submitted.</Typography>}
+                  </Paper>
+                </>
+              ) : null}
+              {error ? <Typography sx={{ color: dangerColor, fontSize: 12.5 }}>{error}</Typography> : null}
+            </Stack>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function clientPortalStage(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized.includes("deliver") || normalized.includes("complete") || normalized === "done") return "Delivered";
+  if (normalized.includes("review") || normalized.includes("revision") || normalized.includes("feedback")) return "Review";
+  if (normalized.includes("progress") || normalized.includes("editing") || normalized.includes("active")) return "In Progress";
+  return "Planning";
 }
 
 function formatShortDateTime(value: string) {
@@ -4426,7 +5944,7 @@ function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: {
         {isConvexAuthLoading ? (
           <Typography sx={{ color: muted, fontSize: 13 }}>Connecting Team comments...</Typography>
         ) : !isConvexAuthenticated ? (
-          <Typography sx={{ color: "#9f3029", fontSize: 13 }}>Team comments require Convex auth. Check Team sync before posting comments.</Typography>
+          <Typography sx={{ color: dangerColor, fontSize: 13 }}>Team comments require Convex auth. Check Team sync before posting comments.</Typography>
         ) : projectComments === undefined ? (
           <Typography sx={{ color: muted, fontSize: 13 }}>Loading comments...</Typography>
         ) : projectComments.length ? projectComments.map((comment) => (
@@ -4562,12 +6080,12 @@ function ProjectDialog({
             emptyBody="Add links to this project's folders, reviews, channels, or calendar events."
             onChange={(integrationLinks) => setForm({ ...form, integrationLinks })}
           />
-          {formError ? <Typography sx={{ color: "#bc3d35", fontSize: 13 }}>{formError}</Typography> : null}
+          {formError ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{formError}</Typography> : null}
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} sx={{ color: muted }}>Cancel</Button>
-        <Button onClick={onSave} variant="contained" sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: "#4e348d" } }}>Save</Button>
+        <Button onClick={onSave} variant="contained" sx={{ bgcolor: accent, color: cutlab.color.softWhite, "&:hover": { bgcolor: "var(--app-highlight)", color: cutlab.color.charcoal } }}>Save</Button>
       </DialogActions>
     </Dialog>
   );
@@ -4584,7 +6102,7 @@ function DeleteProjectDialog({ project, onCancel, onConfirm }: { project: WorkIt
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} sx={{ color: muted }}>Cancel</Button>
-        <Button onClick={onConfirm} variant="contained" sx={{ bgcolor: "#bd3f37", color: "#fff", "&:hover": { bgcolor: "#a9342d" } }}>Delete</Button>
+        <Button onClick={onConfirm} variant="contained" sx={{ bgcolor: dangerColor, color: cutlab.color.charcoal, "&:hover": { bgcolor: dangerColor } }}>Delete</Button>
       </DialogActions>
     </Dialog>
   );
@@ -4866,25 +6384,7 @@ function themeVariables(settings: SettingsState) {
 
   return {
     isDark,
-    vars: {
-      "--app-accent": settings.accentColor || defaultAccent,
-      "--app-canvas": isDark ? "#09090b" : "#fbfaf8",
-      "--app-panel": isDark ? "#18181b" : "#ffffff",
-      "--app-soft-panel": isDark ? "#202024" : "#fbfafc",
-      "--app-header-panel": isDark ? "#242428" : "#f6f3f8",
-      "--app-active": isDark ? "#27272f" : "#f0eafa",
-      "--app-hover": isDark ? "#232329" : "#f7f4fc",
-      "--app-success-bg": isDark ? "#14311f" : "#e9f5e9",
-      "--app-warning-bg": isDark ? "#342713" : "#fff4dc",
-      "--app-danger-bg": isDark ? "#35191d" : "#fae8e6",
-      "--app-ink": isDark ? "#f8fafc" : "#19171f",
-      "--app-muted": isDark ? "#c4c4cc" : "#6f6a78",
-      "--app-border": isDark ? "#3f3f46" : "#dedbe5",
-      "--app-control": isDark ? "#111114" : "#ffffff",
-      "--app-progress-track": isDark ? "#3a3a42" : "#ece8f4",
-      "--app-avatar-surface": isDark ? "#27272f" : "#dfe7ef",
-      "--app-thumb-icon": isDark ? "rgba(248,250,252,0.38)" : "rgba(25,23,31,0.34)"
-    }
+    vars: cutlabThemeVariables(isDark, settings.accentColor || defaultAccent)
   };
 }
 

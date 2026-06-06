@@ -4,7 +4,7 @@ import { join } from "node:path";
 const baseUrl = process.env.CUTLAB_VERIFY_URL || "http://localhost:3000";
 
 const routes = [
-  ["/", 200, ["Dashboard", "Salary Edits Done", "Sort", "Payment"]],
+  ["/", 200, ["Dashboard", "Upcoming Deliveries", "Workflow Pipeline", "Performance Overview", "Salary Batch Progress", "Recent Activity", "Team Activity", "All Projects", "Salary Edits Done", "Sort", "Payment"]],
   ["/projects", 200, ["Projects", "My Projects", "Team Projects"]],
   ["/clients", 200, ["Clients", "New Client"]],
   ["/timeline", 200, ["Timeline", "Delivery timeline"]],
@@ -22,13 +22,15 @@ const routes = [
   ["/profile", 200, ["CutLab", "Share Profile"]],
   ["/profile/edit", 200, ["Edit Profile", "Profile Bio"]],
   ["/organization", 200, ["Organization Profile", "Team access"]],
+  ["/client-portal", 200, ["Client Portal", "A project link is required", "No account required"]],
   ["/privacy", 200, ["Privacy Policy", "Local-First Storage", "Clerk", "Convex"]],
   ["/terms", 200, ["Terms of Service", "Local Mode", "Acceptable Use"]],
   ["/missing-route", 404, ["Page not found"]]
 ];
 
 const knownInternalRoutes = new Set(routes.map(([route]) => route));
-knownInternalRoutes.add("/icon.svg");
+knownInternalRoutes.add("/icon.png");
+knownInternalRoutes.add("/manifest.webmanifest");
 
 const routeFiles = [
   "src/app/page.tsx",
@@ -49,11 +51,14 @@ const routeFiles = [
   "src/app/profile/page.tsx",
   "src/app/profile/edit/page.tsx",
   "src/app/organization/page.tsx",
+  "src/app/client-portal/page.tsx",
+  "src/app/client-portal/[token]/page.tsx",
+  "src/app/client-portal/client-portal-view.tsx",
   "src/app/privacy/page.tsx",
   "src/app/terms/page.tsx",
   "src/app/error.tsx",
   "src/app/not-found.tsx",
-  "src/app/icon.svg"
+  "src/app/icon.png"
 ];
 
 const forbiddenText = [
@@ -75,6 +80,23 @@ const requiredStaticAssets = [
   "assets/readme-workflow.png",
   "assets/readme-features.png",
   "public/og-image.png"
+];
+const requiredBrandAssets = [
+  "public/brand/logo/cutlab-studio.png",
+  "public/brand/favicon.png",
+  "public/brand/cutlab-mark.svg",
+  "public/brand/app-icon-dark.svg",
+  "public/brand/app-icon-light.svg",
+  "public/brand/icons/app-icon-dark-192.png",
+  "public/brand/icons/app-icon-dark-512.png",
+  "public/brand/empty-states/projects.png",
+  "public/brand/empty-states/clients.png",
+  "public/brand/empty-states/schedule.png",
+  "public/brand/empty-states/library.png",
+  "public/brand/empty-states/feedback.png",
+  "public/brand/empty-states/reports.png",
+  "public/brand/empty-states/team.png",
+  "public/brand/empty-states/resources.png"
 ];
 const sourceChecks = [
   ["src/app/tracker-app.tsx", "applyRootThemeVariables(settings)", "root theme variable synchronization"],
@@ -105,7 +127,7 @@ const sourceChecks = [
   ["src/lib/data-context.tsx", "role: optionSetting(m.role, teamRoleOptions", "stored team member role normalization"],
   ["src/lib/data-context.tsx", "s.trim() ? [s.trim()] : []", "stored workflow stage trimming"],
   ["src/lib/data-context.tsx", "const storedItems = Array.isArray(stored) ? stored : []", "malformed project storage guard"],
-  ["src/app/tracker-app.tsx", "[defaultAccent, \"#2f6edb\"", "persistable accent color swatches"],
+  ["src/app/tracker-app.tsx", "[cutlab.color.teal, cutlab.color.cyan, cutlab.color.deepTeal", "brand-system accent color swatches"],
   ["src/lib/profiles.ts", "statusOptions: [\"Planned\", \"In Progress\", \"Delivered\", \"Cancelled\"]", "profile status options aligned with app statuses"],
   ["src/app/tracker-app.tsx", "Math.max(0, amount)", "non-negative money normalization"],
   ["src/app/tracker-app.tsx", "function copyText", "safe clipboard helper"],
@@ -134,6 +156,23 @@ const sourceChecks = [
   ["src/app/tracker-app.tsx", "function ClientTabPanel", "client detail tabs render real panels"],
   ["src/app/tracker-app.tsx", "type ClientDetailTab", "typed client detail tab state"],
   ["src/app/tracker-app.tsx", "function clearFilters", "dashboard filter reset workflow"],
+  ["src/app/tracker-app.tsx", "function WorkflowPipeline", "dashboard workflow pipeline"],
+  ["src/app/tracker-app.tsx", "function UpcomingDeliveries", "dashboard upcoming delivery queue"],
+  ["src/app/tracker-app.tsx", "function SalaryBatchProgress", "dashboard salary batch progress"],
+  ["src/app/tracker-app.tsx", "function UnifiedOperationsMetrics", "unified performance and salary metrics"],
+  ["src/app/tracker-app.tsx", "function DashboardActivityFeed", "dashboard recent and team activity feeds"],
+  ["src/app/tracker-app.tsx", "value=\"recent\" label=\"Recent Activity\"", "tabbed recent activity panel"],
+  ["src/app/tracker-app.tsx", "value=\"team\" label=\"Team Activity\"", "tabbed team activity panel"],
+  ["src/app/tracker-app.tsx", "projects.slice(0, compact ? 3 : 6)", "compact upcoming delivery cap"],
+  ["src/app/tracker-app.tsx", "minHeight: compact ? 72 : 112", "compact workflow pipeline"],
+  ["src/app/tracker-app.tsx", "function CompactDashboardEmpty", "compact dashboard empty states"],
+  ["src/app/tracker-app.tsx", "function DashboardActivitySkeleton", "dashboard team loading skeleton"],
+  ["src/app/tracker-app.tsx", "function dashboardProjectStage", "dashboard pipeline stage derivation"],
+  ["src/app/tracker-app.tsx", "function dashboardUpcomingDeliveries", "dashboard urgency ordering"],
+  ["src/app/tracker-app.tsx", "function dashboardProjectActivity", "dashboard project activity derivation"],
+  ["src/app/tracker-app.tsx", "pipelineFilter", "dashboard stage-driven project filtering"],
+  ["src/app/tracker-app.tsx", "No upcoming deliveries", "dashboard delivery empty state"],
+  ["src/app/tracker-app.tsx", "No team activity", "dashboard solo workspace empty state"],
   ["src/app/tracker-app.tsx", "function clearClientFilters", "client filter reset workflow"],
   ["src/app/tracker-app.tsx", "function shiftMonth", "calendar month navigation workflow"],
   ["src/app/tracker-app.tsx", "function jumpToToday", "calendar today workflow"],
@@ -158,6 +197,11 @@ const sourceChecks = [
   ["src/app/tracker-app.tsx", "Public profile", "bottom identity public profile menu"],
   ["src/app/tracker-app.tsx", "Organization profile", "bottom identity organization profile menu"],
   ["src/app/tracker-app.tsx", "navigationItems", "sidebar route list"],
+  ["src/app/tracker-app.tsx", "function ContextNavigation", "merged-area contextual navigation"],
+  ["src/app/tracker-app.tsx", "label: \"Library\"", "consolidated Library sidebar destination"],
+  ["src/app/tracker-app.tsx", "pages: [\"projects\", \"timeline\", \"calendar\"]", "grouped project navigation"],
+  ["src/app/tracker-app.tsx", "pages: [\"settings\", \"account\"]", "grouped settings navigation"],
+  ["src/app/tracker-app.tsx", "<CutLabMark size={collapsed ? 18 : 48}", "supplied sidebar wordmark"],
   ["src/lib/integrations.ts", "isValidIntegrationUrl", "link-only integration URL validation"],
   ["src/app/tracker-app.tsx", "function IntegrationLinkManager", "reusable integration link manager"],
   ["src/app/tracker-app.tsx", "Project Integrations", "project-level integration link surface"],
@@ -177,13 +221,23 @@ const sourceChecks = [
   ["src/app/layout.tsx", "twitter", "public Twitter card metadata"],
   ["src/app/layout.tsx", "/og-image.png", "served social preview image metadata"],
   ["src/app/layout.tsx", "export const viewport", "responsive viewport metadata"],
-  ["src/app/layout.tsx", "/icon.svg", "app icon metadata"],
+  ["src/app/layout.tsx", "/brand/icons/app-icon-dark-32.png", "supplied PNG app icon metadata"],
   ["src/app/layout.tsx", "data-clerk-modal-centering", "Clerk modal centering CSS fallback"],
   ["src/app/layout.tsx", "clerkModalCenteringCss", "Clerk modal centering stylesheet"],
   ["src/app/providers.tsx", "modalBackdrop", "Clerk modal backdrop appearance centering"],
   ["src/app/providers.tsx", "modalContent", "Clerk modal content appearance centering"],
   ["src/app/theme.ts", "MuiMenu", "dark mode menu surface override"],
-  ["src/app/theme.ts", "var(--app-panel, #ffffff)", "CSS variable driven MUI surfaces"],
+  ["src/app/theme.ts", "var(--app-panel, ${cutlab.color.graphite})", "CSS variable driven MUI surfaces"],
+  ["src/app/design-system.ts", "charcoal: \"#0C0F12\"", "centralized CutLab color tokens"],
+  ["src/app/design-system.ts", "heading: \"var(--font-space-grotesk)", "centralized CutLab typography tokens"],
+  ["src/app/cutlab-brand.tsx", "function CutLabMark", "shared CutLab product mark"],
+  ["src/app/cutlab-brand.tsx", "src=\"/brand/logo/cutlab-studio.png\"", "supplied CutLab Studio wordmark asset"],
+  ["src/app/cutlab-brand.tsx", "href=\"/\"", "brand lockup dashboard link"],
+  ["src/app/brand-assets.ts", "emptyStateAssets", "typed generated asset registry"],
+  ["src/app/tracker-app.tsx", "emptyStateAssets[emptyStateAssetFor(title)]", "contextual generated empty-state selection"],
+  ["src/app/manifest.ts", "app-icon-dark-192.png", "installable app icon manifest"],
+  ["scripts/generate-brand-assets.mjs", "const iconSizes", "repeatable app icon export pipeline"],
+  ["src/app/tracker-app.tsx", "function EmptyPanel", "shared branded empty-state primitive"],
   ["package.json", "\"name\": \"cutlab-studio\"", "branded package name"],
   ["package.json", "\"node\": \">=22\"", "Node engine requirement"],
   ["next.config.mjs", "async headers()", "production response headers"],
@@ -201,6 +255,35 @@ const sourceChecks = [
   ["convex/salaryBatches.ts", "return batches.map", "plain Convex salary batch query payloads"],
   ["convex/salaryBatches.ts", "id: batch.id ?? `batch-${batch.number}`", "cloud salary batch id persistence"],
   ["src/app/providers.tsx", "mode={convex && clerkPublishableKey ? \"cloud\" : \"local\"}", "local-first provider fallback"],
+  ["convex/schema.ts", "clientPortals: defineTable", "client portal safe snapshot table"],
+  ["convex/schema.ts", "portalDeliverables: defineTable", "client portal deliverables table"],
+  ["convex/schema.ts", "portalRevisions: defineTable", "client portal revision requests table"],
+  ["convex/schema.ts", "portalEvents: defineTable", "client-visible portal events table"],
+  ["convex/clientPortals.ts", "export const getByToken = query", "public token portal query"],
+  ["convex/clientPortals.ts", "export const submitRevision = mutation", "persisted public revision submission"],
+  ["convex/clientPortals.ts", "export const updateDeliverableStatus = mutation", "editor deliverable status workflow"],
+  ["convex/clientPortals.ts", "title: \"Work started\"", "client timeline work-started milestone"],
+  ["convex/clientPortals.ts", "title: \"Review sent\"", "client timeline review-sent milestone"],
+  ["convex/clientPortals.ts", "title: \"Delivery completed\"", "client timeline delivery-completed milestone"],
+  ["convex/clientPortals.ts", "\"revision_completed\", \"Revision completed\"", "client timeline revision-completed milestone"],
+  ["convex/clientPortals.ts", "await requireProjectAccess(ctx, args.projectId, \"editProjects\")", "authenticated portal publishing authorization"],
+  ["convex/clientPortals.ts", "deliverables: [", "merged public deliverable projection"],
+  ["convex/clientPortals.ts", "...deliverables.map((item) => ({", "explicit legacy deliverable field projection"],
+  ["convex/clientPortals.ts", "revisions: revisions.map", "explicit public revision projection"],
+  ["convex/clientPortals.ts", "events: events.map", "explicit public event projection"],
+  ["convex/workItems.ts", "await syncClientPortal", "published portal safe snapshot synchronization"],
+  ["convex/workItems.ts", "await deleteClientPortal", "deleted project portal cleanup"],
+  ["src/app/client-portal/[token]/page.tsx", "<ClientPortalView token={token}", "dynamic token portal route"],
+  ["src/app/client-portal/client-portal-view.tsx", "api.clientPortals.getByToken", "public portal data query wiring"],
+  ["src/app/client-portal/client-portal-view.tsx", "api.clientPortals.submitRevision", "public revision submission wiring"],
+  ["src/app/client-portal/client-portal-view.tsx", "No deliverables yet", "deliverables empty state"],
+  ["src/app/client-portal/client-portal-view.tsx", "No timeline events", "timeline empty state"],
+  ["src/app/client-portal/client-portal-view.tsx", "No revision requests", "revisions empty state"],
+  ["src/app/client-portal/client-portal-view.tsx", "No client notes", "client notes empty state"],
+  ["src/app/client-portal/client-portal-view.tsx", "label=\"Last Updated\"", "required client project last-updated field"],
+  ["src/app/tracker-app.tsx", "function ClientPortalManager", "editor client portal management surface"],
+  ["src/app/tracker-app.tsx", "Copy Link", "client portal copy-link action"],
+  ["src/app/tracker-app.tsx", "Only notes entered here are visible. Internal project notes are never copied.", "client-note security boundary copy"],
   ["package.json", "\"check:full\"", "single full verification npm script"],
   ["package.json", "npm run verify:team && npm run verify:browser && npm run verify:prod", "full verification includes Team, browser, and production gates"],
   ["scripts/verify-production.mjs", "waitForServer", "production runtime verification script"],
@@ -255,6 +338,22 @@ for (const asset of requiredStaticAssets) {
   if (Math.abs(aspectRatio - 16 / 9) > 0.02) {
     failures += 1;
     console.error(`Static PNG should be close to 16:9: ${asset} is ${dimensions.width}x${dimensions.height}`);
+  }
+}
+
+for (const asset of requiredBrandAssets) {
+  if (!existsSync(asset)) {
+    failures += 1;
+    console.error(`Missing brand asset: ${asset}`);
+    continue;
+  }
+  if (!asset.endsWith(".png")) continue;
+  const dimensions = readPngDimensions(asset);
+  if (!dimensions || dimensions.width < 16 || dimensions.height < 16) {
+    failures += 1;
+    console.error(`Brand PNG is invalid or too small: ${asset}`);
+  } else {
+    checkedPngAssets += 1;
   }
 }
 
@@ -318,7 +417,7 @@ for (const file of routeFiles.filter((file) => file.endsWith(".tsx"))) {
   const source = readFileSync(file, "utf8");
   for (const match of source.matchAll(/href="([^"]+)"/g)) {
     const target = match[1];
-    if (!target.startsWith("/") || target.startsWith("/assets/") || target.startsWith("/_next/")) continue;
+    if (!target.startsWith("/") || target.startsWith("/assets/") || target.startsWith("/brand/") || target.startsWith("/_next/")) continue;
     const pathname = target.split(/[?#]/)[0];
     checkedSourceLinks += 1;
     if (!knownInternalRoutes.has(pathname)) {
@@ -389,7 +488,7 @@ for (const [route, expectedStatus, expectedText] of routes) {
       ['property="og:image"', "Open Graph image"],
       ['content="https://cutlab.studio/og-image.png"', "served Open Graph image URL"],
       ['name="twitter:card" content="summary_large_image"', "Twitter card"],
-      ['rel="icon" href="/icon.svg"', "icon link"],
+      ['href="/brand/icons/app-icon-dark-32.png"', "PNG icon link"],
       ["data-clerk-modal-centering", "Clerk modal centering style tag"]
     ];
 
@@ -405,7 +504,7 @@ for (const [route, expectedStatus, expectedText] of routes) {
     const hrefPattern = /\s(?:href|src)="([^"]+)"/g;
     for (const match of body.matchAll(hrefPattern)) {
       const target = match[1];
-      if (!target.startsWith("/") || target.startsWith("/assets/")) continue;
+      if (!target.startsWith("/") || target.startsWith("/assets/") || target.startsWith("/brand/")) continue;
       if (target.startsWith("/_next/")) {
         checkedNextAssets += 1;
         const assetResponse = await fetch(`${baseUrl}${target}`).catch((error) => {
@@ -429,25 +528,49 @@ for (const [route, expectedStatus, expectedText] of routes) {
   }
 }
 
-const iconResponse = await fetch(`${baseUrl}/icon.svg`).catch((error) => {
+const iconResponse = await fetch(`${baseUrl}/icon.png`).catch((error) => {
   failures += 1;
-  console.error(`Could not fetch ${baseUrl}/icon.svg: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Could not fetch ${baseUrl}/icon.png: ${error instanceof Error ? error.message : String(error)}`);
   return null;
 });
 if (iconResponse) {
-  const iconBody = await iconResponse.text();
   const contentType = iconResponse.headers.get("content-type") || "";
   if (iconResponse.status !== 200) {
     failures += 1;
-    console.error(`/icon.svg returned ${iconResponse.status}, expected 200`);
+    console.error(`/icon.png returned ${iconResponse.status}, expected 200`);
   }
-  if (!contentType.includes("image/svg+xml")) {
+  if (!contentType.includes("image/png")) {
     failures += 1;
-    console.error(`/icon.svg returned unexpected content type: ${contentType}`);
+    console.error(`/icon.png returned unexpected content type: ${contentType}`);
   }
-  if (!iconBody.includes("<svg") || !iconBody.includes("viewBox")) {
+}
+
+const manifestResponse = await fetch(`${baseUrl}/manifest.webmanifest`).catch((error) => {
+  failures += 1;
+  console.error(`Could not fetch ${baseUrl}/manifest.webmanifest: ${error instanceof Error ? error.message : String(error)}`);
+  return null;
+});
+if (manifestResponse) {
+  const manifest = await manifestResponse.json().catch(() => null);
+  if (manifestResponse.status !== 200 || !manifest?.icons?.some((icon) => icon.src === "/brand/icons/app-icon-dark-192.png")) {
     failures += 1;
-    console.error("/icon.svg does not look like an SVG icon.");
+    console.error("/manifest.webmanifest is missing the generated CutLab app icon set.");
+  }
+}
+
+for (const asset of requiredBrandAssets) {
+  const target = `/${asset.replace(/^public[\\/]/, "").replaceAll("\\", "/")}`;
+  const response = await fetch(`${baseUrl}${target}`).catch((error) => {
+    failures += 1;
+    console.error(`Could not fetch brand asset ${target}: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  });
+  if (!response) continue;
+  const expectedType = asset.endsWith(".svg") ? "image/svg+xml" : "image/png";
+  const contentType = response.headers.get("content-type") || "";
+  if (response.status !== 200 || !contentType.includes(expectedType)) {
+    failures += 1;
+    console.error(`Brand asset ${target} returned ${response.status} with ${contentType}, expected 200 ${expectedType}`);
   }
 }
 
