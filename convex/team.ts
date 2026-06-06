@@ -481,10 +481,13 @@ export const normalizeLegacyRoles = mutation({
   args: { teamId: v.string() },
   handler: async (ctx, args) => {
     const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
-    const members = await ctx.db
+    const members = [];
+    const memberQuery = ctx.db
       .query("teamMembers")
-      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
-      .take(MAX_TEAM_MEMBERS + 1);
+      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId));
+    for await (const member of memberQuery) {
+      members.push(member);
+    }
     const legacyMembers = members.filter((member) => member.role === "Client");
     if (!legacyMembers.length) return 0;
     const now = new Date().toISOString();

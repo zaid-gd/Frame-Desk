@@ -88,14 +88,16 @@ async function portalForEditor(ctx: QueryCtx | MutationCtx, projectId: string) {
 }
 
 async function visibleProjectDeliverables(ctx: QueryCtx, projectId: string) {
-  const projectFiles = await ctx.db
+  const visibleFiles = await ctx.db
     .query("projectFiles")
-    .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", projectId))
+    .withIndex("by_projectId_and_category_and_clientVisible_and_createdAt", (q) =>
+      q
+        .eq("projectId", projectId)
+        .eq("category", "Deliverable")
+        .eq("clientVisible", true)
+    )
     .order("desc")
     .take(MAX_DELIVERABLES);
-  const visibleFiles = projectFiles.filter(
-    (file) => file.category === "Deliverable" && file.clientVisible
-  );
 
   const deliverables = await Promise.all(
     visibleFiles.map(async (file) => {
@@ -112,7 +114,7 @@ async function visibleProjectDeliverables(ctx: QueryCtx, projectId: string) {
       if (!url) return null;
       return {
         title: file.title,
-        detail: file.description || latest.notes,
+        detail: file.description,
         url,
         status: file.status,
         downloadable: file.downloadable,
@@ -449,7 +451,11 @@ export const submitRevision = mutation({
       .query("portalRevisions")
       .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", portal._id))
       .take(MAX_REVISIONS);
-    if (existing.length >= MAX_REVISIONS) throw new Error("This portal has reached its revision request limit");
+    const effectiveLimit = Math.min(
+      MAX_REVISIONS,
+      Math.max(0, Math.floor(portal.revisionLimit ?? MAX_REVISIONS))
+    );
+    if (existing.length >= effectiveLimit) throw new Error("This portal has reached its revision request limit");
     const now = new Date().toISOString();
     await ctx.db.insert("portalRevisions", {
       portalId: portal._id,

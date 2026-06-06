@@ -162,6 +162,30 @@ describe("project file management", () => {
     expect(result.uploadHistory[0].url).toBeTruthy();
   });
 
+  test("rejects reusing one Convex storage blob across versions", async () => {
+    const { t, owner } = await setupProject();
+    const storageId = await t.run((ctx) => ctx.storage.store(new Blob(["shared"], { type: "text/plain" })));
+    const version = {
+      projectId: "project-files",
+      storageId,
+      category: "Asset" as const,
+      title: "Shared source",
+      description: "",
+      status: "Working" as const,
+      clientVisible: false,
+      downloadable: true,
+      fileName: "shared.txt",
+      mimeType: "text/plain",
+      notes: "",
+    };
+
+    await owner.mutation(api.projectFiles.saveStorageVersion, version);
+    await expect(owner.mutation(api.projectFiles.saveStorageVersion, {
+      ...version,
+      title: "Duplicate source",
+    })).rejects.toThrow("This uploaded file is already attached to a project version");
+  });
+
   test("reviewers can view files but cannot upload, edit, or delete", async () => {
     const { owner, reviewer } = await setupProject(true);
     const fileId = await owner.mutation(api.projectFiles.saveExternalVersion, {
@@ -200,7 +224,7 @@ describe("project file management", () => {
       fileName: "final-master.mp4",
       mimeType: "video/mp4",
       size: 5000,
-      notes: "",
+      notes: "Internal upload note",
     });
     await owner.mutation(api.projectFiles.saveExternalVersion, {
       projectId: "project-files",
@@ -238,9 +262,67 @@ describe("project file management", () => {
       updatedAt: new Date().toISOString(),
     }));
     expect(portalId).toBeTruthy();
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 50; index += 1) {
+        await ctx.db.insert("projectFiles", {
+          projectId: "project-files",
+          ownerUserId: "owner",
+          category: "Asset",
+          title: `Hidden asset ${index}`,
+          description: "Internal only",
+          status: "Working",
+          clientVisible: false,
+          downloadable: false,
+          createdByUserId: "owner",
+          createdByName: "Owner User",
+          createdAt: `2099-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+          updatedAt: `2099-01-01T00:00:${String(index).padStart(2, "0")}.000Z`,
+        });
+      }
+    });
 
     const portal = await t.query(api.clientPortals.getByToken, { token: "portal-token" });
     expect(portal?.deliverables).toHaveLength(1);
-    expect(portal?.deliverables[0]).toMatchObject({ title: "Final master", status: "Delivered" });
+    expect(portal?.deliverables[0]).toMatchObject({
+      title: "Final master",
+      detail: "Approved 4K export",
+      status: "Delivered",
+    });
+    expect(portal?.deliverables[0]?.detail).not.toContain("Internal upload note");
+  });
+
+  test("client revision requests honor the configured portal limit", async () => {
+    const { t } = await setupProject();
+    await t.run((ctx) => ctx.db.insert("clientPortals", {
+      ownerUserId: "owner",
+      projectId: "project-files",
+      token: "limited-portal",
+      title: "Project Files",
+      clientName: "Client",
+      projectType: "Freelance",
+      status: "Review",
+      sourceStatus: "Review",
+      startDate: "2026-06-01",
+      dueDate: "2026-06-10",
+      progress: 75,
+      clientSummary: "",
+      clientNotes: "",
+      estimatedCompletion: "2026-06-10",
+      revisionLimit: 1,
+      published: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+    await t.mutation(api.clientPortals.submitRevision, {
+      token: "limited-portal",
+      clientName: "Client",
+      message: "Please adjust the opening.",
+    });
+    await expect(t.mutation(api.clientPortals.submitRevision, {
+      token: "limited-portal",
+      clientName: "Client",
+      message: "One more change.",
+    })).rejects.toThrow("This portal has reached its revision request limit");
   });
 });

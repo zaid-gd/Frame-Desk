@@ -110,7 +110,14 @@ export default defineSchema({
     createdByName: v.string(),
     createdAt: v.string(),
     updatedAt: v.string(),
-  }).index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+  })
+    .index("by_projectId_and_createdAt", ["projectId", "createdAt"])
+    .index("by_projectId_and_category_and_clientVisible_and_createdAt", [
+      "projectId",
+      "category",
+      "clientVisible",
+      "createdAt",
+    ]),
 
   projectFileVersions: defineTable({
     projectId: v.string(),
@@ -129,7 +136,8 @@ export default defineSchema({
     notes: v.string(),
   })
     .index("by_projectFileId_and_versionNumber", ["projectFileId", "versionNumber"])
-    .index("by_projectId_and_uploadedAt", ["projectId", "uploadedAt"]),
+    .index("by_projectId_and_uploadedAt", ["projectId", "uploadedAt"])
+    .index("by_storageId", ["storageId"]),
 
   teamWorkspaces: defineTable({
     ownerUserId: v.string(),

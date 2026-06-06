@@ -31,4 +31,6 @@ Google Drive or Frame.io OAuth integrations can later resolve provider IDs, refr
 
 ## Compatibility
 
-Legacy `portalDeliverables` records remain readable and manageable for existing portals. New deliverables are created through `projectFiles`, making the unified model the source of truth going forward.
+Legacy `portalDeliverables` records remain readable and manageable for existing portals. `convex/clientPortals.ts` still exposes the `addDeliverable` mutation, which can insert new `portalDeliverables` rows, although the current editor UI directs new deliverables through `projectFiles`.
+
+`projectFiles` is the intended future source of truth, but it is not yet the exclusive write path. TODO: revise this note when `addDeliverable` is removed or rewritten to create `projectFiles` records.

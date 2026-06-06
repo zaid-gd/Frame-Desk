@@ -143,11 +143,11 @@ describe("team workspace permissions and synchronization", () => {
     await expect(reviewer.mutation(api.workItems.replaceAll, {
       deleteMissing: false,
       items: [project("blocked-create", teamId, { ownerUserId: "reviewer" })],
-    })).rejects.toThrow("permission to create");
+    })).rejects.toThrow("You do not have permission to create team projects");
     await expect(reviewer.mutation(api.workItems.replaceAll, {
       deleteMissing: false,
       items: [project("review-project", teamId, { ownerUserId: "owner", status: "Review" })],
-    })).rejects.toThrow("permission to edit");
+    })).rejects.toThrow("You do not have permission to edit team projects");
 
     await reviewer.mutation(api.team.addProjectComment, {
       teamId,
@@ -208,36 +208,44 @@ describe("team workspace permissions and synchronization", () => {
 
   test("Only Owners manage roles and legacy Client members normalize to Reviewer", async () => {
     const { t, teamId, owner, editor } = await setupTeam();
-    const { legacyMemberId, editorMemberId } = await t.run(async (ctx) => {
+    const { legacyMemberIds, editorMemberId } = await t.run(async (ctx) => {
       const createdAt = new Date().toISOString();
-      const legacyMemberId = await ctx.db.insert("teamMembers", {
-        teamId,
-        userId: "legacy",
-        email: "legacy@example.com",
-        name: "Legacy Client",
-        role: "Client",
-        status: "active",
-        permissions: { ...reviewerPermissions, useChat: false },
-        createdAt,
-        joinedAt: createdAt,
-      });
+      const legacyMemberIds = [];
+      for (let index = 0; index < 5; index += 1) {
+        legacyMemberIds.push(await ctx.db.insert("teamMembers", {
+          teamId,
+          userId: `legacy-${index}`,
+          email: `legacy-${index}@example.com`,
+          name: `Legacy Client ${index}`,
+          role: "Client",
+          status: "active",
+          permissions: { ...reviewerPermissions, useChat: false },
+          createdAt,
+          joinedAt: createdAt,
+        }));
+      }
       const editorMember = await ctx.db
         .query("teamMembers")
         .withIndex("by_teamId_and_userId", (q) => q.eq("teamId", teamId).eq("userId", "editor"))
         .unique();
       if (!editorMember) throw new Error("Editor missing");
-      return { legacyMemberId, editorMemberId: editorMember._id };
+      return { legacyMemberIds, editorMemberId: editorMember._id };
     });
 
     await expect(editor.mutation(api.team.updateMemberRole, {
       teamId,
-      memberId: legacyMemberId,
+      memberId: legacyMemberIds[0],
       role: "Reviewer",
     })).rejects.toThrow("Permission denied");
 
-    expect(await owner.mutation(api.team.normalizeLegacyRoles, { teamId })).toBe(1);
-    const legacyMember = await t.run((ctx) => ctx.db.get(legacyMemberId));
-    expect(legacyMember).toMatchObject({ role: "Reviewer", permissions: reviewerPermissions });
+    expect(await owner.mutation(api.team.normalizeLegacyRoles, { teamId })).toBe(5);
+    const legacyMembers = await t.run(async (ctx) =>
+      Promise.all(legacyMemberIds.map((memberId) => ctx.db.get(memberId)))
+    );
+    expect(legacyMembers).toHaveLength(5);
+    for (const legacyMember of legacyMembers) {
+      expect(legacyMember).toMatchObject({ role: "Reviewer", permissions: reviewerPermissions });
+    }
 
     await owner.mutation(api.team.updateMemberRole, {
       teamId,

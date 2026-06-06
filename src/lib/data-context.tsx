@@ -945,12 +945,19 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
           const previousById = new Map(prev.map((item) => [item.id, item]));
           const nextIds = new Set(next.map((item) => item.id));
           const changedItems = next.filter((item) => JSON.stringify(previousById.get(item.id)) !== JSON.stringify(item));
-          const removedIds = prev.filter((item) => !nextIds.has(item.id)).map((item) => item.id);
+          const removedIds = [
+            ...new Set(prev.filter((item) => !nextIds.has(item.id)).map((item) => item.id)),
+          ];
           const writes = [
             ...(changedItems.length ? [replaceAllItems({ items: changedItems, deleteMissing: false })] : []),
             ...removedIds.map((projectId) => deleteWorkItem({ projectId })),
           ];
-          Promise.all(writes).catch((error) => {
+          Promise.allSettled(writes).then((results) => {
+            const failure = results.find(
+              (result): result is PromiseRejectedResult => result.status === "rejected"
+            );
+            if (failure) throw failure.reason;
+          }).catch((error) => {
             if (isProjectAuthorizationError(error)) {
               setItemsState(prev);
               setToast({

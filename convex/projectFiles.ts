@@ -155,6 +155,15 @@ async function insertVersion(
   if (projectVersions.length >= MAX_PROJECT_VERSIONS) {
     throw new Error("This project has reached its 500-version history limit");
   }
+  if (args.storageId) {
+    const existingStorageReference = await ctx.db
+      .query("projectFileVersions")
+      .withIndex("by_storageId", (q) => q.eq("storageId", args.storageId))
+      .unique();
+    if (existingStorageReference) {
+      throw new Error("This uploaded file is already attached to a project version");
+    }
+  }
   let fileId = args.projectFileId;
   if (fileId) {
     const existing = await ctx.db.get(fileId);

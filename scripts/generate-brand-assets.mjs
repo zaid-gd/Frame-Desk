@@ -5,27 +5,44 @@ import sharp from "sharp";
 const root = process.cwd();
 const brandDir = path.join(root, "public", "brand");
 const iconDir = path.join(brandDir, "icons");
-await fs.mkdir(iconDir, { recursive: true });
-
 const iconSizes = [16, 24, 32, 64, 128, 192, 256, 512, 1024];
 const faviconSource = path.join(root, "assets", "Favicon.png");
-await sharp(faviconSource)
-  .resize(1024, 1024, { fit: "cover" })
-  .png({ compressionLevel: 9, adaptiveFiltering: true })
-  .toFile(path.join(brandDir, "favicon.png"));
+const reportsSource = path.join(brandDir, "empty-states", "reports.png");
 
-for (const variant of ["dark", "light"]) {
-  for (const size of iconSizes) {
-    await sharp(faviconSource)
-      .resize(size, size)
-      .png({ compressionLevel: 9, adaptiveFiltering: true })
-      .toFile(path.join(iconDir, `app-icon-${variant}-${size}.png`));
+async function requireAsset(assetPath) {
+  try {
+    await fs.access(assetPath);
+  } catch {
+    throw new Error(`Missing source file: ${path.relative(root, assetPath)}. Run the asset preparation workflow first.`);
   }
 }
 
-const reports = await fs.readFile(path.join(brandDir, "empty-states", "reports.png"));
-const reportsData = `data:image/png;base64,${reports.toString("base64")}`;
-const ogSvg = `
+function iconPipeline(variant) {
+  const pipeline = sharp(faviconSource);
+  return variant === "light" ? pipeline.negate({ alpha: false }) : pipeline;
+}
+
+async function main() {
+  await fs.mkdir(iconDir, { recursive: true });
+  await requireAsset(faviconSource);
+  await sharp(faviconSource)
+    .resize(1024, 1024, { fit: "cover" })
+    .png({ compressionLevel: 9, adaptiveFiltering: true })
+    .toFile(path.join(brandDir, "favicon.png"));
+
+  for (const variant of ["dark", "light"]) {
+    for (const size of iconSizes) {
+      await iconPipeline(variant)
+        .resize(size, size)
+        .png({ compressionLevel: 9, adaptiveFiltering: true })
+        .toFile(path.join(iconDir, `app-icon-${variant}-${size}.png`));
+    }
+  }
+
+  await requireAsset(reportsSource);
+  const reports = await fs.readFile(reportsSource);
+  const reportsData = `data:image/png;base64,${reports.toString("base64")}`;
+  const ogSvg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
   <defs>
     <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(1270 170) rotate(130) scale(670 530)" gradientUnits="userSpaceOnUse">
@@ -63,5 +80,21 @@ const ogSvg = `
   <circle cx="1425" cy="656" r="18" fill="#69C4CE"/>
 </svg>`;
 
-await sharp(Buffer.from(ogSvg)).png({ compressionLevel: 9 }).toFile(path.join(root, "public", "og-image.png"));
-console.log(`Generated favicon master, ${iconSizes.length * 2} app icon PNGs, and public/og-image.png`);
+  await sharp(Buffer.from(ogSvg))
+    .png({ compressionLevel: 9 })
+    .toFile(path.join(root, "public", "og-image.png"));
+  console.log(`Generated favicon master, ${iconSizes.length * 2} app icon PNGs, and public/og-image.png`);
+}
+
+try {
+  await main();
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  const message = code === "EACCES" || code === "EPERM"
+    ? `Permission denied writing to ${path.relative(root, brandDir)}.`
+    : detail;
+  console.error(`Brand asset generation failed: ${message}`);
+  console.error(error);
+  process.exitCode = 1;
+}
