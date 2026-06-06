@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { recordProjectActivity } from "./projectActivity";
 
 const MAX_TEAM_MEMBERS = 5;
 const TEAM_WORKSPACE_NAME_LIMIT = 80;
@@ -8,8 +9,7 @@ const TEAM_WORKSPACE_NAME_LIMIT = 80;
 const roleValidator = v.union(
   v.literal("Owner"),
   v.literal("Editor"),
-  v.literal("Reviewer"),
-  v.literal("Client")
+  v.literal("Reviewer")
 );
 
 const permissionDefaults: Record<string, Record<string, boolean>> = {
@@ -39,15 +39,6 @@ const permissionDefaults: Record<string, Record<string, boolean>> = {
     commentProjects: true,
     manageTeam: false,
     useChat: true,
-  },
-  Client: {
-    viewProjects: true,
-    createProjects: false,
-    editProjects: false,
-    updateStatus: false,
-    commentProjects: true,
-    manageTeam: false,
-    useChat: false,
   },
 };
 
@@ -486,6 +477,46 @@ export const updateMemberRole = mutation({
   },
 });
 
+export const normalizeLegacyRoles = mutation({
+  args: { teamId: v.string() },
+  handler: async (ctx, args) => {
+    const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
+    const members = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_teamId", (q) => q.eq("teamId", args.teamId))
+      .take(MAX_TEAM_MEMBERS + 1);
+    const legacyMembers = members.filter((member) => member.role === "Client");
+    if (!legacyMembers.length) return 0;
+    const now = new Date().toISOString();
+    await Promise.all(
+      legacyMembers.map(async (member) => {
+        await ctx.db.patch(member._id, {
+          role: "Reviewer",
+          permissions: permissionDefaults.Reviewer,
+        });
+        if (member.userId) {
+          await ctx.db.insert("teamNotifications", {
+            teamId: args.teamId,
+            userId: member.userId,
+            kind: "role_updated",
+            message: "Your legacy Client workspace role was updated to Reviewer.",
+            read: false,
+            createdAt: now,
+          });
+        }
+      })
+    );
+    await logActivity(ctx, {
+      teamId: args.teamId,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "legacy_roles_normalized",
+      message: `${actorName(identity)} updated ${legacyMembers.length} legacy Client role${legacyMembers.length === 1 ? "" : "s"} to Reviewer.`,
+    });
+    return legacyMembers.length;
+  },
+});
+
 export const removeMember = mutation({
   args: { teamId: v.string(), memberId: v.id("teamMembers") },
   handler: async (ctx, args) => {
@@ -613,6 +644,14 @@ export const addProjectComment = mutation({
       kind: "project_comment",
       projectId: args.projectId,
       message: `${actorName(identity)} commented on ${project.title}.`,
+    });
+    await recordProjectActivity(ctx, {
+      project,
+      actorUserId: identity.tokenIdentifier,
+      actorName: actorName(identity),
+      kind: "team_note_added",
+      message: `${actorName(identity)} added a team note.`,
+      detail: storedBody,
     });
     await notifyProjectParticipants(ctx, {
       teamId: args.teamId,

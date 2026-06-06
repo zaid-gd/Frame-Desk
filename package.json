@@ -11,11 +11,13 @@
     "convex:dev": "convex dev",
     "build": "next build",
     "check": "npm run lint && npm run build && npm audit --omit=dev",
-    "check:full": "npm run check && npm run verify:team && npm run verify:browser && npm run verify:prod",
+    "check:full": "npm run check && npm run test:team && npm run test:files && npm run verify:team && npm run verify:browser && npm run verify:prod",
     "start": "next start",
     "lint": "tsc --noEmit",
     "verify": "node scripts/verify.mjs",
     "verify:team": "node scripts/verify-team.mjs",
+    "test:team": "vitest run convex/team.test.ts",
+    "test:files": "vitest run convex/projectFiles.test.ts",
     "verify:team:live": "node scripts/verify-team-live.mjs",
     "verify:browser": "node scripts/verify-browser-smoke.mjs",
     "verify:prod": "node scripts/verify-production.mjs"
@@ -39,9 +41,13 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
+    "convex-test": "^0.0.53",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   }
 }

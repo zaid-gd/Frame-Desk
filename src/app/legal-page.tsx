@@ -15,8 +15,8 @@ type LegalPageProps = {
 
 const pageStyle: CSSProperties = {
   minHeight: "100dvh",
-  background: "var(--app-canvas, #fbfaf8)",
-  color: "var(--app-ink, #19171f)",
+  background: "var(--app-canvas, #0C0F12)",
+  color: "var(--app-ink, #E6E5E3)",
   padding: "48px 20px 64px"
 };
 
@@ -33,9 +33,9 @@ const navStyle: CSSProperties = {
 };
 
 const linkStyle: CSSProperties = {
-  border: "1px solid var(--app-border, #dedbe5)",
-  borderRadius: 6,
-  color: "var(--app-accent, #5b3fa0)",
+  border: "1px solid var(--app-border, #2A3138)",
+  borderRadius: 8,
+  color: "var(--app-highlight, #69C4CE)",
   fontSize: 14,
   fontWeight: 760,
   padding: "10px 14px",
@@ -43,14 +43,14 @@ const linkStyle: CSSProperties = {
 };
 
 const cardStyle: CSSProperties = {
-  background: "var(--app-panel, #ffffff)",
-  border: "1px solid var(--app-border, #dedbe5)",
+  background: "var(--app-panel, #1A1F24)",
+  border: "1px solid var(--app-border, #2A3138)",
   borderRadius: 8,
   padding: "clamp(24px, 5vw, 48px)"
 };
 
 const eyebrowStyle: CSSProperties = {
-  color: "var(--app-muted, #6f6a78)",
+  color: "var(--app-muted, #A5ADB4)",
   fontSize: 12,
   fontWeight: 760,
   letterSpacing: 0.6,
@@ -59,7 +59,7 @@ const eyebrowStyle: CSSProperties = {
 };
 
 const titleStyle: CSSProperties = {
-  fontFamily: "Georgia, 'Times New Roman', serif",
+  fontFamily: "var(--font-space-grotesk), 'Space Grotesk', sans-serif",
   fontSize: "clamp(42px, 8vw, 76px)",
   fontWeight: 760,
   letterSpacing: 0,
@@ -68,7 +68,7 @@ const titleStyle: CSSProperties = {
 };
 
 const introStyle: CSSProperties = {
-  color: "var(--app-muted, #6f6a78)",
+  color: "var(--app-muted, #A5ADB4)",
   fontSize: 17,
   lineHeight: 1.65,
   margin: 0,
@@ -76,7 +76,7 @@ const introStyle: CSSProperties = {
 };
 
 const sectionStyle: CSSProperties = {
-  borderTop: "1px solid var(--app-border, #dedbe5)",
+  borderTop: "1px solid var(--app-border, #2A3138)",
   marginTop: 28,
   paddingTop: 26
 };

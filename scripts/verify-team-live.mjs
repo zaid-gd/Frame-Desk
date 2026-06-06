@@ -71,7 +71,8 @@ const checklist = [
   "Confirm session B receives the shared project, assignment notification, status update, activity entry, and project comment without refreshing.",
   "Post a project comment mentioning the other member and confirm the mention notification appears.",
   "Send a Team Chat message mentioning the other member and confirm chat sync plus mention notification.",
-  "Change roles and confirm reviewers cannot edit, clients cannot use chat, and removed members lose workspace access.",
+  "Change the invited member between Editor and Reviewer. Confirm reviewers can comment and chat but cannot create, edit, assign, or change project stages.",
+  "Remove the invited member and confirm the removed account immediately loses projects, chat, notifications, and workspace access.",
 ];
 
 console.log("Team live smoke prerequisites look configured.");

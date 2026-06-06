@@ -1,53 +1,61 @@
 import { createTheme } from "@mui/material/styles";
+import { cutlab } from "./design-system";
 
 export const theme = createTheme({
   palette: {
-    mode: "light",
+    mode: "dark",
     background: {
-      default: "#fbfaf8",
-      paper: "#ffffff"
+      default: cutlab.color.charcoal,
+      paper: cutlab.color.graphite
     },
     primary: {
-      main: "#5b3fa0",
-      contrastText: "#ffffff"
+      main: cutlab.color.teal,
+      light: cutlab.color.cyan,
+      dark: cutlab.color.deepTeal,
+      contrastText: cutlab.color.softWhite
     },
     secondary: {
-      main: "#8167c4"
+      main: cutlab.color.cyan
     },
     error: {
-      main: "#bc3d35"
+      main: cutlab.color.error
     },
     warning: {
-      main: "#b27616"
+      main: cutlab.color.warning
+    },
+    success: {
+      main: cutlab.color.success
     },
     text: {
-      primary: "#19171f",
-      secondary: "#6f6a78"
+      primary: cutlab.color.softWhite,
+      secondary: "#A5ADB4"
     },
-    divider: "#dedbe5"
+    divider: "#2A3138"
   },
   shape: {
-    borderRadius: 8
+    borderRadius: cutlab.radius.sm
   },
   typography: {
-    fontFamily: "Inter, Arial, sans-serif",
+    fontFamily: cutlab.font.body,
     h1: {
-      fontFamily: "Georgia, 'Times New Roman', serif",
-      fontWeight: 760,
-      letterSpacing: 0,
-      lineHeight: 0.94
+      fontFamily: cutlab.font.heading,
+      fontWeight: 700,
+      letterSpacing: "-0.015em",
+      lineHeight: 1.1
     },
     h2: {
-      fontFamily: "Georgia, 'Times New Roman', serif",
-      fontWeight: 760,
-      letterSpacing: 0
+      fontFamily: cutlab.font.heading,
+      fontWeight: 600,
+      letterSpacing: "-0.005em"
     },
     h3: {
-      fontWeight: 720
+      fontFamily: cutlab.font.heading,
+      fontWeight: 600
     },
     button: {
-      fontWeight: 800,
-      textTransform: "none"
+      fontWeight: 600,
+      textTransform: "none",
+      letterSpacing: "0.01em"
     }
   },
   components: {
@@ -57,8 +65,8 @@ export const theme = createTheme({
       },
       styleOverrides: {
         root: {
-          borderColor: "#dedbe5",
-          color: "var(--app-ink, #19171f)",
+          borderColor: "var(--app-border, #2A3138)",
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
           backgroundImage: "none",
           boxShadow: "none"
         }
@@ -67,13 +75,28 @@ export const theme = createTheme({
     MuiButton: {
       defaultProps: {
         disableElevation: true
+      },
+      styleOverrides: {
+        root: {
+          borderRadius: cutlab.radius.sm,
+          transition: "background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease",
+          "&:active": { transform: "translateY(1px)" },
+          "&:focus-visible": {
+            outline: `2px solid ${cutlab.color.cyan}`,
+            outlineOffset: 2
+          }
+        },
+        containedPrimary: {
+          backgroundColor: "var(--app-accent, #2D8C97)",
+          "&:hover": { backgroundColor: "var(--app-highlight, #69C4CE)", color: cutlab.color.charcoal }
+        }
       }
     },
     MuiTextField: {
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            backgroundColor: "var(--app-panel, #ffffff)"
+            backgroundColor: `var(--app-control, ${cutlab.color.charcoal})`
           }
         }
       }
@@ -81,22 +104,22 @@ export const theme = createTheme({
     MuiInputBase: {
       styleOverrides: {
         root: {
-          color: "var(--app-ink, #19171f)"
+          color: `var(--app-ink, ${cutlab.color.softWhite})`
         }
       }
     },
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          color: "var(--app-ink, #19171f)",
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
           "& .MuiOutlinedInput-notchedOutline": {
-            borderColor: "var(--app-border, #dedbe5)"
+            borderColor: "var(--app-border, #2A3138)"
           },
           "&:hover .MuiOutlinedInput-notchedOutline": {
-            borderColor: "var(--app-accent, #5b3fa0)"
+            borderColor: "var(--app-highlight, #69C4CE)"
           },
           "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-            borderColor: "var(--app-accent, #5b3fa0)"
+            borderColor: "var(--app-highlight, #69C4CE)"
           }
         }
       }
@@ -104,9 +127,9 @@ export const theme = createTheme({
     MuiInputLabel: {
       styleOverrides: {
         root: {
-          color: "var(--app-muted, #6f6a78)",
+          color: "var(--app-muted, #A5ADB4)",
           "&.Mui-focused": {
-            color: "var(--app-accent, #5b3fa0)"
+            color: "var(--app-highlight, #69C4CE)"
           }
         }
       }
@@ -114,17 +137,17 @@ export const theme = createTheme({
     MuiMenuItem: {
       styleOverrides: {
         root: {
-          backgroundColor: "var(--app-panel, #ffffff)",
-          color: "var(--app-ink, #19171f)",
+          backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
           "&.Mui-selected": {
-            backgroundColor: "var(--app-active, #f0eafa)",
-            color: "var(--app-accent, #5b3fa0)",
+            backgroundColor: "var(--app-active, rgba(45,140,151,0.18))",
+            color: "var(--app-highlight, #69C4CE)",
             "&:hover": {
-              backgroundColor: "var(--app-active, #f0eafa)"
+              backgroundColor: "var(--app-active, rgba(45,140,151,0.18))"
             }
           },
           "&:hover": {
-            backgroundColor: "var(--app-hover, #f7f4fc)"
+            backgroundColor: "var(--app-hover, rgba(105,196,206,0.09))"
           }
         }
       }
@@ -132,9 +155,9 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          backgroundColor: "var(--app-panel, #ffffff)",
-          color: "var(--app-ink, #19171f)",
-          borderColor: "var(--app-border, #dedbe5)",
+          backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
+          borderColor: "var(--app-border, #2A3138)",
           backgroundImage: "none"
         }
       }
@@ -142,23 +165,23 @@ export const theme = createTheme({
     MuiMenu: {
       styleOverrides: {
         paper: {
-          backgroundColor: "var(--app-panel, #ffffff)",
-          color: "var(--app-ink, #19171f)",
-          border: "1px solid var(--app-border, #dedbe5)",
+          backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
+          border: "1px solid var(--app-border, #2A3138)",
           backgroundImage: "none"
         },
         list: {
-          backgroundColor: "var(--app-panel, #ffffff)",
-          color: "var(--app-ink, #19171f)"
+          backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
+          color: `var(--app-ink, ${cutlab.color.softWhite})`
         }
       }
     },
     MuiPopover: {
       styleOverrides: {
         paper: {
-          backgroundColor: "var(--app-panel, #ffffff)",
-          color: "var(--app-ink, #19171f)",
-          borderColor: "var(--app-border, #dedbe5)",
+          backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
+          color: `var(--app-ink, ${cutlab.color.softWhite})`,
+          borderColor: "var(--app-border, #2A3138)",
           backgroundImage: "none"
         }
       }
@@ -166,7 +189,30 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          fontWeight: 800
+          fontWeight: 600,
+          borderRadius: cutlab.radius.xs
+        }
+      }
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          border: "1px solid var(--app-border, #2A3138)",
+          borderRadius: cutlab.radius.md,
+          boxShadow: cutlab.shadow[3]
+        }
+      }
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          borderColor: "var(--app-border, #2A3138)"
+        },
+        head: {
+          color: "var(--app-muted, #A5ADB4)",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: "0.04em"
         }
       }
     }

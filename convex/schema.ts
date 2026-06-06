@@ -29,8 +29,107 @@ export default defineSchema({
     createdAt: v.optional(v.string()),
   })
     .index("by_userId", ["userId"])
+    .index("by_workItemId", ["id"])
     .index("by_teamId", ["teamId"])
     .index("by_teamId_and_id", ["teamId", "id"]),
+
+  clientPortals: defineTable({
+    ownerUserId: v.string(),
+    projectId: v.string(),
+    token: v.string(),
+    title: v.string(),
+    clientName: v.string(),
+    projectType: v.string(),
+    status: v.string(),
+    sourceStatus: v.string(),
+    startDate: v.string(),
+    dueDate: v.string(),
+    progress: v.number(),
+    clientSummary: v.string(),
+    clientNotes: v.string(),
+    estimatedCompletion: v.string(),
+    revisionLimit: v.number(),
+    published: v.boolean(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_token", ["token"]),
+
+  portalDeliverables: defineTable({
+    portalId: v.id("clientPortals"),
+    title: v.string(),
+    detail: v.string(),
+    url: v.string(),
+    status: v.string(),
+    downloadable: v.boolean(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  }).index("by_portalId_and_createdAt", ["portalId", "createdAt"]),
+
+  portalRevisions: defineTable({
+    portalId: v.id("clientPortals"),
+    clientName: v.string(),
+    message: v.string(),
+    status: v.string(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  }).index("by_portalId_and_createdAt", ["portalId", "createdAt"]),
+
+  portalEvents: defineTable({
+    portalId: v.id("clientPortals"),
+    kind: v.string(),
+    title: v.string(),
+    body: v.string(),
+    createdAt: v.string(),
+  }).index("by_portalId_and_createdAt", ["portalId", "createdAt"]),
+
+  projectActivity: defineTable({
+    projectId: v.string(),
+    ownerUserId: v.string(),
+    teamId: v.optional(v.string()),
+    actorUserId: v.string(),
+    actorName: v.string(),
+    kind: v.string(),
+    message: v.string(),
+    detail: v.optional(v.string()),
+    createdAt: v.string(),
+  }).index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+
+  projectFiles: defineTable({
+    projectId: v.string(),
+    ownerUserId: v.string(),
+    teamId: v.optional(v.string()),
+    category: v.string(),
+    title: v.string(),
+    description: v.string(),
+    status: v.string(),
+    clientVisible: v.boolean(),
+    downloadable: v.boolean(),
+    createdByUserId: v.string(),
+    createdByName: v.string(),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  }).index("by_projectId_and_createdAt", ["projectId", "createdAt"]),
+
+  projectFileVersions: defineTable({
+    projectId: v.string(),
+    projectFileId: v.id("projectFiles"),
+    versionNumber: v.number(),
+    provider: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    externalUrl: v.optional(v.string()),
+    externalId: v.optional(v.string()),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    uploadedByUserId: v.string(),
+    uploadedByName: v.string(),
+    uploadedAt: v.string(),
+    notes: v.string(),
+  })
+    .index("by_projectFileId_and_versionNumber", ["projectFileId", "versionNumber"])
+    .index("by_projectId_and_uploadedAt", ["projectId", "uploadedAt"]),
 
   teamWorkspaces: defineTable({
     ownerUserId: v.string(),

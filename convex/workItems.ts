@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import { deleteProjectActivity, recordProjectActivity } from "./projectActivity";
 
 const integrationLinkValidator = v.record(
   v.string(),
@@ -60,6 +61,7 @@ export const list = query({
 
 export const replaceAll = mutation({
   args: {
+    deleteMissing: v.optional(v.boolean()),
     items: v.array(
       v.object({
         id: v.string(),
@@ -151,11 +153,19 @@ export const replaceAll = mutation({
       if (isTeamProject && existing && existing.teamId && isStatusOnlyUpdate && !canEditTeamProjects && canUpdateTeamStatus) {
         if (existing.status !== item.status) {
           await ctx.db.patch(existing._id, { status: item.status });
+          await syncClientPortal(ctx, existing, { ...existing, status: item.status });
           await logProjectActivity(ctx, {
             teamId: existing.teamId,
             actorUserId: userId,
             actorName: identity.name || identity.email || "Team member",
             projectId: item.id,
+            message: `${item.title} status changed from ${existing.status} to ${item.status}.`,
+          });
+          await recordProjectActivity(ctx, {
+            project: existing,
+            actorUserId: userId,
+            actorName: identity.name || identity.email || "Team member",
+            kind: "status_changed",
             message: `${item.title} status changed from ${existing.status} to ${item.status}.`,
           });
           await notifyProjectAssignees(ctx, {
@@ -193,6 +203,7 @@ export const replaceAll = mutation({
 
       if (existing) {
         await ctx.db.patch(existing._id, nextItem);
+        await syncClientPortal(ctx, existing, { ...existing, ...nextItem });
         const integrationLinksChanged = JSON.stringify(existing.integrationLinks ?? {}) !== JSON.stringify(item.integrationLinks ?? {});
         const importantDetailChanges = [
           existing.title !== item.title ? "title" : "",
@@ -203,6 +214,30 @@ export const replaceAll = mutation({
           existing.earnings !== item.earnings ? "amount" : "",
           integrationLinksChanged ? "resource links" : "",
         ].filter(Boolean);
+        const assignmentsChanged =
+          JSON.stringify(existing.assigneeUserIds ?? []) !== JSON.stringify(nextItem.assigneeUserIds);
+        if (
+          existing.status !== item.status ||
+          existing.notes !== item.notes ||
+          importantDetailChanges.length ||
+          assignmentsChanged
+        ) {
+          const updateMessage =
+            existing.status !== item.status
+              ? `${item.title} status changed from ${existing.status} to ${item.status}.`
+              : existing.notes !== item.notes
+                ? `${item.title} internal notes were updated.`
+                : assignmentsChanged
+                  ? `${item.title} assignments were updated.`
+                  : `${item.title} details updated: ${importantDetailChanges.join(", ")}.`;
+          await recordProjectActivity(ctx, {
+            project: { ...existing, ...nextItem },
+            actorUserId: userId,
+            actorName: identity.name || identity.email || "CutLab user",
+            kind: existing.status !== item.status ? "status_changed" : assignmentsChanged ? "assignment_changed" : "project_updated",
+            message: updateMessage,
+          });
+        }
         if (targetTeamId && (existing.status !== item.status || existing.notes !== item.notes || importantDetailChanges.length)) {
           const updateMessage =
             existing.status !== item.status
@@ -277,11 +312,22 @@ export const replaceAll = mutation({
           });
         }
       } else {
-        await ctx.db.insert("workItems", {
+        const projectId = await ctx.db.insert("workItems", {
           ...nextItem,
           id: item.id,
           userId,
         });
+        const createdProject = await ctx.db.get(projectId);
+        if (createdProject) {
+          await recordProjectActivity(ctx, {
+            project: createdProject,
+            actorUserId: userId,
+            actorName: identity.name || identity.email || "CutLab user",
+            kind: "project_created",
+            message: `${item.title} was created.`,
+            createdAt: nextItem.createdAt,
+          });
+        }
         if (targetTeamId) {
           await logProjectActivity(ctx, {
             teamId: targetTeamId,
@@ -302,40 +348,111 @@ export const replaceAll = mutation({
       }
     }
 
-    for (const existing of personalExisting) {
-      if (!incomingIds.has(existing.id) && !existing.teamId) {
-        await ctx.db.delete(existing._id);
-      }
-    }
-    if (activeMembership && (canEditTeamProjects || canManageTeamProjects)) {
-      for (const existing of teamExisting) {
-        const canDeleteTeamProject = existing.ownerUserId === userId || canManageTeamProjects;
-        if (!incomingIds.has(existing.id) && canDeleteTeamProject) {
-          await logProjectActivity(ctx, {
-            teamId: activeMembership.teamId,
-            actorUserId: userId,
-            actorName: identity.name || identity.email || "Team member",
-            projectId: existing.id,
-            message: `${existing.title} was deleted.`,
-          });
-          await notifyProjectAssignees(ctx, {
-            teamId: activeMembership.teamId,
-            senderUserId: userId,
-            ownerUserId: existing.ownerUserId,
-            assigneeUserIds: existing.assigneeUserIds ?? [],
-            projectId: existing.id,
-            message: `${existing.title} was deleted.`,
-          });
-          await deleteProjectComments(ctx, {
-            teamId: activeMembership.teamId,
-            projectId: existing.id,
-          });
+    if (args.deleteMissing !== false) {
+      for (const existing of personalExisting) {
+        if (!incomingIds.has(existing.id) && !existing.teamId) {
+          await deleteClientPortal(ctx, existing.id);
+          await deleteProjectActivity(ctx, existing.id);
           await ctx.db.delete(existing._id);
+        }
+      }
+      if (activeMembership && (canEditTeamProjects || canManageTeamProjects)) {
+        for (const existing of teamExisting) {
+          const canDeleteTeamProject = existing.ownerUserId === userId || canManageTeamProjects;
+          if (!incomingIds.has(existing.id) && canDeleteTeamProject) {
+            await deleteWorkItem(ctx, {
+              project: existing,
+              userId,
+              actorName: identity.name || identity.email || "Team member",
+            });
+          }
         }
       }
     }
   },
 });
+
+export const deleteOne = mutation({
+  args: { projectId: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const project = await ctx.db
+      .query("workItems")
+      .withIndex("by_workItemId", (q) => q.eq("id", args.projectId))
+      .unique();
+    if (!project) return null;
+    const userId = identity.tokenIdentifier;
+    if (!project.teamId) {
+      if (project.userId !== userId) throw new Error("Project access required");
+    } else {
+      const membership = await ctx.db
+        .query("teamMembers")
+        .withIndex("by_teamId_and_userId", (q) =>
+          q.eq("teamId", project.teamId as string).eq("userId", userId)
+        )
+        .unique();
+      const canDelete = Boolean(
+        membership &&
+        membership.status === "active" &&
+        membership.permissions.editProjects &&
+        (project.ownerUserId === userId || membership.permissions.manageTeam)
+      );
+      if (!canDelete) throw new Error("You do not have permission to delete this team project");
+    }
+    await deleteWorkItem(ctx, {
+      project,
+      userId,
+      actorName: identity.name || identity.email || "Team member",
+    });
+    return null;
+  },
+});
+
+async function deleteWorkItem(
+  ctx: MutationCtx,
+  args: { project: Doc<"workItems">; userId: string; actorName: string }
+) {
+  if (args.project.teamId) {
+    await logProjectActivity(ctx, {
+      teamId: args.project.teamId,
+      actorUserId: args.userId,
+      actorName: args.actorName,
+      projectId: args.project.id,
+      message: `${args.project.title} was deleted.`,
+    });
+    await notifyProjectAssignees(ctx, {
+      teamId: args.project.teamId,
+      senderUserId: args.userId,
+      ownerUserId: args.project.ownerUserId,
+      assigneeUserIds: args.project.assigneeUserIds ?? [],
+      projectId: args.project.id,
+      message: `${args.project.title} was deleted.`,
+    });
+    await deleteProjectComments(ctx, {
+      teamId: args.project.teamId,
+      projectId: args.project.id,
+    });
+  }
+  const projectFiles = await ctx.db
+    .query("projectFiles")
+    .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", args.project.id))
+    .take(100);
+  const projectVersions = await ctx.db
+    .query("projectFileVersions")
+    .withIndex("by_projectId_and_uploadedAt", (q) => q.eq("projectId", args.project.id))
+    .take(500);
+  await Promise.all(
+    projectVersions.map(async (version) => {
+      if (version.storageId) await ctx.storage.delete(version.storageId);
+      await ctx.db.delete(version._id);
+    })
+  );
+  await Promise.all(projectFiles.map((file) => ctx.db.delete(file._id)));
+  await deleteClientPortal(ctx, args.project.id);
+  await deleteProjectActivity(ctx, args.project.id);
+  await ctx.db.delete(args.project._id);
+}
 
 async function logProjectActivity(
   ctx: MutationCtx,
@@ -356,6 +473,101 @@ async function logProjectActivity(
     message: args.message,
     createdAt: new Date().toISOString(),
   });
+}
+
+function portalProgress(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized.includes("deliver") || normalized.includes("complete") || normalized === "done") return 100;
+  if (normalized.includes("review") || normalized.includes("revision") || normalized.includes("feedback")) return 75;
+  if (normalized.includes("progress") || normalized.includes("editing") || normalized.includes("active")) return 45;
+  return 15;
+}
+
+function portalStage(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized.includes("deliver") || normalized.includes("complete") || normalized === "done") return "Delivered";
+  if (normalized.includes("review") || normalized.includes("revision") || normalized.includes("feedback")) return "Review";
+  if (normalized.includes("progress") || normalized.includes("editing") || normalized.includes("active")) return "In Progress";
+  return "Planning";
+}
+
+function portalMilestone(stage: string) {
+  if (stage === "In Progress") {
+    return { kind: "work_started", title: "Work started", body: "Production work is now underway." };
+  }
+  if (stage === "Review") {
+    return { kind: "review_sent", title: "Review sent", body: "The latest project version is ready for client review." };
+  }
+  if (stage === "Delivered") {
+    return { kind: "delivery_completed", title: "Delivery completed", body: "The project has reached final delivery." };
+  }
+  return { kind: "status_changed", title: "Project moved to Planning", body: "The project workflow returned to planning." };
+}
+
+async function syncClientPortal(
+  ctx: MutationCtx,
+  previous: Doc<"workItems">,
+  next: Pick<Doc<"workItems">, "id" | "title" | "client" | "workType" | "status" | "startDate" | "dueDate">
+) {
+  const portal = await ctx.db
+    .query("clientPortals")
+    .withIndex("by_projectId", (q) => q.eq("projectId", next.id))
+    .unique();
+  if (!portal) return;
+  const now = new Date().toISOString();
+  await ctx.db.patch(portal._id, {
+    title: next.title,
+    clientName: next.client ?? "",
+    projectType: next.workType,
+    ...(previous.status !== next.status ? { status: portalStage(next.status) } : {}),
+    sourceStatus: next.status,
+    startDate: next.startDate,
+    dueDate: next.dueDate,
+    ...(previous.status !== next.status ? { progress: portalProgress(next.status) } : {}),
+    updatedAt: now,
+  });
+  if (previous.status === next.status) return;
+
+  const milestone = portalMilestone(portalStage(next.status));
+  const events = await ctx.db
+    .query("portalEvents")
+    .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", portal._id))
+    .order("desc")
+    .take(100);
+  if (events.length >= 100) await ctx.db.delete(events[events.length - 1]._id);
+  await ctx.db.insert("portalEvents", {
+    portalId: portal._id,
+    kind: milestone.kind,
+    title: milestone.title,
+    body: milestone.body,
+    createdAt: now,
+  });
+}
+
+async function deleteClientPortal(ctx: MutationCtx, projectId: string) {
+  const portal = await ctx.db
+    .query("clientPortals")
+    .withIndex("by_projectId", (q) => q.eq("projectId", projectId))
+    .unique();
+  if (!portal) return;
+  const deliverables = await ctx.db
+    .query("portalDeliverables")
+    .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", portal._id))
+    .take(50);
+  const revisions = await ctx.db
+    .query("portalRevisions")
+    .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", portal._id))
+    .take(100);
+  const events = await ctx.db
+    .query("portalEvents")
+    .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", portal._id))
+    .take(100);
+  await Promise.all([
+    ...deliverables.map((item) => ctx.db.delete(item._id)),
+    ...revisions.map((item) => ctx.db.delete(item._id)),
+    ...events.map((item) => ctx.db.delete(item._id)),
+  ]);
+  await ctx.db.delete(portal._id);
 }
 
 async function deleteProjectComments(
