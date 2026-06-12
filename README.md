@@ -23,6 +23,34 @@
 
 ![CutLab Studio command-center dashboard](assets/readme-hero.png)
 
+## Quick Start
+
+### Requirements
+
+- Node.js 22+
+- npm
+- A Convex account and project
+- A Clerk application
+
+```bash
+git clone https://github.com/zaid-gd/Cutlab-Studio.git
+cd Cutlab-Studio
+npm ci
+cp .env.example .env.local
+npm run dev
+```
+
+### Useful Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start Convex and the Next.js development server. |
+| `npm run build` | Create a production Next.js build. |
+| `npm run check` | Run type checking, the production build, and the production dependency audit. |
+| `npm run check:full` | Run the complete local test and verification suite. |
+| `npm run verify:team` | Verify Team workspace permissions, routes, and source invariants. |
+| `npm run verify:team:live` | Print the live Team collaboration smoke-test checklist. |
+
 ## Why CutLab Exists
 
 Most project tools treat video editing like generic task tracking. CutLab is narrower on purpose: projects have clients, due dates, deliverables, review rounds, assets, references, salary batches, and final exports.
@@ -39,6 +67,28 @@ CutLab Studio is built around that real production rhythm.
 | Client portal | Publishes a client-safe project link with optional expiry, access disabling, token regeneration, and PIN/password protection. |
 | Team collaboration | Supports owners, editors, reviewers, invites, assignments, comments, mentions, notifications, activity, and team chat. |
 | Public profiles | Gives editors shareable profile pages with portfolio metrics, projects, bio, location, time zone, and turnaround. |
+
+## Feature Status
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Command dashboard | Available | Surfaces delivery urgency, workflow stages, feedback, earnings, salary batches, and activity. |
+| Personal projects | Available | Keeps solo projects separate from team-owned work. |
+| Team workspaces | Available | Supports shared projects, roles, invitations, assignments, comments, activity, notifications, and chat. |
+| Project file management | Available | Supports Convex Storage uploads and provider-neutral external file links. |
+| File version history | Available | Stores immutable uploaded or linked revisions with file and provider metadata. |
+| Client portals | Available | Provides client-safe progress, deliverable downloads, and revision requests through public links. |
+| Public editor profiles | Available | Editors can publish a shareable profile page. |
+| Clerk authentication | Available | Clerk sign-in supplies authenticated identity to the app and Convex. |
+| Convex sync | Available | Authenticated project, team, file, portal, and profile data syncs through Convex. |
+| Google Drive integration | Modeled | Google Drive links and provider IDs are supported; OAuth and API synchronization are not implemented. |
+| Frame.io integration | Modeled | Frame.io links and provider IDs are supported; OAuth and API synchronization are not implemented. |
+| Timecode feedback | Planned | Revision requests exist, but timecode-specific review tools are not implemented. |
+| Project templates | Modeled | Built-in starter presets are available; reusable custom template management is not implemented. |
+| Portal password/expiry controls | Planned | Public portal links do not yet provide password or expiration controls. |
+| Invoicing/payment tracking | Planned | Earnings and salary batches are tracked; invoice and payment workflows are not implemented. |
+
+Planned work is outlined in the [CutLab Studio Roadmap](ROADMAP.md).
 
 ## Built For Editing Work
 
@@ -111,6 +161,8 @@ More detail lives in [Project File Architecture](docs/project-file-architecture.
 
 This branch is validated with TypeScript, Convex tests, team-permission tests, production build checks, route verification, asset verification, and Convex development deployment.
 
+Changes to the Convex-backed Team workspace should pass `npm run verify:team` and a live two-account Clerk/Convex smoke test using the checklist from `npm run verify:team:live`.
+
 Current automated coverage includes:
 
 - Team roles, invitations, project sync, comments, mentions, chat, and role migration.
@@ -126,3 +178,15 @@ The Convex-backed Team workspace has a static invariant check with
 CutLab Studio currently includes the command dashboard, separated personal/team projects, project file management, secured client portals, public profiles, account settings, consolidated navigation, branded empty states, Clerk authentication, Convex synchronization, Vercel analytics, and fresh README screenshots captured from the current UI.
 
 Client portal security currently includes enable/disable controls, optional expiry, token regeneration, and optional PBKDF2-hashed PIN/password protection. See [Security](SECURITY.md) for the storage and access contract.
+
+## Security
+
+CutLab Studio uses Clerk authentication, identity-based Convex authorization, explicit client-safe portal projections, and baseline response headers. See the [Security Policy](SECURITY.md) for implementation boundaries and private vulnerability reporting.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, branch conventions, code expectations, and required checks before opening a pull request.
+
+## License
+
+License: Not specified yet.
