@@ -276,7 +276,7 @@ describe("project file management", () => {
 
     const before = await owner.query(api.projectFiles.listForProject, { projectId: "project-files" });
     expect(before.files[0]).toMatchObject({ status: "sent_to_client" });
-    expect(before.files[0].versions[0].status).toBeUndefined();
+    expect(before.files[0].versions[0].status).toBe("draft");
 
     await owner.mutation(api.projectFiles.updateFile, {
       fileId,
@@ -592,7 +592,7 @@ describe("project file management", () => {
     const portal = await t.query(api.clientPortals.getByToken, { token: "portal-token" });
     expect(portal.access).toBe("active");
     if (portal.access !== "active") throw new Error("Expected an active portal");
-    expect(portal.deliverables.map((item) => item.title).sort()).toEqual([
+    expect(portal.deliverables.map((item) => item.title)).toEqual([
       "Approved preview",
       "Final master",
       "Manual approved handoff",

@@ -18,8 +18,15 @@ const checks = [
   ["convex/team.ts", "const TEAM_WORKSPACE_NAME_LIMIT = 80", "workspace name backend limit constant"],
   ["convex/team.ts", "export const createWorkspace = mutation", "workspace creation mutation"],
   ["convex/team.ts", "const workspaceName = (args.name.trim() || \"CutLab Studio Team\").slice(0, TEAM_WORKSPACE_NAME_LIMIT)", "workspace name trim/default/limit normalization"],
-  ["convex/team.ts", ".withIndex(\"by_userId_and_status\"", "workspace creation indexed active membership lookup"],
-  ["convex/team.ts", ".eq(\"status\", \"active\")", "workspace creation active membership predicate"],
+  [
+    "convex/team.ts",
+    `const activeMembership = await ctx.db
+      .query("teamMembers")
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("status", "active")
+      )`,
+    "workspace creation indexed active membership lookup",
+  ],
   ["convex/team.ts", "if (activeMembership) return activeMembership.teamId", "workspace creation single active workspace guard"],
   ["convex/team.ts", "name: workspaceName", "workspace creation stores normalized name"],
   ["convex/team.ts", "export const inviteMember = mutation", "member invite mutation"],
@@ -76,13 +83,30 @@ const checks = [
   ["convex/team.ts", "export const markNotificationRead = mutation", "notification read mutation"],
   ["convex/team.ts", "export const markAllNotificationsRead = mutation", "bulk notification read mutation"],
   ["convex/team.ts", "await findActiveMembership(ctx, args.teamId, identity.tokenIdentifier)", "bulk notification read membership guard"],
-  ["convex/team.ts", ".withIndex(\"by_teamId_and_userId_and_read_and_createdAt\"", "unread team notification indexed lookup"],
-  ["convex/team.ts", ".eq(\"read\", false)", "bulk notification unread predicate"],
+  [
+    "convex/team.ts",
+    `const notifications = await ctx.db
+      .query("teamNotifications")
+      .withIndex("by_teamId_and_userId_and_read_and_createdAt", (q) =>
+        q
+          .eq("teamId", args.teamId)
+          .eq("userId", identity.tokenIdentifier)
+          .eq("read", false)
+      )`,
+    "unread team notification indexed lookup",
+  ],
   ["convex/team.ts", ".order(\"desc\")", "newest-first team notification query order"],
   ["convex/team.ts", ".take(50)", "bulk notification read bounded batch"],
   ["convex/workItems.ts", "withIndex(\"by_teamId\"", "team project query"],
-  ["convex/workItems.ts", "withIndex(\"by_userId_and_teamId\"", "personal project indexed query"],
-  ["convex/workItems.ts", ".eq(\"teamId\", undefined)", "personal project scope predicate"],
+  [
+    "convex/workItems.ts",
+    `const personalItems = await ctx.db
+      .query("workItems")
+      .withIndex("by_userId_and_teamId", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("teamId", undefined)
+      )`,
+    "personal project indexed query",
+  ],
   ["convex/workItems.ts", "canViewTeamProjects", "server-side project view permission enforcement"],
   ["convex/workItems.ts", "activeMembership && canViewTeamProjects", "team project list permission gate"],
   ["convex/workItems.ts", "canCreateTeamProjects", "project create permission enforcement"],

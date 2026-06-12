@@ -273,7 +273,7 @@ export function ClientPortalView({ token }: { token: string }) {
                   }}
                   size="small"
                   placeholder="00:12 or 00:01:25"
-                  inputProps={{ maxLength: 8, inputMode: "numeric" }}
+                  inputProps={{ maxLength: 8, inputMode: "text" }}
                   helperText={TIMECODE_FORMAT_HINT}
                 />
                 <TextField

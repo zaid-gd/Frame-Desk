@@ -502,10 +502,6 @@ export function TrackerApp({ page }: { page: PageKey }) {
   });
 
   useEffect(() => {
-    reconcileSalaryBatches(items.filter((item) => !item.teamId));
-  }, [items, reconcileSalaryBatches]);
-
-  useEffect(() => {
     applyRootThemeVariables(settings);
   }, [settings]);
 
@@ -533,6 +529,11 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
   const personalProjects = useMemo(() => projects.filter((item) => !item.teamId), [projects]);
+
+  useEffect(() => {
+    reconcileSalaryBatches(projects);
+  }, [projects, reconcileSalaryBatches]);
+
   const activeTeamMembers = useMemo(() => teamData?.members.filter((member) => member.status === "active") ?? [], [teamData]);
   const teamDataLoading = Boolean(isSignedIn && (isConvexAuthLoading || (isConvexAuthenticated && teamData === undefined)));
   const teamSyncUnavailable = Boolean(isSignedIn && !isConvexAuthLoading && !isConvexAuthenticated);
@@ -2745,7 +2746,11 @@ function ReportsDesignPage({
       action={
         <Stack direction="row" gap={1}>
           <FormControl size="small" sx={{ minWidth: 145 }}>
-            <Select value={period} onChange={(event) => setPeriod(event.target.value as PayoutPeriod)}>
+            <Select
+              value={period}
+              inputProps={{ "aria-label": "Payout period" }}
+              onChange={(event) => setPeriod(event.target.value as PayoutPeriod)}
+            >
               <MenuItem value="month">This month</MenuItem>
               <MenuItem value="quarter">This quarter</MenuItem>
               <MenuItem value="year">This year</MenuItem>
@@ -3203,7 +3208,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                           size="small"
                           placeholder="00:12"
                           sx={{ width: { xs: "100%", md: 180 }, flexShrink: 0 }}
-                          slotProps={{ htmlInput: { maxLength: 8, inputMode: "numeric" } }}
+                          slotProps={{ htmlInput: { maxLength: 8, inputMode: "text" } }}
                           helperText="MM:SS or HH:MM:SS"
                           onChange={(event) => setCommentTimecode(event.target.value)}
                         />
@@ -6489,7 +6494,7 @@ function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: {
             size="small"
             placeholder="00:12"
             sx={{ width: { xs: "100%", md: 180 }, flexShrink: 0 }}
-            slotProps={{ htmlInput: { maxLength: 8, inputMode: "numeric" } }}
+            slotProps={{ htmlInput: { maxLength: 8, inputMode: "text" } }}
             helperText={TIMECODE_FORMAT_HINT}
             onChange={(event) => {
               setCommentTimecode(event.target.value);

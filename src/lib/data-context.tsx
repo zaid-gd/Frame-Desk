@@ -784,6 +784,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);
+  const [cloudInitialized, setCloudInitialized] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const initializationToken = useRef(0);
   const authMode = isSignedIn ? "signed-in" : "guest";
@@ -806,6 +807,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     previousAuthMode.current = authMode;
     initializationToken.current += 1;
     setReady(false);
+    setCloudInitialized(false);
   }, [authMode, clerkLoaded]);
 
   // Guest mode: load from localStorage
@@ -834,15 +836,18 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setSettingsState(readInitialSettings());
       setResourceLinksState(readInitialResources());
       setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
+      let cancelled = false;
       void diagnoseConvexAuthToken(getToken).then((message) => {
-        setToast({ tone: "warning", message });
+        if (!cancelled) setToast({ tone: "warning", message });
       });
       setReady(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined || convexResources === undefined) return;
-    if (ready) return;
+    if (cloudInitialized) return;
 
     const loadedItems = normalizeWorkItems(convexItems);
     const loadedSettings = convexSettings;
@@ -921,6 +926,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setSettingsState(nextSettings);
       setResourceLinksState(nextResources);
       setSalaryBatches(nextBatches);
+      setCloudInitialized(true);
       setReady(true);
     }
 
@@ -933,6 +939,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     isSignedIn,
     convexAuthLoading,
     convexAuthenticated,
+    cloudInitialized,
     getToken,
     ready,
     convexItems,
@@ -948,11 +955,11 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // Keep signed-in workspaces live after the initial cloud load. Team project
   // changes from other members arrive through Convex subscriptions here.
   useEffect(() => {
-    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !ready || convexItems === undefined || convexResources === undefined || convexBatches === undefined) return;
+    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !cloudInitialized || convexItems === undefined || convexResources === undefined || convexBatches === undefined) return;
     setItemsState(normalizeWorkItems(convexItems));
     setResourceLinksState(normalizeResourceLinks(convexResources));
     setSalaryBatches(normalizeSalaryState({ batches: convexBatches }).batches);
-  }, [clerkLoaded, convexAuthenticated, convexBatches, convexItems, convexResources, isSignedIn, ready]);
+  }, [clerkLoaded, cloudInitialized, convexAuthenticated, convexBatches, convexItems, convexResources, isSignedIn]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;

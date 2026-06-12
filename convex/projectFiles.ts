@@ -254,7 +254,7 @@ export const listForProject = query({
         _id: version._id,
         projectFileId: version.projectFileId,
         versionNumber: version.versionNumber,
-        status: version.status,
+        status: normalizeFileStatus(version.status),
         provider: version.provider,
         url: version.storageId ? await ctx.storage.getUrl(version.storageId) : version.externalUrl,
         externalId: version.externalId,
