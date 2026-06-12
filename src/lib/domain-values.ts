@@ -112,7 +112,7 @@ export function normalizeDeliverableStatus(value: unknown): DeliverableStatus {
   if ((DELIVERABLE_STATUS_VALUES as readonly string[]).includes(value)) {
     return value as DeliverableStatus;
   }
-  if (value === "In Progress") return "sent_to_client";
+  if (value === "In Progress") return "draft";
   if (value === "Ready") return "approved";
   if (value === "Delivered") return "final_delivered";
   return "draft";

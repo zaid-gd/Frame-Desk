@@ -683,14 +683,17 @@ export function TrackerApp({ page }: { page: PageKey }) {
     const channelTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("channel"))
       ?? freelanceTag;
     setEditingId("");
-    setForm(applyProjectTemplate(template, {
-      profileId: profile.id,
-      startDate: iso(todayDate()),
-      dueDate: iso(addDays(todayDate(), template.durationDays)),
-      workType: template.workType === "channel" ? channelTag : freelanceTag,
-      baseNotes: defaultProjectNotes(settings),
-      teamId: scope === "team" ? currentTeamId : undefined,
-    }));
+    setForm({
+      id: "",
+      ...applyProjectTemplate(template, {
+        profileId: profile.id,
+        startDate: iso(todayDate()),
+        dueDate: iso(addDays(todayDate(), template.durationDays)),
+        workType: template.workType === "channel" ? channelTag : freelanceTag,
+        baseNotes: defaultProjectNotes(settings),
+        teamId: scope === "team" ? currentTeamId : undefined,
+      }),
+    });
     setFormError("");
     setProjectStartOpen(false);
     setDialogOpen(true);

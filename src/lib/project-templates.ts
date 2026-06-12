@@ -193,9 +193,8 @@ export function applyProjectTemplate(
     baseNotes?: string;
     teamId?: string;
   }
-): WorkItem {
+): Omit<WorkItem, "id"> {
   return {
-    id: "",
     profileId: options.profileId,
     title: template.name,
     client: "",
