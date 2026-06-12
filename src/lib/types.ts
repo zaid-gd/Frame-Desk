@@ -1,4 +1,12 @@
 import type { IntegrationLinks } from "./integrations";
+import type {
+  FileCategory,
+  FileStatus,
+  SettingsTeamRole,
+  StoredProjectStatus,
+  StoredTeamRole,
+} from "./domain-values";
+import type { ProjectTemplateId } from "./project-templates";
 
 export type EarningsMode = "manual" | "optional" | "batch" | "none";
 
@@ -42,13 +50,22 @@ export type WorkItem = {
   createdAt?: string;
   title: string;
   client?: string;
-  status: string;
+  status: StoredProjectStatus;
   workType: string;
   startDate: string;
   dueDate: string;
   earnings: number;
   notes: string;
   integrationLinks?: IntegrationLinks;
+  templateId?: ProjectTemplateId;
+  templateProjectType?: string;
+  workflowStages?: string[];
+  templateDeliverables?: Array<{
+    title: string;
+    category: FileCategory;
+    initialStatus: FileStatus;
+  }>;
+  checklistItems?: string[];
 };
 
 export type ResourceLink = {
@@ -68,6 +85,9 @@ export type SalaryBatch = {
   completedDate: string;
   archived: boolean;
   archivedDate: string;
+  amount?: number;
+  paid?: boolean;
+  paidDate?: string;
 };
 
 export type SalaryState = {
@@ -86,7 +106,7 @@ export type Filters = {
 export type TeamMember = {
   id: string;
   name: string;
-  role: string;
+  role: StoredTeamRole;
   email: string;
 };
 
@@ -127,7 +147,7 @@ export type SettingsState = {
   integrationAccounts: Record<string, string>;
   integrationConfigs: Record<string, IntegrationConfig>;
   integrationLinks: IntegrationLinks;
-  teamRole: string;
+  teamRole: SettingsTeamRole;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;
   rolePermissions: Record<string, Record<string, boolean>>;

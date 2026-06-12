@@ -6,6 +6,18 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink } from "./types";
 import { normalizeIntegrationLinks } from "./integrations";
+import { PROJECT_TEMPLATE_IDS } from "./project-templates";
+import {
+  FILE_CATEGORY_VALUES,
+  FILE_STATUS_VALUES,
+  LEGACY_TEAM_ROLE_VALUES,
+  TEAM_ROLE_VALUES,
+  normalizeStoredProjectStatus,
+  type FileCategory,
+  type FileStatus,
+  type SettingsTeamRole,
+  type StoredTeamRole,
+} from "./domain-values";
 
 const STORAGE_KEY = "video-editing-work-tracker:v1";
 const SALARY_STORAGE_KEY = "video-editing-work-tracker:salary-batches:v1";
@@ -19,7 +31,10 @@ const defaultSalaryBatchAmount = 10000;
 type ToastState = { message: string; tone: "success" | "info" | "warning" };
 type ClerkGetToken = ReturnType<typeof useAuth>["getToken"];
 
-const teamRoleOptions = ["Owner", "Editor", "Reviewer"];
+const teamRoleOptions: StoredTeamRole[] = [
+  ...TEAM_ROLE_VALUES,
+  ...LEGACY_TEAM_ROLE_VALUES,
+];
 const LEGACY_DEMO_SETTINGS = {
   studioName: "CutLab Studio",
   profileName: "Jordan Lee",
@@ -256,12 +271,37 @@ function normalizeStoredItem(value: unknown): WorkItem | null {
     createdAt: typeof value.createdAt === "string" ? value.createdAt : undefined,
     title,
     client: typeof value.client === "string" ? value.client : "",
-    status: stringSetting(value.status, "Planned"),
+    status: normalizeStoredProjectStatus(value.status),
     workType: stringSetting(value.workType, "Job / Salary"),
     startDate: stringSetting(value.startDate, iso(todayDate())),
     dueDate: stringSetting(value.dueDate, iso(todayDate())),
     earnings: typeof value.earnings === "number" && Number.isFinite(value.earnings) ? Math.max(0, value.earnings) : 0,
     notes: typeof value.notes === "string" ? value.notes : "",
+    templateId: typeof value.templateId === "string" &&
+      PROJECT_TEMPLATE_IDS.includes(value.templateId.trim() as (typeof PROJECT_TEMPLATE_IDS)[number])
+      ? value.templateId.trim() as WorkItem["templateId"]
+      : undefined,
+    templateProjectType: typeof value.templateProjectType === "string" && value.templateProjectType.trim()
+      ? value.templateProjectType.trim().slice(0, 80)
+      : undefined,
+    workflowStages: Array.isArray(value.workflowStages)
+      ? value.workflowStages.flatMap((stage): string[] => typeof stage === "string" && stage.trim() ? [stage.trim()] : []).slice(0, 12)
+      : undefined,
+    templateDeliverables: Array.isArray(value.templateDeliverables)
+      ? value.templateDeliverables.flatMap((deliverable): NonNullable<WorkItem["templateDeliverables"]> => {
+          if (!isPlainRecord(deliverable) || typeof deliverable.title !== "string" || !deliverable.title.trim()) return [];
+          const category = FILE_CATEGORY_VALUES.includes(deliverable.category as FileCategory)
+            ? deliverable.category as FileCategory
+            : "Deliverable";
+          const initialStatus = FILE_STATUS_VALUES.includes(deliverable.initialStatus as FileStatus)
+            ? deliverable.initialStatus as FileStatus
+            : "draft";
+          return [{ title: deliverable.title.trim(), category, initialStatus }];
+        }).slice(0, 12)
+      : undefined,
+    checklistItems: Array.isArray(value.checklistItems)
+      ? value.checklistItems.flatMap((entry): string[] => typeof entry === "string" && entry.trim() ? [entry.trim()] : []).slice(0, 20)
+      : undefined,
     integrationLinks: normalizeIntegrationLinks(value.integrationLinks),
   };
 }
@@ -278,6 +318,9 @@ function normalizeSalaryState(value: unknown): SalaryState {
         completedDate: stringSetting(batch.completedDate, iso(todayDate())),
         archived: typeof batch.archived === "boolean" ? batch.archived : false,
         archivedDate: typeof batch.archivedDate === "string" ? batch.archivedDate : "",
+        amount: typeof batch.amount === "number" && Number.isFinite(batch.amount) ? Math.max(0, batch.amount) : undefined,
+        paid: typeof batch.paid === "boolean" ? batch.paid : false,
+        paidDate: typeof batch.paidDate === "string" ? batch.paidDate : "",
       }];
     }),
   };
@@ -381,7 +424,7 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     salaryWorkType,
     salaryBatchSize: positiveIntegerSetting(r.salaryBatchSize, defaultSettings.salaryBatchSize),
     salaryBatchAmount: positiveMoneySetting(r.salaryBatchAmount, defaultSettings.salaryBatchAmount),
-    teamRole: optionSetting(r.teamRole, teamRoleOptions, defaultSettings.teamRole),
+    teamRole: optionSetting(r.teamRole, teamRoleOptions, defaultSettings.teamRole) as SettingsTeamRole,
     theme: optionSetting(r.theme, ["Light", "Dark", "System"], defaultSettings.theme),
     accentColor: colorSetting(r.accentColor, defaultSettings.accentColor),
     density: optionSetting(r.density, ["Comfortable", "Compact"], defaultSettings.density),
@@ -394,7 +437,7 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
           return [{
             id: typeof m.id === "string" && m.id.trim() ? m.id : `member-${m.name.trim().toLowerCase().replace(/\s+/g, "-")}`,
             name: m.name.trim(),
-            role: optionSetting(m.role, teamRoleOptions, "Editor"),
+            role: optionSetting(m.role, teamRoleOptions, "Editor") as StoredTeamRole,
             email: typeof m.email === "string" ? m.email.trim() : "",
           }];
         })
@@ -483,6 +526,11 @@ function isSalaryWorkType(value: string, settings: SettingsState) {
 
 function normalizedSalaryBatchSize(value: unknown) {
   return positiveIntegerSetting(value, defaultSalaryBatchSize);
+}
+
+function normalizedSalaryBatchAmount(value: unknown) {
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(amount) ? Math.max(0, amount) : defaultSalaryBatchAmount;
 }
 
 function todayDate() {
@@ -611,6 +659,7 @@ interface DataContextValue {
   setResourceLinks: React.Dispatch<React.SetStateAction<ResourceLink[]>>;
   salaryBatches: SalaryBatch[];
   reconcileSalaryBatches: (items: WorkItem[]) => void;
+  updateSalaryBatchPayment: (batchId: string, paid: boolean) => void;
   isAuthEnabled: boolean;
   isSignedIn: boolean;
   isAuthLoaded: boolean;
@@ -686,12 +735,25 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
           completedDate: iso(todayDate()),
           archived: false,
           archivedDate: "",
+          amount: normalizedSalaryBatchAmount(settings.salaryBatchAmount),
+          paid: false,
+          paidDate: "",
         });
       }
       writeJson(SALARY_STORAGE_KEY, { batches: next });
       return next;
     });
   }, [settings]);
+
+  const updateSalaryBatchPayment = useCallback((batchId: string, paid: boolean) => {
+    setSalaryBatches((prev) => {
+      const next = prev.map((batch) => batch.id === batchId
+        ? { ...batch, paid, paidDate: paid ? iso(todayDate()) : "" }
+        : batch);
+      writeJson(SALARY_STORAGE_KEY, { batches: next });
+      return next;
+    });
+  }, []);
 
   const value: DataContextValue = {
     items,
@@ -702,6 +764,7 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
     setResourceLinks,
     salaryBatches,
     reconcileSalaryBatches,
+    updateSalaryBatchPayment,
     isAuthEnabled: false,
     isSignedIn: false,
     isAuthLoaded: true,
@@ -721,6 +784,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);
+  const [cloudInitialized, setCloudInitialized] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const initializationToken = useRef(0);
   const authMode = isSignedIn ? "signed-in" : "guest";
@@ -743,6 +807,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     previousAuthMode.current = authMode;
     initializationToken.current += 1;
     setReady(false);
+    setCloudInitialized(false);
   }, [authMode, clerkLoaded]);
 
   // Guest mode: load from localStorage
@@ -771,15 +836,18 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setSettingsState(readInitialSettings());
       setResourceLinksState(readInitialResources());
       setSalaryBatches(normalizeSalaryState(readJson<unknown>(SALARY_STORAGE_KEY, { batches: [] })).batches);
+      let cancelled = false;
       void diagnoseConvexAuthToken(getToken).then((message) => {
-        setToast({ tone: "warning", message });
+        if (!cancelled) setToast({ tone: "warning", message });
       });
       setReady(true);
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (convexItems === undefined || convexSettings === undefined || convexBatches === undefined || convexResources === undefined) return;
-    if (ready) return;
+    if (cloudInitialized) return;
 
     const loadedItems = normalizeWorkItems(convexItems);
     const loadedSettings = convexSettings;
@@ -858,6 +926,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
       setSettingsState(nextSettings);
       setResourceLinksState(nextResources);
       setSalaryBatches(nextBatches);
+      setCloudInitialized(true);
       setReady(true);
     }
 
@@ -870,6 +939,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     isSignedIn,
     convexAuthLoading,
     convexAuthenticated,
+    cloudInitialized,
     getToken,
     ready,
     convexItems,
@@ -885,10 +955,11 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   // Keep signed-in workspaces live after the initial cloud load. Team project
   // changes from other members arrive through Convex subscriptions here.
   useEffect(() => {
-    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !ready || convexItems === undefined || convexResources === undefined) return;
+    if (!clerkLoaded || !isSignedIn || !convexAuthenticated || !cloudInitialized || convexItems === undefined || convexResources === undefined || convexBatches === undefined) return;
     setItemsState(normalizeWorkItems(convexItems));
     setResourceLinksState(normalizeResourceLinks(convexResources));
-  }, [clerkLoaded, convexAuthenticated, convexItems, convexResources, isSignedIn, ready]);
+    setSalaryBatches(normalizeSalaryState({ batches: convexBatches }).batches);
+  }, [clerkLoaded, cloudInitialized, convexAuthenticated, convexBatches, convexItems, convexResources, isSignedIn]);
 
   useEffect(() => {
     if (!clerkLoaded || !isSignedIn || !user || !ready) return;
@@ -1040,6 +1111,9 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
             completedDate: iso(todayDate()),
             archived: false,
             archivedDate: "",
+            amount: normalizedSalaryBatchAmount(settings.salaryBatchAmount),
+            paid: false,
+            paidDate: "",
           });
         }
         const normalizedNext = normalizeSalaryState({ batches: next }).batches;
@@ -1060,6 +1134,31 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     [convexAuthenticated, isSignedIn, replaceAllBatches, settings],
   );
 
+  const updateSalaryBatchPayment = useCallback(
+    (batchId: string, paid: boolean) => {
+      setSalaryBatches((prev) => {
+        const next = normalizeSalaryState({
+          batches: prev.map((batch) => batch.id === batchId
+            ? { ...batch, paid, paidDate: paid ? iso(todayDate()) : "" }
+            : batch),
+        }).batches;
+        if (isSignedIn && convexAuthenticated) {
+          replaceAllBatches({ batches: next }).catch(() => {
+            writeJson(SALARY_STORAGE_KEY, { batches: next });
+            setToast({
+              tone: "warning",
+              message: "Cloud sync failed. The payout status is saved locally for now.",
+            });
+          });
+        } else {
+          writeJson(SALARY_STORAGE_KEY, { batches: next });
+        }
+        return next;
+      });
+    },
+    [convexAuthenticated, isSignedIn, replaceAllBatches],
+  );
+
   const value: DataContextValue = {
     items,
     setItems,
@@ -1069,6 +1168,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
     setResourceLinks,
     salaryBatches,
     reconcileSalaryBatches,
+    updateSalaryBatchPayment,
     isAuthEnabled: true,
     isSignedIn: !!isSignedIn,
     isAuthLoaded: clerkLoaded && ready && (!isSignedIn || !convexAuthLoading),

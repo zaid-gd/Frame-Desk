@@ -16,3 +16,7 @@ pnpm-debug.log*
 next-dev*.log
 
 *.tsbuildinfo
+
+playwright-report/
+test-results/
+blob-report/

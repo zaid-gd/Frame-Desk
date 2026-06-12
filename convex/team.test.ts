@@ -4,6 +4,22 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
+import type {
+  FileCategory,
+  FileStatus,
+  StoredProjectStatus,
+  TeamRole,
+} from "../src/lib/domain-values";
+import {
+  PROJECT_TEMPLATES,
+  applyProjectTemplate,
+} from "../src/lib/project-templates";
+import type { ProjectTemplateId } from "../src/lib/project-templates";
+import {
+  buildPayoutReport,
+  payoutReportToCsv,
+} from "../src/lib/payout-reporting";
+import type { SalaryBatch, WorkItem } from "../src/lib/types";
 
 const modules = import.meta.glob("./**/*.ts");
 
@@ -32,7 +48,32 @@ const reviewerPermissions = {
   useChat: true,
 };
 
-function project(id: string, teamId: string, overrides: Record<string, unknown> = {}) {
+type TestProject = {
+  id: string;
+  teamId: string;
+  ownerUserId?: string;
+  assigneeUserIds: string[];
+  profileId: string;
+  title: string;
+  client: string;
+  status: StoredProjectStatus;
+  workType: string;
+  startDate: string;
+  dueDate: string;
+  earnings: number;
+  notes: string;
+  templateId?: ProjectTemplateId;
+  templateProjectType?: string;
+  workflowStages?: string[];
+  templateDeliverables?: Array<{
+    title: string;
+    category: FileCategory;
+    initialStatus: FileStatus;
+  }>;
+  checklistItems?: string[];
+};
+
+function project(id: string, teamId: string, overrides: Partial<TestProject> = {}): TestProject {
   return {
     id,
     teamId,
@@ -60,11 +101,18 @@ async function setupTeam() {
       inviteCode: "ABC123",
       createdAt,
     });
-    for (const member of [
+    const members: Array<{
+      userId: string;
+      email: string;
+      name: string;
+      role: TeamRole;
+      permissions: typeof ownerPermissions;
+    }> = [
       { userId: "owner", email: "owner@example.com", name: "Owner User", role: "Owner", permissions: ownerPermissions },
       { userId: "editor", email: "editor@example.com", name: "Editor User", role: "Editor", permissions: editorPermissions },
       { userId: "reviewer", email: "reviewer@example.com", name: "Review User", role: "Reviewer", permissions: reviewerPermissions },
-    ]) {
+    ];
+    for (const member of members) {
       await ctx.db.insert("teamMembers", {
         teamId: workspaceId,
         ...member,
@@ -84,7 +132,357 @@ async function setupTeam() {
   };
 }
 
+describe("salary payout reporting", () => {
+  test("calculates period earnings, legacy batch fallbacks, and editor attribution", () => {
+    const projects: WorkItem[] = [
+      {
+        id: "freelance-delivered",
+        profileId: "video-editing",
+        title: "Launch, \"cut\"",
+        status: "Delivered",
+        workType: "Freelance",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-10",
+        earnings: 1200,
+        notes: "",
+      },
+      {
+        id: "personal-salary",
+        profileId: "video-editing",
+        title: "Personal salary edit",
+        status: "Delivered",
+        workType: "Job / Salary",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-11",
+        earnings: 9999,
+        notes: "",
+      },
+      {
+        id: "team-salary",
+        teamId: "team",
+        ownerUserId: "owner",
+        assigneeUserIds: ["editor"],
+        profileId: "video-editing",
+        title: "Team salary edit",
+        status: "Delivered",
+        workType: "Job / Salary",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-12",
+        earnings: 500,
+        notes: "",
+      },
+      {
+        id: "outside-period",
+        profileId: "video-editing",
+        title: "Older project",
+        status: "Delivered",
+        workType: "Freelance",
+        startDate: "2025-12-01",
+        dueDate: "2025-12-20",
+        earnings: 700,
+        notes: "",
+      },
+      {
+        id: "not-delivered",
+        profileId: "video-editing",
+        title: "In progress",
+        status: "In Progress",
+        workType: "Freelance",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-13",
+        earnings: 800,
+        notes: "",
+      },
+    ];
+    const batches: SalaryBatch[] = [
+      {
+        id: "batch-1",
+        number: 1,
+        completedDate: "2026-06-05",
+        archived: false,
+        archivedDate: "",
+        amount: 10000,
+        paid: true,
+        paidDate: "2026-06-06",
+      },
+      {
+        id: "batch-2",
+        number: 2,
+        completedDate: "2026-06-12",
+        archived: false,
+        archivedDate: "",
+      },
+      {
+        id: "batch-old",
+        number: 3,
+        completedDate: "2025-12-10",
+        archived: false,
+        archivedDate: "",
+        amount: 8000,
+      },
+    ];
+
+    const report = buildPayoutReport({
+      projects,
+      salaryBatches: batches,
+      salaryWorkType: "Job / Salary",
+      salaryBatchAmount: 9000,
+      profileName: "Jordan Lee",
+      editors: [
+        { userId: "owner", name: "Owner User" },
+        { userId: "editor", name: "Editor User" },
+      ],
+      period: "year",
+      now: new Date(2026, 5, 12),
+    });
+
+    expect(report.deliveredProjects).toHaveLength(3);
+    expect(report.completedBatchCount).toBe(2);
+    expect(report.paidBatchCount).toBe(1);
+    expect(report.unpaidBatchCount).toBe(1);
+    expect(report.paidBatchEarnings).toBe(10000);
+    expect(report.unpaidBatchEarnings).toBe(9000);
+    expect(report.manualEarnings).toBe(1200);
+    expect(report.batchEarnings).toBe(19000);
+    expect(report.totalEarnings).toBe(20200);
+    expect(report.editors.find((editor) => editor.name === "Editor User")).toMatchObject({
+      deliveredProjects: 1,
+      salaryEdits: 1,
+      totalEarnings: 0,
+    });
+    expect(report.editors.find((editor) => editor.name === "Jordan Lee")).toMatchObject({
+      deliveredProjects: 2,
+      salaryEdits: 1,
+      manualEarnings: 1200,
+      batchEarnings: 19000,
+      totalEarnings: 20200,
+    });
+
+    const csv = payoutReportToCsv(report, "AED");
+    expect(csv).toContain("\"Launch, \"\"cut\"\"\"");
+    expect(csv).toContain("Salary batch,2026-06-12,Batch 2,Jordan Lee,Unpaid,9000,AED");
+  });
+
+  test("persists optional payment metadata while legacy batches remain readable", async () => {
+    const { owner } = await setupTeam();
+    await owner.mutation(api.salaryBatches.replaceAll, {
+      batches: [
+        {
+          id: "paid-batch",
+          number: 1,
+          completedDate: "2026-06-10",
+          archived: false,
+          archivedDate: "",
+          amount: 10000,
+          paid: true,
+          paidDate: "2026-06-11",
+        },
+        {
+          id: "legacy-batch",
+          number: 2,
+          completedDate: "2026-06-12",
+          archived: false,
+          archivedDate: "",
+        },
+      ],
+    });
+    await owner.run(async (ctx) => {
+      await ctx.db.insert("salaryBatches", {
+        userId: "owner",
+        id: "pre-payment-schema-batch",
+        number: 3,
+        completedDate: "2026-06-12",
+        archived: false,
+        archivedDate: "",
+      });
+    });
+
+    const storedBatches = await owner.query(api.salaryBatches.list, {});
+    expect(storedBatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "paid-batch",
+        amount: 10000,
+        paid: true,
+        paidDate: "2026-06-11",
+      }),
+      expect.objectContaining({
+        id: "legacy-batch",
+        paid: false,
+        paidDate: "",
+      }),
+      expect.objectContaining({
+        id: "pre-payment-schema-batch",
+        number: 3,
+      }),
+    ]));
+    expect(storedBatches.find((batch) => batch.id === "pre-payment-schema-batch")?.amount).toBeUndefined();
+    expect(storedBatches.find((batch) => batch.id === "pre-payment-schema-batch")?.paid).toBeUndefined();
+  });
+});
+
 describe("team workspace permissions and synchronization", () => {
+  test("project template catalog creates editable projects without client-specific data", async () => {
+    expect(PROJECT_TEMPLATES).toHaveLength(8);
+    expect(new Set(PROJECT_TEMPLATES.map((template) => template.id)).size).toBe(8);
+    expect(PROJECT_TEMPLATES.map((template) => template.name)).toEqual([
+      "YouTube Video",
+      "Instagram Reel",
+      "Corporate Event Video",
+      "Product Ad",
+      "Wedding Film",
+      "Theme Park / Social Campaign",
+      "Podcast Edit",
+      "Client Retainer Package",
+    ]);
+
+    for (const template of PROJECT_TEMPLATES) {
+      const item = applyProjectTemplate(template, {
+        profileId: "video-editing",
+        startDate: "2026-06-12",
+        dueDate: "2026-06-20",
+        workType: "Freelance",
+      });
+      expect(item.client).toBe("");
+      expect(item.templateProjectType).toBe(template.projectType);
+      expect(item.workflowStages?.length).toBeGreaterThan(0);
+      expect(item.templateDeliverables?.length).toBeGreaterThan(0);
+      expect(item.checklistItems?.length).toBeGreaterThan(0);
+      expect(JSON.stringify(item).toLowerCase()).not.toContain("jordan");
+      expect(JSON.stringify(item).toLowerCase()).not.toContain("cutlab drive");
+    }
+
+    const { owner } = await setupTeam();
+    const template = PROJECT_TEMPLATES[3];
+    const templated = applyProjectTemplate(template, {
+      profileId: "video-editing",
+      startDate: "2026-06-12",
+      dueDate: "2026-06-24",
+      workType: "Freelance",
+    });
+    await owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [{ ...templated, id: "template-product-ad" }],
+    });
+
+    const created = (await owner.query(api.workItems.list, {})).find((item) => item.id === "template-product-ad");
+    expect(created).toMatchObject({
+      templateId: "product-ad",
+      templateProjectType: "Commercial",
+      title: "Product Ad",
+      client: "",
+      workflowStages: template.workflowStages,
+      templateDeliverables: template.deliverables,
+      checklistItems: template.checklistItems,
+    });
+
+    await owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [{
+        ...created!,
+        title: "Summer Product Launch",
+        workflowStages: ["Brief", "Edit", "Approval", "Delivery"],
+        checklistItems: ["Confirm final CTA"],
+      }],
+    });
+    expect((await owner.query(api.workItems.list, {})).find((item) => item.id === "template-product-ad")).toMatchObject({
+      title: "Summer Product Launch",
+      workflowStages: ["Brief", "Edit", "Approval", "Delivery"],
+      checklistItems: ["Confirm final CTA"],
+    });
+  });
+
+  test("blank projects remain valid without template metadata", async () => {
+    const { owner } = await setupTeam();
+    await owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [{
+        id: "blank-project",
+        profileId: "video-editing",
+        title: "Blank Project",
+        client: "",
+        status: "Planned",
+        workType: "Freelance",
+        startDate: "2026-06-12",
+        dueDate: "2026-06-19",
+        earnings: 0,
+        notes: "",
+        assigneeUserIds: [],
+      }],
+    });
+    const blank = (await owner.query(api.workItems.list, {})).find((item) => item.id === "blank-project");
+    expect(blank).toMatchObject({ title: "Blank Project", status: "Planned" });
+    expect(blank?.templateId).toBeUndefined();
+    expect(blank?.workflowStages).toBeUndefined();
+  });
+
+  test("active membership lookup is not limited by earlier non-active records", async () => {
+    const t = convexTest(schema, modules);
+    const userId = "multi-membership-user";
+    const createdAt = new Date().toISOString();
+    const activeTeamId = await t.run(async (ctx) => {
+      for (let index = 0; index < 6; index += 1) {
+        const invitedTeamId = await ctx.db.insert("teamWorkspaces", {
+          ownerUserId: `owner-${index}`,
+          name: `Invited Team ${index}`,
+          inviteCode: `INV${index}`,
+          createdAt,
+        });
+        await ctx.db.insert("teamMembers", {
+          teamId: invitedTeamId,
+          userId,
+          email: "member@example.com",
+          name: "Invited Member",
+          role: "Reviewer",
+          status: "invited",
+          permissions: reviewerPermissions,
+          createdAt,
+        });
+      }
+
+      const teamId = await ctx.db.insert("teamWorkspaces", {
+        ownerUserId: userId,
+        name: "Active Team",
+        inviteCode: "ACTIVE",
+        createdAt,
+      });
+      await ctx.db.insert("teamMembers", {
+        teamId,
+        userId,
+        email: "member@example.com",
+        name: "Active Member",
+        role: "Owner",
+        status: "active",
+        permissions: ownerPermissions,
+        createdAt,
+        joinedAt: createdAt,
+      });
+      await ctx.db.insert("workItems", {
+        userId,
+        id: "active-team-project",
+        teamId,
+        ownerUserId: userId,
+        assigneeUserIds: [],
+        profileId: "video-editing",
+        title: "Active team project",
+        client: "Client",
+        status: "In Progress",
+        workType: "Freelance",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-10",
+        earnings: 500,
+        notes: "",
+        createdAt,
+      });
+      return teamId;
+    });
+    const member = t.withIdentity({ tokenIdentifier: userId, name: "Active Member" });
+
+    expect((await member.query(api.team.getMyWorkspace, {}))?.workspace._id).toBe(activeTeamId);
+    expect(await member.query(api.workItems.list, {})).toContainEqual(
+      expect.objectContaining({ id: "active-team-project", teamId: activeTeamId })
+    );
+  });
+
   test("Owner and Editor can create, edit, assign, and update stages without stale snapshot deletion", async () => {
     const { t, teamId, owner, editor } = await setupTeam();
 
@@ -116,6 +514,7 @@ describe("team workspace permissions and synchronization", () => {
     });
 
     const projects = await editor.query(api.workItems.list, {});
+    expect(projects.map((item) => item.id)).toEqual(["editor-project", "owner-project"]);
     expect(projects.map((item) => item.id).sort()).toEqual(["editor-project", "owner-project"]);
     expect(projects.find((item) => item.id === "editor-project")).toMatchObject({
       status: "Review",
@@ -164,6 +563,46 @@ describe("team workspace permissions and synchronization", () => {
     expect(ownerWorkspace?.activity.some((event) => event.kind === "project_comment")).toBe(true);
     expect(ownerWorkspace?.activity.some((event) => event.kind === "chat_message")).toBe(true);
     expect(ownerWorkspace?.chat[ownerWorkspace.chat.length - 1]?.body).toBe("@owner Review notes are ready.");
+  });
+
+  test("project comments support optional validated timecodes", async () => {
+    const { teamId, owner, reviewer } = await setupTeam();
+    await owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [project("timecoded-comments", teamId, { ownerUserId: "owner" })],
+    });
+
+    await reviewer.mutation(api.team.addProjectComment, {
+      teamId,
+      projectId: "timecoded-comments",
+      body: "Replace the logo.",
+      timecode: "01:05",
+    });
+    await reviewer.mutation(api.team.addProjectComment, {
+      teamId,
+      projectId: "timecoded-comments",
+      body: "General pacing note.",
+    });
+    await expect(reviewer.mutation(api.team.addProjectComment, {
+      teamId,
+      projectId: "timecoded-comments",
+      body: "Invalid timestamp.",
+      timecode: "01:99",
+    })).rejects.toThrow("Use MM:SS or HH:MM:SS");
+
+    const comments = await owner.query(api.team.listProjectComments, {
+      teamId,
+      projectId: "timecoded-comments",
+    });
+    expect(comments).toHaveLength(2);
+    expect(comments[0]).toMatchObject({ body: "Replace the logo.", timecode: "01:05" });
+    expect(comments[1]).toMatchObject({ body: "General pacing note." });
+    expect(comments[1].timecode).toBeUndefined();
+
+    const activity = await owner.query(api.projectActivity.listForProject, {
+      projectId: "timecoded-comments",
+    });
+    expect(activity.some((event) => event.detail === "01:05 · Replace the logo.")).toBe(true);
   });
 
   test("Only a project owner or team Owner can delete a team project", async () => {
@@ -256,5 +695,67 @@ describe("team workspace permissions and synchronization", () => {
       deleteMissing: false,
       items: [project("role-blocked", teamId)],
     })).rejects.toThrow("permission to create");
+  });
+
+  test("legacy project statuses remain readable while unknown statuses are rejected", async () => {
+    const { teamId, owner } = await setupTeam();
+
+    await owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [project("legacy-status", teamId, {
+        ownerUserId: "owner",
+        status: "Client Review",
+      })],
+    });
+
+    expect(await owner.query(api.workItems.list, {})).toContainEqual(
+      expect.objectContaining({ id: "legacy-status", status: "Client Review" })
+    );
+
+    await expect(owner.mutation(api.workItems.replaceAll, {
+      deleteMissing: false,
+      items: [project("invalid-status", teamId, {
+        ownerUserId: "owner",
+        status: "client review" as StoredProjectStatus,
+      })],
+    })).rejects.toThrow();
+  });
+
+  test("mark all notifications reads older unread rows without scanning newer read rows", async () => {
+    const { t, teamId, owner } = await setupTeam();
+    await t.run(async (ctx) => {
+      for (let index = 0; index < 60; index += 1) {
+        await ctx.db.insert("teamNotifications", {
+          teamId,
+          userId: "owner",
+          kind: "project_update",
+          message: `Read notification ${index}`,
+          read: true,
+          createdAt: `2026-06-11T12:${String(index).padStart(2, "0")}:00.000Z`,
+        });
+      }
+      for (let index = 0; index < 2; index += 1) {
+        await ctx.db.insert("teamNotifications", {
+          teamId,
+          userId: "owner",
+          kind: "project_update",
+          message: `Older unread notification ${index}`,
+          read: false,
+          createdAt: `2026-06-10T12:0${index}:00.000Z`,
+        });
+      }
+    });
+
+    await owner.mutation(api.team.markAllNotificationsRead, { teamId });
+
+    const unread = await t.run((ctx) =>
+      ctx.db
+        .query("teamNotifications")
+        .withIndex("by_teamId_and_userId_and_read_and_createdAt", (q) =>
+          q.eq("teamId", teamId).eq("userId", "owner").eq("read", false)
+        )
+        .take(10)
+    );
+    expect(unread).toHaveLength(0);
   });
 });
