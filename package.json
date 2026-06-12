@@ -18,6 +18,8 @@
     "verify:team": "node scripts/verify-team.mjs",
     "test:team": "vitest run convex/team.test.ts",
     "test:files": "vitest run convex/projectFiles.test.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "verify:team:live": "node scripts/verify-team-live.mjs",
     "verify:browser": "node scripts/verify-browser-smoke.mjs",
     "verify:prod": "node scripts/verify-production.mjs"
@@ -41,7 +43,9 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.1.1",
     "@edge-runtime/vm": "^5.0.0",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.6",
     "@types/react-dom": "^19.2.3",

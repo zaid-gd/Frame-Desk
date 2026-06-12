@@ -1,10 +1,11 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
 
 const teamMemberSchema = v.object({
   id: v.string(),
   name: v.string(),
-  role: v.string(),
+  role: storedTeamRoleValidator,
   email: v.string(),
 });
 
@@ -57,7 +58,7 @@ export const upsert = mutation({
     integrations: v.record(v.string(), v.boolean()),
     integrationAccounts: v.record(v.string(), v.string()),
     integrationLinks: v.optional(integrationLinkValidator),
-    teamRole: v.string(),
+    teamRole: settingsTeamRoleValidator,
     teamMembers: v.array(teamMemberSchema),
     editorPermissions: v.record(v.string(), v.boolean()),
     rolePermissions: v.record(v.string(), v.record(v.string(), v.boolean())),

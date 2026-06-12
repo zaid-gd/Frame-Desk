@@ -9,6 +9,7 @@
  */
 
 import type * as clientPortals from "../clientPortals.js";
+import type * as domainValidators from "../domainValidators.js";
 import type * as projectActivity from "../projectActivity.js";
 import type * as projectFiles from "../projectFiles.js";
 import type * as publicProfiles from "../publicProfiles.js";
@@ -26,6 +27,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   clientPortals: typeof clientPortals;
+  domainValidators: typeof domainValidators;
   projectActivity: typeof projectActivity;
   projectFiles: typeof projectFiles;
   publicProfiles: typeof publicProfiles;

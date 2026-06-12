@@ -16,6 +16,9 @@ export const list = query({
       completedDate: batch.completedDate,
       archived: batch.archived,
       archivedDate: batch.archivedDate,
+      amount: batch.amount,
+      paid: batch.paid,
+      paidDate: batch.paidDate,
     }));
   },
 });
@@ -29,6 +32,9 @@ export const replaceAll = mutation({
         completedDate: v.string(),
         archived: v.boolean(),
         archivedDate: v.string(),
+        amount: v.optional(v.number()),
+        paid: v.optional(v.boolean()),
+        paidDate: v.optional(v.string()),
       })
     ),
   },
@@ -42,13 +48,19 @@ export const replaceAll = mutation({
       .take(500);
     await Promise.all(existing.map((batch) => ctx.db.delete(batch._id)));
     await Promise.all(
-      args.batches.map((batch) =>
-        ctx.db.insert("salaryBatches", {
+      args.batches.map((batch) => {
+        const amount = batch.amount === undefined || !Number.isFinite(batch.amount)
+          ? undefined
+          : Math.max(0, batch.amount);
+        return ctx.db.insert("salaryBatches", {
           ...batch,
           id: batch.id ?? `batch-${batch.number}`,
+          ...(amount === undefined ? {} : { amount }),
+          paid: batch.paid ?? false,
+          paidDate: batch.paid ? (batch.paidDate ?? "") : "",
           userId,
-        })
-      )
+        });
+      })
     );
   },
 });

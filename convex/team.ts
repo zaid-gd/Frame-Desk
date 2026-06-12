@@ -2,17 +2,21 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { recordProjectActivity } from "./projectActivity";
+import { teamRoleValidator } from "./domainValidators";
+import type {
+  NotificationKind,
+  TeamActivityKind,
+  TeamRole,
+} from "../src/lib/domain-values";
+import {
+  formatTimecodedDetail,
+  normalizeOptionalTimecode,
+} from "../src/lib/timecode";
 
 const MAX_TEAM_MEMBERS = 5;
 const TEAM_WORKSPACE_NAME_LIMIT = 80;
 
-const roleValidator = v.union(
-  v.literal("Owner"),
-  v.literal("Editor"),
-  v.literal("Reviewer")
-);
-
-const permissionDefaults: Record<string, Record<string, boolean>> = {
+const permissionDefaults: Record<TeamRole, Record<string, boolean>> = {
   Owner: {
     viewProjects: true,
     createProjects: true,
@@ -108,7 +112,7 @@ async function logActivity(
     teamId: string;
     actorUserId: string;
     actorName: string;
-    kind: string;
+    kind: TeamActivityKind;
     message: string;
     projectId?: string;
   }
@@ -125,7 +129,7 @@ async function notifyMentionedMembers(
     teamId: string;
     mentions: string[];
     message: string;
-    kind: string;
+    kind: NotificationKind;
     projectId?: string;
     senderUserId: string;
     requiredPermission?: string;
@@ -235,11 +239,12 @@ export const getMyWorkspace = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const memberships = await ctx.db
+    const currentMember = await ctx.db
       .query("teamMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
-      .take(5);
-    const currentMember = memberships.find((member) => member.status === "active");
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("status", "active")
+      )
+      .first();
     if (!currentMember) return null;
 
     const workspace = await ctx.db.get(currentMember.teamId as Doc<"teamWorkspaces">["_id"]);
@@ -303,11 +308,12 @@ export const createWorkspace = mutation({
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
     const workspaceName = (args.name.trim() || "CutLab Studio Team").slice(0, TEAM_WORKSPACE_NAME_LIMIT);
-    const memberships = await ctx.db
+    const activeMembership = await ctx.db
       .query("teamMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
-      .take(5);
-    const activeMembership = memberships.find((member) => member.status === "active");
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("status", "active")
+      )
+      .first();
     if (activeMembership) return activeMembership.teamId;
 
     const now = new Date().toISOString();
@@ -340,7 +346,7 @@ export const createWorkspace = mutation({
 });
 
 export const inviteMember = mutation({
-  args: { teamId: v.string(), email: v.string(), role: roleValidator },
+  args: { teamId: v.string(), email: v.string(), role: teamRoleValidator },
   handler: async (ctx, args) => {
     const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
     const email = normalizeEmail(args.email);
@@ -383,11 +389,12 @@ export const joinWorkspace = mutation({
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
     const email = normalizeEmail(identity.email);
-    const existingMemberships = await ctx.db
+    const existingActiveMembership = await ctx.db
       .query("teamMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
-      .take(5);
-    const existingActiveMembership = existingMemberships.find((member) => member.status === "active");
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("status", "active")
+      )
+      .first();
     const workspace = await ctx.db
       .query("teamWorkspaces")
       .withIndex("by_inviteCode", (q) => q.eq("inviteCode", args.inviteCode.trim().toUpperCase()))
@@ -446,7 +453,7 @@ export const joinWorkspace = mutation({
 });
 
 export const updateMemberRole = mutation({
-  args: { teamId: v.string(), memberId: v.id("teamMembers"), role: roleValidator },
+  args: { teamId: v.string(), memberId: v.id("teamMembers"), role: teamRoleValidator },
   handler: async (ctx, args) => {
     const { identity } = await requirePermission(ctx, args.teamId, "manageTeam");
     if (args.role === "Owner") throw new Error("Owner role cannot be assigned here");
@@ -617,7 +624,12 @@ export const sendChatMessage = mutation({
 });
 
 export const addProjectComment = mutation({
-  args: { teamId: v.string(), projectId: v.string(), body: v.string() },
+  args: {
+    teamId: v.string(),
+    projectId: v.string(),
+    body: v.string(),
+    timecode: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const { identity, member } = await requirePermission(ctx, args.teamId, "commentProjects");
     if (!member.permissions.viewProjects) throw new Error("Permission denied");
@@ -625,6 +637,7 @@ export const addProjectComment = mutation({
     const body = args.body.trim();
     if (!body) throw new Error("Comment cannot be empty");
     const storedBody = body.slice(0, 1000);
+    const timecode = normalizeOptionalTimecode(args.timecode);
     const mentions = mentionsFrom(storedBody);
     const mentionedMembers = await membersMatchingMentions(ctx, {
       teamId: args.teamId,
@@ -637,6 +650,7 @@ export const addProjectComment = mutation({
       authorUserId: identity.tokenIdentifier,
       authorName: actorName(identity),
       body: storedBody,
+      timecode,
       mentions,
       createdAt: new Date().toISOString(),
     });
@@ -654,7 +668,7 @@ export const addProjectComment = mutation({
       actorName: actorName(identity),
       kind: "team_note_added",
       message: `${actorName(identity)} added a team note.`,
-      detail: storedBody,
+      detail: formatTimecodedDetail(timecode, storedBody),
     });
     await notifyProjectParticipants(ctx, {
       teamId: args.teamId,
@@ -693,15 +707,16 @@ export const markAllNotificationsRead = mutation({
     await findActiveMembership(ctx, args.teamId, identity.tokenIdentifier);
     const notifications = await ctx.db
       .query("teamNotifications")
-      .withIndex("by_teamId_and_userId_and_createdAt", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", identity.tokenIdentifier)
+      .withIndex("by_teamId_and_userId_and_read_and_createdAt", (q) =>
+        q
+          .eq("teamId", args.teamId)
+          .eq("userId", identity.tokenIdentifier)
+          .eq("read", false)
       )
       .order("desc")
       .take(50);
     await Promise.all(
-      notifications
-        .filter((notification) => !notification.read)
-        .map((notification) => ctx.db.patch(notification._id, { read: true }))
+      notifications.map((notification) => ctx.db.patch(notification._id, { read: true }))
     );
   },
 });

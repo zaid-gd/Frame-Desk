@@ -1,12 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { storedProjectStatusValidator } from "./domainValidators";
 
 const PUBLIC_PROFILE_PROJECT_LIMIT = 5;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9._-]{1,39}$/;
 
 const publicProjectValidator = v.object({
   title: v.string(),
-  status: v.string(),
+  status: storedProjectStatusValidator,
   workType: v.string(),
   dueDate: v.string(),
 });
@@ -95,7 +96,7 @@ export const publish = mutation({
       avgTurnaroundDays: Math.max(0, Math.floor(args.avgTurnaroundDays)),
       projects: args.projects.slice(0, PUBLIC_PROFILE_PROJECT_LIMIT).map((project) => ({
         title: project.title.trim(),
-        status: project.status.trim(),
+        status: project.status,
         workType: project.workType.trim(),
         dueDate: project.dueDate.trim(),
       })),

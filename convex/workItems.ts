@@ -2,6 +2,15 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { deleteProjectActivity, recordProjectActivity } from "./projectActivity";
+import {
+  fileCategoryValidator,
+  fileStatusValidator,
+  storedProjectStatusValidator,
+} from "./domainValidators";
+import type {
+  ClientPortalStage,
+  PortalEventKind,
+} from "../src/lib/domain-values";
 
 const integrationLinkValidator = v.record(
   v.string(),
@@ -13,6 +22,12 @@ const integrationLinkValidator = v.record(
   })
 );
 
+const templateDeliverableValidator = v.object({
+  title: v.string(),
+  category: fileCategoryValidator,
+  initialStatus: fileStatusValidator,
+});
+
 export const list = query({
   args: {},
   handler: async (ctx) => {
@@ -20,13 +35,16 @@ export const list = query({
     if (!identity) return [];
     const personalItems = await ctx.db
       .query("workItems")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
+      .withIndex("by_userId_and_teamId", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("teamId", undefined)
+      )
       .take(500);
-    const memberships = await ctx.db
+    const activeMembership = await ctx.db
       .query("teamMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", identity.tokenIdentifier))
-      .take(3);
-    const activeMembership = memberships.find((member) => member.status === "active");
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", identity.tokenIdentifier).eq("status", "active")
+      )
+      .first();
     const canViewTeamProjects = Boolean(activeMembership?.permissions.viewProjects);
     const teamItems = activeMembership && canViewTeamProjects
       ? await ctx.db
@@ -34,8 +52,12 @@ export const list = query({
           .withIndex("by_teamId", (q) => q.eq("teamId", activeMembership.teamId))
           .take(500)
       : [];
+    const currentUserTeamItems = teamItems
+      .filter((item) => item.userId === identity.tokenIdentifier);
+    const currentUserItems = [...personalItems, ...currentUserTeamItems]
+      .sort((left, right) => left._creationTime - right._creationTime);
     const itemsById = new Map<string, Doc<"workItems">>();
-    for (const item of [...personalItems, ...teamItems]) {
+    for (const item of [...currentUserItems, ...teamItems]) {
       itemsById.set(item.id, item);
     }
     const items = Array.from(itemsById.values());
@@ -53,6 +75,11 @@ export const list = query({
       dueDate: item.dueDate,
       earnings: item.earnings,
       notes: item.notes,
+      templateId: item.templateId,
+      templateProjectType: item.templateProjectType,
+      workflowStages: item.workflowStages,
+      templateDeliverables: item.templateDeliverables,
+      checklistItems: item.checklistItems,
       integrationLinks: item.integrationLinks,
       createdAt: item.createdAt,
     }));
@@ -71,12 +98,17 @@ export const replaceAll = mutation({
         profileId: v.string(),
         title: v.string(),
         client: v.optional(v.string()),
-        status: v.string(),
+        status: storedProjectStatusValidator,
         workType: v.string(),
         startDate: v.string(),
         dueDate: v.string(),
         earnings: v.number(),
         notes: v.string(),
+        templateId: v.optional(v.string()),
+        templateProjectType: v.optional(v.string()),
+        workflowStages: v.optional(v.array(v.string())),
+        templateDeliverables: v.optional(v.array(templateDeliverableValidator)),
+        checklistItems: v.optional(v.array(v.string())),
         integrationLinks: v.optional(integrationLinkValidator),
         createdAt: v.optional(v.string()),
       })
@@ -86,18 +118,21 @@ export const replaceAll = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.tokenIdentifier;
-    const memberships = await ctx.db
+    const activeMembership = await ctx.db
       .query("teamMembers")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
-      .take(3);
-    const activeMembership = memberships.find((member) => member.status === "active");
+      .withIndex("by_userId_and_status", (q) =>
+        q.eq("userId", userId).eq("status", "active")
+      )
+      .first();
     const canCreateTeamProjects = Boolean(activeMembership?.permissions.createProjects);
     const canEditTeamProjects = Boolean(activeMembership?.permissions.editProjects);
     const canManageTeamProjects = Boolean(activeMembership?.permissions.manageTeam);
     const canUpdateTeamStatus = Boolean(activeMembership?.permissions.updateStatus);
     const personalExisting = await ctx.db
       .query("workItems")
-      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .withIndex("by_userId_and_teamId", (q) =>
+        q.eq("userId", userId).eq("teamId", undefined)
+      )
       .take(500);
     const teamExisting = activeMembership
       ? await ctx.db
@@ -141,6 +176,11 @@ export const replaceAll = mutation({
         existing.dueDate === item.dueDate &&
         existing.earnings === item.earnings &&
         existing.notes === item.notes &&
+        existing.templateId === item.templateId &&
+        existing.templateProjectType === item.templateProjectType &&
+        JSON.stringify(existing.workflowStages ?? []) === JSON.stringify(item.workflowStages ?? []) &&
+        JSON.stringify(existing.templateDeliverables ?? []) === JSON.stringify(item.templateDeliverables ?? []) &&
+        JSON.stringify(existing.checklistItems ?? []) === JSON.stringify(item.checklistItems ?? []) &&
         JSON.stringify(existing.integrationLinks ?? {}) === JSON.stringify(item.integrationLinks ?? {}) &&
         JSON.stringify(existing.assigneeUserIds ?? []) === JSON.stringify(item.assigneeUserIds ?? [])
       );
@@ -194,6 +234,14 @@ export const replaceAll = mutation({
         dueDate: item.dueDate,
         earnings: item.earnings,
         notes: item.notes,
+        templateId: item.templateId,
+        templateProjectType: item.templateProjectType?.trim().slice(0, 80),
+        workflowStages: item.workflowStages?.map((stage) => stage.trim()).filter(Boolean).slice(0, 12),
+        templateDeliverables: item.templateDeliverables?.map((deliverable) => ({
+          ...deliverable,
+          title: deliverable.title.trim().slice(0, 120),
+        })).filter((deliverable) => deliverable.title).slice(0, 12),
+        checklistItems: item.checklistItems?.map((entry) => entry.trim()).filter(Boolean).slice(0, 20),
         integrationLinks: item.integrationLinks,
         createdAt: item.createdAt ?? existing?.createdAt ?? now,
         teamId: targetTeamId,
@@ -212,6 +260,10 @@ export const replaceAll = mutation({
           existing.startDate !== item.startDate ? "start date" : "",
           existing.dueDate !== item.dueDate ? "due date" : "",
           existing.earnings !== item.earnings ? "amount" : "",
+          existing.templateProjectType !== nextItem.templateProjectType ? "project type" : "",
+          JSON.stringify(existing.workflowStages ?? []) !== JSON.stringify(nextItem.workflowStages ?? []) ? "workflow" : "",
+          JSON.stringify(existing.templateDeliverables ?? []) !== JSON.stringify(nextItem.templateDeliverables ?? []) ? "deliverables" : "",
+          JSON.stringify(existing.checklistItems ?? []) !== JSON.stringify(nextItem.checklistItems ?? []) ? "checklist" : "",
           integrationLinksChanged ? "resource links" : "",
         ].filter(Boolean);
         const assignmentsChanged =
@@ -483,7 +535,7 @@ function portalProgress(status: string) {
   return 15;
 }
 
-function portalStage(status: string) {
+function portalStage(status: string): ClientPortalStage {
   const normalized = status.trim().toLowerCase();
   if (normalized.includes("deliver") || normalized.includes("complete") || normalized === "done") return "Delivered";
   if (normalized.includes("review") || normalized.includes("revision") || normalized.includes("feedback")) return "Review";
@@ -491,7 +543,11 @@ function portalStage(status: string) {
   return "Planning";
 }
 
-function portalMilestone(stage: string) {
+function portalMilestone(stage: ClientPortalStage): {
+  kind: PortalEventKind;
+  title: string;
+  body: string;
+} {
   if (stage === "In Progress") {
     return { kind: "work_started", title: "Work started", body: "Production work is now underway." };
   }

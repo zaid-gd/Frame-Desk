@@ -14,6 +14,11 @@ const routes = [
     expectedText: ["Team", "Team Members", "Loading workspace"],
   },
   { path: "/team-chat", label: "team-chat", expectedText: ["Team Chat", "Manage Team"] },
+  {
+    path: "/reports",
+    label: "reports",
+    expectedText: ["Reports", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
+  },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
   { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },
 ];

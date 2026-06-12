@@ -19,12 +19,18 @@ import CalendarTodayOutlinedIcon from "@mui/icons-material/CalendarTodayOutlined
 import ChatBubbleOutlineOutlinedIcon from "@mui/icons-material/ChatBubbleOutlineOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { api } from "../../../convex/_generated/api";
 import { CutLabLockup } from "../cutlab-brand";
 import { emptyStateAssets } from "../brand-assets";
 import { cutlab, cutlabPanelSx } from "../design-system";
+import { approvalStatusLabel } from "@/lib/domain-values";
+import {
+  normalizeOptionalTimecode,
+  TIMECODE_FORMAT_HINT,
+} from "@/lib/timecode";
 
 const headingFont = cutlab.font.heading;
 const accent = `var(--app-accent, ${cutlab.color.teal})`;
@@ -40,9 +46,15 @@ const panelSx = cutlabPanelSx;
 const stages = ["Planning", "In Progress", "Review", "Delivered"];
 
 export function ClientPortalView({ token }: { token: string }) {
-  const portal = useQuery(api.clientPortals.getByToken, token ? { token } : "skip");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
+  const portalResult = useQuery(
+    api.clientPortals.getByToken,
+    token ? (portalPassword ? { token, password: portalPassword } : { token }) : "skip"
+  );
   const submitRevision = useMutation(api.clientPortals.submitRevision);
   const [clientName, setClientName] = useState("");
+  const [timecode, setTimecode] = useState("");
   const [request, setRequest] = useState("");
   const [submitState, setSubmitState] = useState<"idle" | "submitting" | "submitted">("idle");
   const [error, setError] = useState("");
@@ -51,10 +63,18 @@ export function ClientPortalView({ token }: { token: string }) {
     const message = request.trim();
     if (!message || submitState === "submitting") return;
     setError("");
-    setSubmitState("submitting");
     try {
-      await submitRevision({ token, clientName, message });
+      const normalizedTimecode = normalizeOptionalTimecode(timecode);
+      setSubmitState("submitting");
+      await submitRevision({
+        token,
+        ...(portalPassword ? { password: portalPassword } : {}),
+        clientName,
+        message,
+        ...(normalizedTimecode ? { timecode: normalizedTimecode } : {}),
+      });
       setRequest("");
+      setTimecode("");
       setSubmitState("submitted");
     } catch (caught) {
       setSubmitState("idle");
@@ -62,7 +82,7 @@ export function ClientPortalView({ token }: { token: string }) {
     }
   }
 
-  if (portal === undefined) {
+  if (portalResult === undefined) {
     return (
       <PortalState title="Loading project portal" body="Connecting to the latest client-facing project snapshot.">
         <CircularProgress size={28} sx={{ color: accent }} />
@@ -70,7 +90,7 @@ export function ClientPortalView({ token }: { token: string }) {
     );
   }
 
-  if (portal === null) {
+  if (portalResult.access === "unavailable") {
     return (
       <PortalState title="Portal link unavailable" body="This link may be incorrect, unpublished, or no longer active. Ask your editor for a current portal link.">
         <Box component="img" src={emptyStateAssets.projects} alt="" aria-hidden="true" sx={{ width: 190 }} />
@@ -78,15 +98,64 @@ export function ClientPortalView({ token }: { token: string }) {
     );
   }
 
+  if (portalResult.access === "expired") {
+    return (
+      <PortalState title="Portal link expired" body="This client portal has expired. Ask your editor to extend access or send a new link.">
+        <AccessTimeOutlinedIcon sx={{ color: accent, fontSize: 54 }} />
+      </PortalState>
+    );
+  }
+
+  if (portalResult.access === "locked") {
+    const incorrectCode = Boolean(portalPassword);
+    return (
+      <PortalState
+        title="This portal is protected"
+        body="Enter the PIN or password provided by your editor to view this project."
+      >
+        <Stack
+          component="form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (passwordInput) setPortalPassword(passwordInput);
+          }}
+          gap={1.2}
+          sx={{ width: "min(100%, 360px)" }}
+        >
+          <LockOutlinedIcon sx={{ color: accent, fontSize: 54, alignSelf: "center" }} />
+          <TextField
+            label="PIN or password"
+            type="password"
+            value={passwordInput}
+            onChange={(event) => {
+              setPasswordInput(event.target.value);
+              if (portalPassword) setPortalPassword("");
+            }}
+            inputProps={{ minLength: 4, maxLength: 128 }}
+            error={incorrectCode}
+            helperText={incorrectCode ? "That code did not unlock the portal. Try again." : "Access is granted only after the code is verified."}
+            autoComplete="current-password"
+            autoFocus
+          />
+          <Button type="submit" variant="contained" disabled={passwordInput.length < 4} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>
+            Unlock Portal
+          </Button>
+        </Stack>
+      </PortalState>
+    );
+  }
+
+  const portal = portalResult;
   const currentStageIndex = Math.max(0, stages.indexOf(portal.status));
   const revisionsUsed = portal.revisions.length;
   const revisionsRemaining = Math.max(0, portal.revisionLimit - revisionsUsed);
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: canvas, color: ink }}>
+    <Box data-testid="client-portal" sx={{ minHeight: "100dvh", bgcolor: canvas, color: ink }}>
       <Box sx={{ maxWidth: 1280, mx: "auto", px: { xs: 2, md: 4 }, py: { xs: 2.5, md: 4 } }}>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={2} sx={{ mb: 3 }}>
           <CutLabLockup subtitle="Client Portal" />
           <Stack direction="row" gap={1} flexWrap="wrap">
+            {portalPassword ? <Chip label="Access granted" sx={{ bgcolor: "var(--app-success-bg, rgba(35,181,142,0.14))", color: "var(--app-success, #23B58E)", borderRadius: "5px" }} /> : null}
             <Chip label="No account required" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
             <Chip label="Private project link" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px" }} />
           </Stack>
@@ -152,7 +221,7 @@ export function ClientPortalView({ token }: { token: string }) {
                         <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{item.title}</Typography>
                         <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{item.detail || "Shared project file"}</Typography>
                       </Box>
-                      <StatusChip label={item.status} tone={deliverableTone(item.status)} />
+                      <StatusChip label={approvalStatusLabel(item.status)} tone={deliverableTone(item.status)} />
                       <Stack direction="row" gap={0.6}>
                         <Button component="a" href={item.url} target="_blank" rel="noreferrer" aria-label={`View ${item.title}`} sx={iconButtonSx}>
                           <OpenInNewIcon sx={{ fontSize: 18 }} />
@@ -179,6 +248,14 @@ export function ClientPortalView({ token }: { token: string }) {
                         <StatusChip label={item.status} tone={item.status === "Resolved" ? "success" : "warning"} />
                       </Stack>
                       <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.25 }}>{formatDateTime(item.createdAt)}</Typography>
+                      {item.timecode ? (
+                        <Chip
+                          icon={<AccessTimeOutlinedIcon />}
+                          label={item.timecode}
+                          size="small"
+                          sx={{ mt: 0.75, height: 24, borderRadius: "5px", bgcolor: activeBg, color: accent, fontWeight: 760, "& .MuiChip-icon": { color: accent, fontSize: 15 } }}
+                        />
+                      ) : null}
                       <Typography sx={{ color: ink, fontSize: 13, lineHeight: 1.55, mt: 0.75, whiteSpace: "pre-wrap" }}>{item.message}</Typography>
                     </Box>
                   ))}
@@ -187,6 +264,18 @@ export function ClientPortalView({ token }: { token: string }) {
               <Divider sx={{ my: 2, borderColor: border }} />
               <Stack gap={1.1}>
                 <TextField label="Your name" value={clientName} onChange={(event) => setClientName(event.target.value)} size="small" inputProps={{ maxLength: 100 }} />
+                <TextField
+                  label="Timecode (optional)"
+                  value={timecode}
+                  onChange={(event) => {
+                    setTimecode(event.target.value);
+                    if (error) setError("");
+                  }}
+                  size="small"
+                  placeholder="00:12 or 00:01:25"
+                  inputProps={{ maxLength: 8, inputMode: "numeric" }}
+                  helperText={TIMECODE_FORMAT_HINT}
+                />
                 <TextField
                   label="Revision request"
                   value={request}
@@ -338,8 +427,8 @@ function StatusChip({ label, tone }: { label: string; tone: "success" | "warning
 }
 
 function deliverableTone(status: string): "success" | "warning" | "neutral" {
-  if (status === "Ready" || status === "Delivered") return "success";
-  if (status === "In Progress") return "warning";
+  if (status === "approved" || status === "final_delivered") return "success";
+  if (status === "sent_to_client" || status === "changes_requested") return "warning";
   return "neutral";
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useState } from "react";
 import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
@@ -62,6 +62,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import ViewTimelineOutlinedIcon from "@mui/icons-material/ViewTimelineOutlined";
 import Link from "next/link";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -74,8 +75,44 @@ import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
-import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink } from "@/lib/types";
+import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink, SalaryBatch } from "@/lib/types";
+import {
+  buildPayoutReport,
+  payoutReportToCsv,
+  type PayoutEditor,
+  type PayoutPeriod,
+} from "@/lib/payout-reporting";
+import {
+  APPROVAL_STATUS_LABELS,
+  CLIENT_PORTAL_STAGE_VALUES,
+  DELIVERABLE_STATUS_VALUES,
+  FILE_CATEGORY_VALUES,
+  FILE_PROVIDER_VALUES,
+  FILE_STATUS_VALUES,
+  PROJECT_STATUS_VALUES,
+  REVISION_STATUS_VALUES,
+  TEAM_ROLE_VALUES,
+  type ClientPortalStage,
+  type DeliverableStatus,
+  type FileCategory,
+  type FileProvider,
+  type FileStatus,
+  type ProjectStatus,
+  type RevisionStatus,
+  type SettingsTeamRole,
+  type StoredTeamRole,
+  approvalStatusLabel,
+} from "@/lib/domain-values";
 import type { IntegrationLink, IntegrationLinks, IntegrationServiceId } from "@/lib/integrations";
+import {
+  PROJECT_TEMPLATES,
+  applyProjectTemplate,
+  type ProjectTemplate,
+} from "@/lib/project-templates";
+import {
+  normalizeOptionalTimecode,
+  TIMECODE_FORMAT_HINT,
+} from "@/lib/timecode";
 import {
   configuredIntegrationCount,
   emptyIntegrationLink,
@@ -141,7 +178,6 @@ type SubNavigationItem = {
   href: string;
   label: string;
 };
-type ProjectStatus = "Planned" | "In Progress" | "Review" | "Revision" | "Delivered" | "Cancelled";
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
 type SortKey = "createdAt_desc" | "createdAt_asc" | "dueDate_asc" | "earnings_desc" | "earnings_asc";
@@ -149,7 +185,7 @@ type ClientDetailTab = "Overview" | "Projects" | "Files" | "Activity";
 type TeamMember = {
   id: string;
   name: string;
-  role: string;
+  role: StoredTeamRole;
   email: string;
 };
 type WorkspaceMemberOption = {
@@ -184,7 +220,7 @@ type SettingsState = {
   integrationAccounts: Record<string, string>;
   integrationConfigs: Record<string, IntegrationConfig>;
   integrationLinks: IntegrationLinks;
-  teamRole: string;
+  teamRole: SettingsTeamRole;
   teamMembers: TeamMember[];
   editorPermissions: Record<string, boolean>;
   rolePermissions: Record<string, Record<string, boolean>>;
@@ -222,11 +258,14 @@ type DashboardPipelineItem = {
 
 const profile = getProfile(DEFAULT_PROFILE_ID);
 
-const statusOptions: ProjectStatus[] = ["Planned", "In Progress", "Review", "Revision", "Delivered", "Cancelled"];
+const statusOptions: ProjectStatus[] = [...PROJECT_STATUS_VALUES];
+const externalFileProviderOptions = FILE_PROVIDER_VALUES.filter(
+  (provider): provider is Exclude<FileProvider, "convex"> => provider !== "convex"
+);
 const billingOptions = ["ALL", "Paid", "Unpaid"];
 const dueOptions: DueFilter[] = ["ALL", "This Week", "Overdue", "Delivered"];
 const sortOptions: SortKey[] = ["createdAt_desc", "createdAt_asc", "dueDate_asc", "earnings_desc", "earnings_asc"];
-const teamRoleOptions = ["Owner", "Editor", "Reviewer"];
+const teamRoleOptions = [...TEAM_ROLE_VALUES];
 const currencyOptions = ["USD", "EUR", "GBP", "INR", "AED", "SAR"];
 const currencyLabels: Record<string, string> = {
   USD: "USD ($)",
@@ -415,12 +454,28 @@ const emptyForm = (): WorkItem => ({
 });
 
 export function TrackerApp({ page }: { page: PageKey }) {
-  const { items, setItems, settings, setSettings, resourceLinks, setResourceLinks, isSignedIn, isAuthLoaded, toast, setToast, reconcileSalaryBatches } = useData();
+  const {
+    items,
+    setItems,
+    settings,
+    setSettings,
+    resourceLinks,
+    setResourceLinks,
+    salaryBatches,
+    isSignedIn,
+    isAuthLoaded,
+    toast,
+    setToast,
+    reconcileSalaryBatches,
+    updateSalaryBatchPayment,
+  } = useData();
   const { openSignIn, openSignUp } = useClerk();
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
   const shouldLoadTeamPermissions = Boolean(isSignedIn && isConvexAuthenticated);
   const teamData = useQuery(api.team.getMyWorkspace, shouldLoadTeamPermissions ? {} : "skip");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [projectStartOpen, setProjectStartOpen] = useState(false);
+  const [projectStartScope, setProjectStartScope] = useState<"personal" | "team">("personal");
   const [editingId, setEditingId] = useState("");
   const [detailProjectId, setDetailProjectId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkItem | null>(null);
@@ -447,7 +502,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   });
 
   useEffect(() => {
-    reconcileSalaryBatches(items);
+    reconcileSalaryBatches(items.filter((item) => !item.teamId));
   }, [items, reconcileSalaryBatches]);
 
   useEffect(() => {
@@ -565,6 +620,11 @@ export function TrackerApp({ page }: { page: PageKey }) {
       notify("Create or join a team workspace before adding team projects.", "warning");
       return;
     }
+    setProjectStartScope(scope);
+    setProjectStartOpen(true);
+  }
+
+  function openBlankProject(scope: "personal" | "team" = projectStartScope) {
     setEditingId("");
     setForm({
       ...emptyForm(),
@@ -573,6 +633,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       notes: defaultProjectNotes(settings)
     });
     setFormError("");
+    setProjectStartOpen(false);
     setDialogOpen(true);
   }
 
@@ -606,23 +667,32 @@ export function TrackerApp({ page }: { page: PageKey }) {
     openSignIn();
   }
 
-  function openTemplateProject(template: { title: string; workType: string; notes: string }) {
+  function openTemplateProject(template: ProjectTemplate, scope: "personal" | "team" = projectStartScope) {
     if (!canCreateProjects) {
       notify("Your team role cannot create projects.", "warning");
       return;
     }
+    if (scope === "team" && (!canCreateTeamProjects || !currentTeamId)) {
+      notify("Your team role cannot create projects in this workspace.", "warning");
+      return;
+    }
+    const freelanceTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("freelance"))
+      ?? settings.projectTags.find((tag) => !isSalaryWorkType(tag, settings))
+      ?? settings.projectTags[0]
+      ?? "Freelance";
+    const channelTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("channel"))
+      ?? freelanceTag;
     setEditingId("");
-    setForm({
-      ...emptyForm(),
-      teamId: undefined,
-      assigneeUserIds: [],
-      title: template.title,
-      workType: template.workType,
+    setForm(applyProjectTemplate(template, {
+      profileId: profile.id,
       startDate: iso(todayDate()),
-      dueDate: iso(addDays(todayDate(), 7)),
-      notes: [template.notes, defaultProjectNotes(settings)].filter(Boolean).join("\n\n")
-    });
+      dueDate: iso(addDays(todayDate(), template.durationDays)),
+      workType: template.workType === "channel" ? channelTag : freelanceTag,
+      baseNotes: defaultProjectNotes(settings),
+      teamId: scope === "team" ? currentTeamId : undefined,
+    }));
     setFormError("");
+    setProjectStartOpen(false);
     setDialogOpen(true);
   }
 
@@ -657,7 +727,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
     if (target) setDeleteTarget(target);
   }
 
-  function updateProjectStatus(project: WorkItem, status: string) {
+  function updateProjectStatus(project: WorkItem, status: ProjectStatus) {
     if (project.teamId && !canUpdateProjectStatus && !canEditProjects) {
       notify("Your team role cannot update project status.", "warning");
       return;
@@ -808,9 +878,17 @@ export function TrackerApp({ page }: { page: PageKey }) {
   ) : page === "feedback" ? (
     <FeedbackDesignPage projects={personalProjects} />
   ) : page === "templates" ? (
-    <TemplatesDesignPage onUseTemplate={openTemplateProject} />
+    <TemplatesDesignPage
+      onUseBlank={() => openBlankProject("personal")}
+      onUseTemplate={(template) => openTemplateProject(template, "personal")}
+    />
   ) : page === "reports" ? (
-    <ReportsDesignPage projects={personalProjects} stats={stats} />
+    <ReportsDesignPage
+      projects={projects}
+      salaryBatches={salaryBatches}
+      editors={activeTeamMembers.map((member) => ({ userId: member.userId, name: member.name }))}
+      onUpdateBatchPayment={updateSalaryBatchPayment}
+    />
   ) : page === "integrations" ? (
     <IntegrationsDesignPage projects={personalProjects} settings={settings} setSettings={setSettings} notify={notify} onEditProject={openEditProject} />
   ) : page === "team" ? (
@@ -830,22 +908,31 @@ export function TrackerApp({ page }: { page: PageKey }) {
   );
 
   const projectDialog = (
-    <ProjectDialog
-      open={dialogOpen}
-      editing={Boolean(editingId)}
-      form={form}
-      setForm={(next) => {
-        setForm(next);
-        if (formError) setFormError("");
-      }}
-      clientOptions={clientOptions}
-      workTypeOptions={projectTagOptions}
-      settings={settings}
-      teamMembers={activeTeamMembers}
-      formError={formError}
-      onClose={() => setDialogOpen(false)}
-      onSave={saveProject}
-    />
+    <>
+      <ProjectStartDialog
+        open={projectStartOpen}
+        scope={projectStartScope}
+        onClose={() => setProjectStartOpen(false)}
+        onBlank={() => openBlankProject(projectStartScope)}
+        onTemplate={(template) => openTemplateProject(template, projectStartScope)}
+      />
+      <ProjectDialog
+        open={dialogOpen}
+        editing={Boolean(editingId)}
+        form={form}
+        setForm={(next) => {
+          setForm(next);
+          if (formError) setFormError("");
+        }}
+        clientOptions={clientOptions}
+        workTypeOptions={projectTagOptions}
+        settings={settings}
+        teamMembers={activeTeamMembers}
+        formError={formError}
+        onClose={() => setDialogOpen(false)}
+        onSave={saveProject}
+      />
+    </>
   );
   const deleteDialog = (
     <DeleteProjectDialog
@@ -2568,51 +2655,40 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
   );
 }
 
-function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { title: string; workType: string; notes: string }) => void }) {
+function TemplatesDesignPage({
+  onUseBlank,
+  onUseTemplate,
+}: {
+  onUseBlank: () => void;
+  onUseTemplate: (template: ProjectTemplate) => void;
+}) {
   const settings = useTrackerSettings();
-  const freelanceTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("freelance")) ?? settings.projectTags.find((tag) => !isSalaryWorkType(tag, settings)) ?? settings.projectTags[0];
-  const channelTag = settings.projectTags.find((tag) => tag.toLowerCase().includes("channel")) ?? freelanceTag;
-  const templates: { title: string; body: string; workType: string; notes: string }[] = [
-    {
-      title: "Client Campaign Edit",
-      body: "A standard freelance client cut with review notes and delivery checkpoints.",
-      workType: freelanceTag,
-      notes: "Scope: assemble cut, sound pass, color pass, client review, final export.\nAssets needed: brief, footage, brand files, delivery specs."
-    },
-    {
-      title: "Salary Batch Edit",
-      body: "A job/salary project template that counts toward the batch payout tracker.",
-      workType: settings.salaryWorkType,
-      notes: "Batch workflow: rough cut, revision pass, thumbnail handoff, publish-ready export.\nTrack completion when delivered."
-    },
-    {
-      title: "Channel Upload",
-      body: "A personal channel edit with publishing, thumbnail, and description reminders.",
-      workType: channelTag,
-      notes: "Publishing checklist: edit lock, thumbnail, title options, description, chapters, upload, post-publish review."
-    },
-    {
-      title: "Revision Sprint",
-      body: "A short turnaround project for client changes, fixes, and final delivery.",
-      workType: freelanceTag,
-      notes: "Revision notes: collect feedback, confirm scope, apply changes, export review copy, deliver final files."
-    }
-  ];
 
   return (
-    <PageFrame title="Templates" subtitle="Reusable production structures for common editing work.">
+    <PageFrame
+      title="Templates"
+      subtitle="Start with a practical editing workflow, then change any field to fit the project."
+      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onUseBlank} sx={outlineButtonSx}>Blank Project</Button>}
+    >
       <Grid container spacing={settings.density === "Compact" ? 1 : 1.5}>
-        {templates.map((template) => (
-          <Grid key={template.title} size={{ xs: 12, md: 6, xl: 3 }}>
-            <Paper sx={{ ...panelSx, p: 2.2, minHeight: 190, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        {PROJECT_TEMPLATES.map((template) => (
+          <Grid key={template.id} size={{ xs: 12, md: 6, xl: 3 }}>
+            <Paper sx={{ ...panelSx, p: 2.2, minHeight: 310, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <Box>
                 <Box sx={{ width: 44, height: 44, borderRadius: "6px", border: `1px solid ${border}`, display: "grid", placeItems: "center", color: accent, mb: 2 }}>
                   <InsertDriveFileOutlinedIcon sx={{ fontSize: 24 }} />
                 </Box>
-                <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>{template.title}</Typography>
-                <Typography sx={{ color: muted, fontSize: 13, mt: 1 }}>{template.body}</Typography>
+                <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>{template.name}</Typography>
+                <Typography sx={{ color: muted, fontSize: 13, mt: 1, lineHeight: 1.5 }}>{template.description}</Typography>
+                <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                  <Chip label={template.projectType} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+                  <Chip label={`${template.durationDays} days`} size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px" }} />
+                </Stack>
+                <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase", mt: 1.6 }}>Workflow</Typography>
+                <Typography sx={{ color: ink, fontSize: 12, lineHeight: 1.5, mt: 0.45 }}>{template.workflowStages.join(" → ")}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5, mt: 1 }}>{template.deliverables.length} suggested deliverables · {template.checklistItems.length} checklist items</Typography>
               </Box>
-              <Button onClick={() => onUseTemplate({ title: template.title, workType: template.workType, notes: template.notes })} sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${border}`, borderRadius: 0, px: 0, color: accent, justifyContent: "space-between", fontSize: 13, fontWeight: 720 }}>
+              <Button onClick={() => onUseTemplate(template)} sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${border}`, borderRadius: 0, px: 0, color: accent, justifyContent: "space-between", fontSize: 13, fontWeight: 720 }}>
                 Use template
                 <AddIcon sx={{ color: accent, fontSize: 18 }} />
               </Button>
@@ -2624,33 +2700,192 @@ function TemplatesDesignPage({ onUseTemplate }: { onUseTemplate: (template: { ti
   );
 }
 
-function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: { active: number; delivered: number; earned: number; salaryEdits: number } }) {
+function ReportsDesignPage({
+  projects,
+  salaryBatches,
+  editors,
+  onUpdateBatchPayment,
+}: {
+  projects: WorkItem[];
+  salaryBatches: SalaryBatch[];
+  editors: PayoutEditor[];
+  onUpdateBatchPayment: (batchId: string, paid: boolean) => void;
+}) {
   const settings = useTrackerSettings();
-  const deliveredRate = projects.length ? Math.round((stats.delivered / projects.length) * 100) : 0;
+  const [period, setPeriod] = useState<PayoutPeriod>("year");
+  const report = useMemo(() => buildPayoutReport({
+    projects,
+    salaryBatches,
+    salaryWorkType: settings.salaryWorkType,
+    salaryBatchAmount: settings.salaryBatchAmount,
+    profileName: settings.profileName,
+    editors,
+    period,
+  }), [editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
   const workTypeOptions = projectWorkTypeOptions(settings, projects);
+  const periodLabel = period === "all" ? "All time" : period === "year" ? "This year" : period === "quarter" ? "This quarter" : "This month";
+
+  function exportCsv() {
+    const csv = payoutReportToCsv(report, settings.currencyCode);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cutlab-payout-report-${period}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
-    <PageFrame title="Reports" subtitle="A compact view of production volume, delivery, and earnings.">
-      {!projects.length ? (
-        <Paper sx={panelSx}>
-          <Box sx={{ px: 2, pt: 2 }}>
-            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
-          </Box>
-          <EmptyPanel
-            title="No reports available"
-            body="Create and track a project to start building production, delivery, and earnings reports."
-            assetKey="reports"
-            action={<Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Open Projects</Button>}
-          />
-        </Paper>
-      ) : (
-      <>
-      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Active" value={String(stats.active)} helper="Projects in motion" /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Delivered" value={String(stats.delivered)} helper={`${deliveredRate}% completion rate`} /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Salary Edits" value={String(stats.salaryEdits)} helper={`${normalizedSalaryBatchSize(settings.salaryBatchSize)} edits per batch`} /></Grid>
-        <Grid size={{ xs: 12, md: 3 }}><StatCard label="Collected" value={money(stats.earned, settings.currencyCode)} helper="Freelance plus salary batches" /></Grid>
+    <PageFrame
+      title="Reports"
+      subtitle="Track completed salary batches, delivered work, and editor payouts without turning the tracker into accounting software."
+      action={
+        <Stack direction="row" gap={1}>
+          <FormControl size="small" sx={{ minWidth: 145 }}>
+            <Select value={period} onChange={(event) => setPeriod(event.target.value as PayoutPeriod)}>
+              <MenuItem value="month">This month</MenuItem>
+              <MenuItem value="quarter">This quarter</MenuItem>
+              <MenuItem value="year">This year</MenuItem>
+              <MenuItem value="all">All time</MenuItem>
+            </Select>
+          </FormControl>
+          <Button variant="outlined" startIcon={<FileDownloadOutlinedIcon />} onClick={exportCsv} sx={outlineButtonSx}>
+            Export CSV
+          </Button>
+        </Stack>
+      }
+    >
+      <Grid container spacing={1.5} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Completed Batches" value={String(report.completedBatchCount)} helper={periodLabel} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Paid Batches" value={money(report.paidBatchEarnings, settings.currencyCode)} helper={`${report.paidBatchCount} marked paid`} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Outstanding" value={money(report.unpaidBatchEarnings, settings.currencyCode)} helper={`${report.unpaidBatchCount} unpaid batches`} /></Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Period Earnings" value={money(report.totalEarnings, settings.currencyCode)} helper="Projects plus batch payouts" /></Grid>
       </Grid>
+
+      <Grid container spacing={1.5} sx={{ mb: 2 }}>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <Paper sx={{ ...panelSx, overflow: "hidden" }}>
+            <Box sx={{ p: 2, borderBottom: `1px solid ${border}` }}>
+              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Salary Batch Ledger</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.4 }}>
+                Payout amounts are captured when a batch completes. Older batches use the current setting until saved again.
+              </Typography>
+            </Box>
+            {report.batches.length ? report.batches.map((batch) => (
+              <Box
+                key={batch.id}
+                sx={{
+                  px: 2,
+                  py: 1.4,
+                  borderBottom: `1px solid ${border}`,
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr auto", md: "1.2fr 1fr 1fr auto" },
+                  gap: 1.5,
+                  alignItems: "center",
+                  "&:last-child": { borderBottom: 0 },
+                }}
+              >
+                <Box>
+                  <Typography sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>Batch {batch.number}</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12 }}>{batch.editorName}</Typography>
+                </Box>
+                <Box sx={{ display: { xs: "none", md: "block" } }}>
+                  <Typography sx={tableHeadingSx}>Completed</Typography>
+                  <Typography sx={{ color: ink, fontSize: 13 }}>{formatDate(batch.date, settings.dateFormat)}</Typography>
+                </Box>
+                <Box sx={{ display: { xs: "none", md: "block" } }}>
+                  <Typography sx={tableHeadingSx}>Payout</Typography>
+                  <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{money(batch.amount, settings.currencyCode)}</Typography>
+                </Box>
+                <Stack direction="row" alignItems="center" gap={0.5}>
+                  <Box sx={{ textAlign: "right" }}>
+                    <Typography sx={{ color: batch.paid ? successColor : warningColor, fontSize: 12, fontWeight: 720 }}>
+                      {batch.paid ? "Paid" : "Unpaid"}
+                    </Typography>
+                    {batch.paidDate ? (
+                      <Typography sx={{ color: muted, fontSize: 10 }}>{formatDate(batch.paidDate, settings.dateFormat)}</Typography>
+                    ) : null}
+                  </Box>
+                  <Switch
+                    size="small"
+                    checked={batch.paid}
+                    onChange={(event) => onUpdateBatchPayment(batch.id, event.target.checked)}
+                    inputProps={{ "aria-label": `Mark batch ${batch.number} paid` }}
+                  />
+                </Stack>
+              </Box>
+            )) : (
+              <Box sx={{ p: 3 }}>
+                <Typography sx={{ color: ink, fontWeight: 720 }}>No completed batches in this period</Typography>
+                <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>
+                  A batch appears after {normalizedSalaryBatchSize(settings.salaryBatchSize)} delivered salary edits.
+                </Typography>
+              </Box>
+            )}
+          </Paper>
+        </Grid>
+
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <Paper sx={{ ...panelSx, p: 2, height: "100%" }}>
+            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Editor Summary</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.4, mb: 1.5 }}>
+              Team work is attributed to the first assignee, then the project owner.
+            </Typography>
+            <Stack divider={<Divider sx={{ borderColor: border }} />}>
+              {report.editors.length ? report.editors.map((editor) => (
+                <Box key={editor.id} sx={{ py: 1.2 }}>
+                  <Stack direction="row" justifyContent="space-between" gap={1}>
+                    <Typography sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>{editor.name}</Typography>
+                    <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{money(editor.totalEarnings, settings.currencyCode)}</Typography>
+                  </Stack>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.4 }}>
+                    {editor.deliveredProjects} delivered · {editor.salaryEdits} salary edits
+                  </Typography>
+                </Box>
+              )) : <Typography sx={{ color: muted, fontSize: 13 }}>No delivered work in this period.</Typography>}
+            </Stack>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      <Paper sx={{ ...panelSx, overflow: "hidden", mb: 2 }}>
+        <Box sx={{ p: 2, borderBottom: `1px solid ${border}` }}>
+          <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Delivered Projects</Typography>
+          <Typography sx={{ color: muted, fontSize: 13, mt: 0.4 }}>
+            Project earnings use the delivery due date; salary edits are paid through completed batches.
+          </Typography>
+        </Box>
+        {report.deliveredProjects.length ? report.deliveredProjects.map((project) => (
+          <Box
+            key={project.id}
+            sx={{
+              px: 2,
+              py: 1.35,
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr auto", md: "minmax(220px, 1.8fr) 1fr 1fr 1fr" },
+              gap: 1.5,
+              borderBottom: `1px solid ${border}`,
+              alignItems: "center",
+              "&:last-child": { borderBottom: 0 },
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography noWrap sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>{project.title}</Typography>
+              <Typography sx={{ color: muted, fontSize: 12 }}>{project.workType}</Typography>
+            </Box>
+            <Typography sx={{ color: ink, fontSize: 13 }}>{project.editorName}</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, display: { xs: "none", md: "block" } }}>{formatDate(project.date, settings.dateFormat)}</Typography>
+            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 720, textAlign: { md: "right" } }}>
+              {project.isSalaryEdit ? "Batch tracked" : money(project.amount, settings.currencyCode)}
+            </Typography>
+          </Box>
+        )) : (
+          <Box sx={{ p: 3 }}>
+            <Typography sx={{ color: muted, fontSize: 13 }}>No delivered projects in this period.</Typography>
+          </Box>
+        )}
+      </Paper>
+
       <Paper sx={{ ...panelSx, p: 2 }}>
         <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
         <Stack gap={1.2} sx={{ mt: 2 }}>
@@ -2669,8 +2904,6 @@ function ReportsDesignPage({ projects, stats }: { projects: WorkItem[]; stats: {
           })}
         </Stack>
       </Paper>
-      </>
-      )}
     </PageFrame>
   );
 }
@@ -2694,6 +2927,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   const [inviteCode, setInviteCode] = useState("");
   const [inviteForm, setInviteForm] = useState({ email: "", role: "Editor" });
   const [commentBody, setCommentBody] = useState("");
+  const [commentTimecode, setCommentTimecode] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [teamError, setTeamError] = useState("");
   const [inviteCopyLabel, setInviteCopyLabel] = useState("Copy Invite Code");
@@ -2953,12 +3187,23 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                       {projectComments === undefined ? <Typography sx={{ color: muted, fontSize: 13 }}>Loading comments...</Typography> : projectComments.length ? projectComments.map((comment) => (
                         <Box key={comment._id} sx={{ p: 1.2, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
                           <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{comment.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatActivityTime(comment.createdAt)}</Box></Typography>
+                          <TimecodeChip value={comment.timecode} />
                           <Typography sx={{ color: ink, fontSize: 13, mt: 0.5, whiteSpace: "pre-wrap" }}>{comment.body}</Typography>
                         </Box>
                       )) : <EmptyPanel title="No project comments yet" body="Team notes for this project will appear here in real time." />}
                     </Stack>
                     {canCommentProjects ? (
                       <Stack direction={{ xs: "column", md: "row" }} gap={1}>
+                        <TextField
+                          label="Timecode (optional)"
+                          value={commentTimecode}
+                          size="small"
+                          placeholder="00:12"
+                          sx={{ width: { xs: "100%", md: 180 }, flexShrink: 0 }}
+                          slotProps={{ htmlInput: { maxLength: 8, inputMode: "numeric" } }}
+                          helperText="MM:SS or HH:MM:SS"
+                          onChange={(event) => setCommentTimecode(event.target.value)}
+                        />
                         <TextField
                           label="Project comment"
                           value={commentBody}
@@ -2970,7 +3215,17 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                           helperText={`${commentBody.length}/${TEAM_PROJECT_COMMENT_LIMIT} characters`}
                           onChange={(event) => setCommentBody(event.target.value)}
                         />
-                        <Button variant="contained" sx={{ bgcolor: accent, minWidth: 112, "&:hover": { bgcolor: accent } }} disabled={Boolean(busyAction) || !commentBody.trim()} onClick={() => runTeamAction("comment", async () => { await addProjectComment({ teamId: teamData.workspace._id, projectId: selectedProject.id, body: commentBody }); setCommentBody(""); })}>Post</Button>
+                        <Button variant="contained" sx={{ bgcolor: accent, minWidth: 112, alignSelf: { md: "flex-start" }, "&:hover": { bgcolor: accent } }} disabled={Boolean(busyAction) || !commentBody.trim()} onClick={() => runTeamAction("comment", async () => {
+                          const normalizedTimecode = normalizeOptionalTimecode(commentTimecode);
+                          await addProjectComment({
+                            teamId: teamData.workspace._id,
+                            projectId: selectedProject.id,
+                            body: commentBody,
+                            ...(normalizedTimecode ? { timecode: normalizedTimecode } : {}),
+                          });
+                          setCommentBody("");
+                          setCommentTimecode("");
+                        })}>Post</Button>
                       </Stack>
                     ) : null}
                   </Stack>
@@ -4308,6 +4563,86 @@ function EmptyPanel({
   );
 }
 
+function ProjectStartDialog({
+  open,
+  scope,
+  onClose,
+  onBlank,
+  onTemplate,
+}: {
+  open: boolean;
+  scope: "personal" | "team";
+  onClose: () => void;
+  onBlank: () => void;
+  onTemplate: (template: ProjectTemplate) => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+      <DialogTitle sx={{ fontSize: 24, fontWeight: 760 }}>Create {scope === "team" ? "Team " : ""}Project</DialogTitle>
+      <DialogContent>
+        <Typography sx={{ color: muted, fontSize: 13.5, mb: 2 }}>Start clean or prefill a workflow you can edit immediately.</Typography>
+        <Button
+          variant="outlined"
+          startIcon={<AddIcon />}
+          onClick={onBlank}
+          sx={{ ...outlineButtonSx, width: "100%", justifyContent: "flex-start", px: 1.5, py: 1.2, mb: 2 }}
+        >
+          Blank project
+        </Button>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
+          {PROJECT_TEMPLATES.map((template) => (
+            <Button
+              key={template.id}
+              variant="outlined"
+              onClick={() => onTemplate(template)}
+              sx={{
+                borderColor: border,
+                color: ink,
+                borderRadius: "6px",
+                p: 1.4,
+                minHeight: 92,
+                textAlign: "left",
+                justifyContent: "flex-start",
+                alignItems: "flex-start",
+                textTransform: "none",
+                "&:hover": { borderColor: accent, bgcolor: activeBg },
+              }}
+            >
+              <Box>
+                <Typography sx={{ fontSize: 14, fontWeight: 760 }}>{template.name}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5, lineHeight: 1.45, mt: 0.4 }}>{template.description}</Typography>
+              </Box>
+            </Button>
+          ))}
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} sx={{ color: muted }}>Cancel</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function TimecodeChip({ value }: { value?: string | null }) {
+  if (!value) return null;
+  return (
+    <Chip
+      icon={<AccessTimeOutlinedIcon />}
+      label={value}
+      size="small"
+      sx={{
+        mt: 0.65,
+        height: 23,
+        borderRadius: "5px",
+        bgcolor: activeBg,
+        color: accent,
+        fontWeight: 760,
+        "& .MuiChip-icon": { color: accent, fontSize: 14 },
+      }}
+    />
+  );
+}
+
 function buildClientSummaries(projects: WorkItem[], savedClients: string[] = []) {
   const groups = new Map<string, { name: string; projects: WorkItem[] }>();
   for (const client of savedClients) {
@@ -4803,6 +5138,8 @@ function ProjectRow({ project, canEdit, canDelete, onView, onEdit, onDelete }: {
   return (
     <Box
       role="button"
+      data-testid="project-row"
+      data-project-title={project.title}
       tabIndex={0}
       aria-label={`View details for ${project.title}`}
       onClick={onView}
@@ -5019,7 +5356,7 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, localActivity, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; localActivity: ProjectActivityEvent[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: string) => void }) {
+function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, localActivity, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; localActivity: ProjectActivityEvent[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: ProjectStatus) => void }) {
   if (!project) {
     return null;
   }
@@ -5039,6 +5376,7 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
   return (
     <Dialog
       open
+      data-testid="project-detail-dialog"
       onClose={onClose}
       fullWidth
       maxWidth="xl"
@@ -5086,7 +5424,7 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
                   <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Workflow Progress</Typography>
                   <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{progress}% complete · {projectPriority(project)}</Typography>
                 </Box>
-                {canUpdateStatus ? <CompactSelect value={project.status} options={statusOptions} onChange={(status) => onStatusChange(project, status)} width={{ xs: "100%", sm: 180 }} /> : <StatusChip status={project.status} />}
+                {canUpdateStatus ? <CompactSelect value={project.status} options={statusOptions} onChange={(status) => onStatusChange(project, status as ProjectStatus)} width={{ xs: "100%", sm: 180 }} /> : <StatusChip status={project.status} />}
               </Stack>
               <ProjectStageTracker status={project.status} />
             </Paper>
@@ -5267,14 +5605,14 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
   const [source, setSource] = useState<"upload" | "external">("upload");
   const [targetFileId, setTargetFileId] = useState<Id<"projectFiles"> | undefined>();
   const [browserFile, setBrowserFile] = useState<File | null>(null);
-  const [category, setCategory] = useState("Deliverable");
+  const [category, setCategory] = useState<FileCategory>("Deliverable");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("Working");
+  const [status, setStatus] = useState<FileStatus>("draft");
   const [clientVisible, setClientVisible] = useState(false);
   const [downloadable, setDownloadable] = useState(true);
   const [notes, setNotes] = useState("");
-  const [provider, setProvider] = useState("external");
+  const [provider, setProvider] = useState<Exclude<FileProvider, "convex">>("external");
   const [externalUrl, setExternalUrl] = useState("");
   const [externalId, setExternalId] = useState("");
   const [externalSize, setExternalSize] = useState(0);
@@ -5290,7 +5628,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
     setCategory("Deliverable");
     setTitle("");
     setDescription("");
-    setStatus("Working");
+    setStatus("draft");
     setClientVisible(false);
     setDownloadable(true);
     setNotes("");
@@ -5332,10 +5670,10 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
       const shared = {
         projectId: project.id,
         projectFileId: targetFileId,
-        category: category as "Deliverable" | "Reference" | "Asset",
+        category,
         title,
         description,
-        status: status as "Working" | "In Review" | "Approved" | "Delivered",
+        status,
         clientVisible: category === "Deliverable" && clientVisible,
         downloadable,
         notes,
@@ -5360,7 +5698,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
         if (!externalUrl.trim()) throw new Error("Enter a file URL.");
         await saveExternalVersion({
           ...shared,
-          provider: provider as "external" | "google_drive" | "frame_io",
+          provider,
           externalUrl,
           externalId: externalId || undefined,
           fileName: title.trim(),
@@ -5379,17 +5717,17 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
 
   async function changeFileMetadata(
     file: NonNullable<typeof fileData>["files"][number],
-    overrides: Partial<{ status: string; clientVisible: boolean; downloadable: boolean }>
+    overrides: Partial<{ status: FileStatus; clientVisible: boolean; downloadable: boolean }>
   ) {
     setBusy(`status-${file._id}`);
     setError("");
     try {
       await updateFile({
         fileId: file._id,
-        category: file.category as "Deliverable" | "Reference" | "Asset",
+        category: file.category,
         title: file.title,
         description: file.description,
-        status: (overrides.status ?? file.status) as "Working" | "In Review" | "Approved" | "Delivered",
+        status: overrides.status ?? file.status,
         clientVisible: overrides.clientVisible ?? file.clientVisible,
         downloadable: overrides.downloadable ?? file.downloadable,
       });
@@ -5444,7 +5782,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
         ) : view === "files" ? (
           <>
             <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ mt: 1.4, mb: 1.2 }}>
-              {["All", "Deliverable", "Reference", "Asset"].map((item) => (
+              {["All", ...FILE_CATEGORY_VALUES].map((item) => (
                 <Chip key={item} label={item} onClick={() => setCategoryFilter(item)} sx={{ bgcolor: categoryFilter === item ? activeBg : softPanel, color: categoryFilter === item ? accent : muted, borderRadius: "5px", fontWeight: 700 }} />
               ))}
             </Stack>
@@ -5452,21 +5790,27 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
               {filteredFiles.length ? filteredFiles.map((file) => {
                 const latest = file.versions[0];
                 return (
-                  <Accordion key={file._id} disableGutters sx={{ bgcolor: softPanel, color: ink, border: `1px solid ${border}`, borderRadius: "6px !important", "&:before": { display: "none" } }}>
+                  <Accordion key={file._id} data-testid="project-file-card" data-file-title={file.title} disableGutters sx={{ bgcolor: softPanel, color: ink, border: `1px solid ${border}`, borderRadius: "6px !important", "&:before": { display: "none" } }}>
                     <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: muted }} />} sx={{ px: 1.4 }}>
                       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1} sx={{ width: "100%", pr: 1 }}>
                         <Box sx={{ minWidth: 0 }}>
                           <Stack direction="row" alignItems="center" gap={0.7} flexWrap="wrap">
                             <Typography noWrap sx={{ color: ink, fontSize: 13.5, fontWeight: 760 }}>{file.title}</Typography>
                             <Chip label={file.category} size="small" sx={{ height: 20, bgcolor: activeBg, color: accent, borderRadius: "4px", fontSize: 10.5 }} />
-                            {file.clientVisible ? <Chip label="Client visible" size="small" sx={{ height: 20, bgcolor: "var(--app-success-bg)", color: successColor, borderRadius: "4px", fontSize: 10.5 }} /> : null}
+                            {file.clientVisible ? (
+                              <Chip
+                                label={file.status === "draft" ? "Share when sent" : "Client visible"}
+                                size="small"
+                                sx={{ height: 20, bgcolor: file.status === "draft" ? activeBg : "var(--app-success-bg)", color: file.status === "draft" ? accent : successColor, borderRadius: "4px", fontSize: 10.5 }}
+                              />
+                            ) : null}
                           </Stack>
                           <Typography noWrap sx={{ color: muted, fontSize: 11.5, mt: 0.35 }}>
                             {latest ? `${latest.fileName} · v${latest.versionNumber} · ${formatFileSize(latest.size)} · ${latest.uploadedByName}` : "No versions"}
                           </Typography>
                         </Box>
                         <Stack direction="row" alignItems="center" gap={0.7} onClick={(event) => event.stopPropagation()}>
-                          {canEdit ? <CompactSelect value={file.status} options={["Working", "In Review", "Approved", "Delivered"]} onChange={(nextStatus) => changeFileMetadata(file, { status: nextStatus })} width={126} /> : <StatusChip status={file.status} />}
+                          {canEdit ? <CompactSelect value={file.status} options={[...FILE_STATUS_VALUES]} labels={APPROVAL_STATUS_LABELS} onChange={(nextStatus) => changeFileMetadata(file, { status: nextStatus as FileStatus })} width={164} /> : <StatusChip status={approvalStatusLabel(file.status)} />}
                           {latest?.url ? <Button component="a" href={latest.url} target="_blank" rel="noreferrer" aria-label={`Open ${file.title}`} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}><FileDownloadOutlinedIcon sx={{ fontSize: 18 }} /></Button> : null}
                         </Stack>
                       </Stack>
@@ -5479,6 +5823,9 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                             <Box>
                               <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>Version {version.versionNumber} · {version.fileName}</Typography>
                               <Typography sx={{ color: muted, fontSize: 11, mt: 0.2 }}>{providerLabel(version.provider)} · {formatFileSize(version.size)} · {formatShortDateTime(version.uploadedAt)} · {version.uploadedByName}</Typography>
+                              <Typography sx={{ color: version.status ? accent : muted, fontSize: 11, mt: 0.25 }}>
+                                {version.status ? approvalStatusLabel(version.status) : "Approval state not recorded"}
+                              </Typography>
                               {version.notes ? <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.45 }}>{version.notes}</Typography> : null}
                             </Box>
                             {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewIcon />} sx={{ color: accent, alignSelf: { xs: "flex-start", sm: "center" } }}>Open</Button> : null}
@@ -5493,7 +5840,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                             <>
                               <Stack direction="row" alignItems="center" gap={0.35}>
                                 <Switch size="small" checked={file.clientVisible} onChange={(event) => changeFileMetadata(file, { clientVisible: event.target.checked })} />
-                                <Typography sx={{ color: muted, fontSize: 11.5 }}>Client visible</Typography>
+                                <Typography sx={{ color: muted, fontSize: 11.5 }}>{file.status === "draft" ? "Share when sent" : "Client visible"}</Typography>
                               </Stack>
                               <Stack direction="row" alignItems="center" gap={0.35}>
                                 <Switch size="small" checked={file.downloadable} onChange={(event) => changeFileMetadata(file, { downloadable: event.target.checked })} />
@@ -5520,6 +5867,9 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                   <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{file?.title ?? version.fileName} · Version {version.versionNumber}</Typography>
                     <Typography sx={{ color: muted, fontSize: 11.2, mt: 0.25 }}>{version.fileName} · {formatFileSize(version.size)} · uploaded by {version.uploadedByName} · {formatShortDateTime(version.uploadedAt)}</Typography>
+                    <Typography sx={{ color: version.status ? accent : muted, fontSize: 10.8, mt: 0.25 }}>
+                      {version.status ? approvalStatusLabel(version.status) : "Approval state not recorded"}
+                    </Typography>
                   </Box>
                   {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" sx={{ minWidth: 32, width: 32, height: 32, color: accent, p: 0 }}><OpenInNewIcon sx={{ fontSize: 17 }} /></Button> : null}
                 </Stack>
@@ -5538,12 +5888,12 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
               <Tab value="upload" label="Upload" />
               <Tab value="external" label="External Link" />
             </Tabs>
-            {!targetFileId ? (
-              <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
-                <DialogSelect label="Category" value={category} options={["Deliverable", "Reference", "Asset"]} onChange={(value) => { setCategory(value); if (value !== "Deliverable") setClientVisible(false); }} />
-                <DialogSelect label="Status" value={status} options={["Working", "In Review", "Approved", "Delivered"]} onChange={setStatus} />
-              </Stack>
-            ) : null}
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
+              {!targetFileId ? (
+                <DialogSelect label="Category" value={category} options={[...FILE_CATEGORY_VALUES]} onChange={(value) => { setCategory(value as FileCategory); if (value !== "Deliverable") setClientVisible(false); }} />
+              ) : null}
+              <DialogSelect label="Approval state" value={status} options={[...FILE_STATUS_VALUES]} labels={APPROVAL_STATUS_LABELS} onChange={(value) => setStatus(value as FileStatus)} />
+            </Stack>
             <TextField label="File title" value={title} onChange={(event) => setTitle(event.target.value)} disabled={Boolean(targetFileId)} />
             {!targetFileId ? <TextField label="Description" value={description} onChange={(event) => setDescription(event.target.value)} multiline minRows={2} /> : null}
             {source === "upload" ? (
@@ -5553,7 +5903,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
               </Button>
             ) : (
               <>
-                <DialogSelect label="Provider" value={provider} options={["external", "google_drive", "frame_io"]} labels={{ external: "External URL", google_drive: "Google Drive", frame_io: "Frame.io" }} onChange={setProvider} />
+                <DialogSelect label="Provider" value={provider} options={externalFileProviderOptions} labels={{ external: "External URL", google_drive: "Google Drive", frame_io: "Frame.io" }} onChange={(value) => setProvider(value as Exclude<FileProvider, "convex">)} />
                 <TextField label="File URL" value={externalUrl} onChange={(event) => setExternalUrl(event.target.value)} placeholder="https://..." />
                 <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
                   <TextField label="Provider file ID" value={externalId} onChange={(event) => setExternalId(event.target.value)} fullWidth helperText="Optional. Reserved for future API synchronization." />
@@ -5564,7 +5914,15 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
             <TextField label="Version notes" value={notes} onChange={(event) => setNotes(event.target.value)} multiline minRows={2} />
             {!targetFileId && category === "Deliverable" ? (
               <Stack direction={{ xs: "column", sm: "row" }} gap={2}>
-                <Stack direction="row" alignItems="center" gap={0.6}><Switch checked={clientVisible} onChange={(event) => setClientVisible(event.target.checked)} size="small" /><Typography sx={{ color: muted, fontSize: 12 }}>Show in Client Portal</Typography></Stack>
+                <Stack direction="row" alignItems="center" gap={0.6}>
+                  <Switch
+                    checked={clientVisible}
+                    onChange={(event) => setClientVisible(event.target.checked)}
+                    size="small"
+                    slotProps={{ input: { "aria-label": status === "draft" ? "Share when sent" : "Show in Client Portal" } }}
+                  />
+                  <Typography sx={{ color: muted, fontSize: 12 }}>{status === "draft" ? "Share when sent" : "Show in Client Portal"}</Typography>
+                </Stack>
                 <Stack direction="row" alignItems="center" gap={0.6}><Switch checked={downloadable} onChange={(event) => setDownloadable(event.target.checked)} size="small" /><Typography sx={{ color: muted, fontSize: 12 }}>Allow download</Typography></Stack>
               </Stack>
             ) : null}
@@ -5602,7 +5960,9 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     isConvexAuthenticated ? { projectId: project.id } : "skip"
   );
   const publishPortal = useMutation(api.clientPortals.publish);
-  const setPortalPublished = useMutation(api.clientPortals.setPublished);
+  const setPortalAccessControls = useMutation(api.clientPortals.setAccessControls);
+  const regeneratePortalToken = useMutation(api.clientPortals.regenerateToken);
+  const setPortalPasswordProtection = useMutation(api.clientPortals.setPasswordProtection);
   const removeDeliverable = useMutation(api.clientPortals.removeDeliverable);
   const updateDeliverableStatus = useMutation(api.clientPortals.updateDeliverableStatus);
   const updateRevisionStatus = useMutation(api.clientPortals.updateRevisionStatus);
@@ -5611,7 +5971,10 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
   const [clientNotes, setClientNotes] = useState("");
   const [estimatedCompletion, setEstimatedCompletion] = useState(project.dueDate);
   const [revisionLimit, setRevisionLimit] = useState(2);
-  const [clientStage, setClientStage] = useState("Planning");
+  const [clientStage, setClientStage] = useState<ClientPortalStage>("Planning");
+  const [accessEnabled, setAccessEnabled] = useState(true);
+  const [expiresAt, setExpiresAt] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const portal = portalData?.portal;
@@ -5622,6 +5985,9 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     setEstimatedCompletion(portal?.estimatedCompletion ?? project.dueDate);
     setRevisionLimit(portal?.revisionLimit ?? 2);
     setClientStage(portal?.status ?? clientPortalStage(project.status));
+    setAccessEnabled(portal?.enabled ?? true);
+    setExpiresAt(toDateTimeLocal(portal?.expiresAt));
+    setPortalPassword("");
     setError("");
     setManagerOpen(true);
   }
@@ -5661,6 +6027,70 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     setError(copied ? "" : "Could not copy the portal link.");
   }
 
+  async function saveAccessControls() {
+    if (!portal || !canEdit) return;
+    setBusy("access");
+    setError("");
+    try {
+      await setPortalAccessControls({
+        portalId: portal._id,
+        enabled: accessEnabled,
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      });
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update portal access.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function regeneratePortalLink() {
+    if (!portal || !canEdit) return;
+    if (typeof window !== "undefined" && !window.confirm("Regenerate this portal link? The current link will stop working immediately.")) return;
+    setBusy("regenerate");
+    setError("");
+    try {
+      const result = await regeneratePortalToken({ portalId: portal._id });
+      const copied = await copyText(portalUrl(result.token));
+      if (!copied) setError("The link was regenerated, but it could not be copied.");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not regenerate the portal link.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function savePortalPassword() {
+    if (!portal || !canEdit || portalPassword.length < 4) return;
+    setBusy("password");
+    setError("");
+    try {
+      await setPortalPasswordProtection({
+        portalId: portal._id,
+        password: portalPassword,
+      });
+      setPortalPassword("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not update portal protection.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function removePortalPassword() {
+    if (!portal || !canEdit) return;
+    setBusy("password-remove");
+    setError("");
+    try {
+      await setPortalPasswordProtection({ portalId: portal._id, password: null });
+      setPortalPassword("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not remove portal protection.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function deleteDeliverable(deliverableId: Parameters<typeof removeDeliverable>[0]["deliverableId"]) {
     setBusy(`remove-${deliverableId}`);
     setError("");
@@ -5673,7 +6103,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     }
   }
 
-  async function changeDeliverableStatus(deliverableId: Parameters<typeof updateDeliverableStatus>[0]["deliverableId"], status: string) {
+  async function changeDeliverableStatus(deliverableId: Parameters<typeof updateDeliverableStatus>[0]["deliverableId"], status: DeliverableStatus) {
     setBusy(`deliverable-${deliverableId}`);
     setError("");
     try {
@@ -5685,7 +6115,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     }
   }
 
-  async function changeRevisionStatus(revisionId: Parameters<typeof updateRevisionStatus>[0]["revisionId"], status: string) {
+  async function changeRevisionStatus(revisionId: Parameters<typeof updateRevisionStatus>[0]["revisionId"], status: RevisionStatus) {
     setBusy(`revision-${revisionId}`);
     setError("");
     try {
@@ -5697,6 +6127,9 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
     }
   }
 
+  const portalExpired = Boolean(portal?.expiresAt && Date.parse(portal.expiresAt) <= Date.now());
+  const portalAccessLabel = !portal?.enabled ? "Disabled" : portalExpired ? "Expired" : "Active";
+
   return (
     <>
       <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
@@ -5705,7 +6138,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
             <Stack direction="row" alignItems="center" gap={0.8}>
               <PublicOutlinedIcon sx={{ color: accent, fontSize: 20 }} />
               <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Client Portal</Typography>
-              {portal ? <Chip label={portal.published ? "Published" : "Unpublished"} size="small" sx={{ bgcolor: portal.published ? activeBg : softPanel, color: portal.published ? accent : muted, borderRadius: "5px" }} /> : null}
+              {portal ? <Chip label={portalAccessLabel} size="small" sx={{ bgcolor: portal.enabled && !portalExpired ? activeBg : softPanel, color: portal.enabled && !portalExpired ? accent : muted, borderRadius: "5px" }} /> : null}
             </Stack>
             <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.45 }}>
               Share a client-safe project view without exposing internal notes, earnings, or team activity.
@@ -5730,7 +6163,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
               <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
                 <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>Deliverables</Typography>
                 <Typography sx={{ color: ink, fontSize: 24, fontWeight: 760, mt: 0.35 }}>{portalData.deliverables.length}</Typography>
-                <Typography sx={{ color: muted, fontSize: 11.5 }}>{portalData.deliverables.filter((item) => item.status === "Delivered").length} delivered · {portalData.deliverables.filter((item) => item.status === "Ready").length} ready</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5 }}>{portalData.deliverables.filter((item) => item.status === "final_delivered").length} final · {portalData.deliverables.filter((item) => item.status === "approved").length} approved</Typography>
               </Box>
               <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px" }}>
                 <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase" }}>Revision History</Typography>
@@ -5748,7 +6181,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                         <Typography noWrap sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{item.title}</Typography>
                         <Typography noWrap sx={{ color: muted, fontSize: 11.2, mt: 0.2 }}>{item.detail || item.url}</Typography>
                       </Box>
-                      {canEdit ? <CompactSelect value={item.status} options={["Pending", "In Progress", "Ready", "Delivered"]} onChange={(status) => changeDeliverableStatus(item._id, status)} width={{ xs: "100%", sm: 138 }} /> : <StatusChip status={item.status} />}
+                      {canEdit ? <CompactSelect value={item.status} options={[...DELIVERABLE_STATUS_VALUES]} labels={APPROVAL_STATUS_LABELS} onChange={(status) => changeDeliverableStatus(item._id, status as DeliverableStatus)} width={{ xs: "100%", sm: 164 }} /> : <StatusChip status={approvalStatusLabel(item.status)} />}
                     </Stack>
                   )) : <Typography sx={{ color: muted, fontSize: 12 }}>No deliverables yet.</Typography>}
                 </Stack>
@@ -5763,8 +6196,9 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                           <Typography sx={{ color: ink, fontSize: 12.5, fontWeight: 700 }}>{revision.clientName}</Typography>
                           <Typography sx={{ color: muted, fontSize: 10.8, mt: 0.2 }}>{formatShortDateTime(revision.createdAt)}</Typography>
                         </Box>
-                        {canEdit ? <CompactSelect value={revision.status} options={["Submitted", "In Review", "Resolved"]} onChange={(status) => changeRevisionStatus(revision._id, status)} width={{ xs: "100%", sm: 130 }} /> : <StatusChip status={revision.status} />}
+                        {canEdit ? <CompactSelect value={revision.status} options={[...REVISION_STATUS_VALUES]} onChange={(status) => changeRevisionStatus(revision._id, status as RevisionStatus)} width={{ xs: "100%", sm: 130 }} /> : <StatusChip status={revision.status} />}
                       </Stack>
+                      <TimecodeChip value={revision.timecode} />
                       <Typography sx={{ color: muted, fontSize: 11.5, lineHeight: 1.45, mt: 0.55, whiteSpace: "pre-wrap" }}>{revision.message}</Typography>
                     </Box>
                   )) : <Typography sx={{ color: muted, fontSize: 12 }}>No revision requests yet.</Typography>}
@@ -5775,7 +6209,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
         ) : null}
       </Paper>
 
-      <Dialog open={managerOpen} onClose={() => setManagerOpen(false)} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}>
+      <Dialog open={managerOpen} data-testid="client-portal-manager" onClose={() => setManagerOpen(false)} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}>
         <DialogTitle sx={{ borderBottom: `1px solid ${border}`, px: { xs: 2, md: 3 }, py: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
             <Box>
@@ -5802,16 +6236,83 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                     <Stack direction="row" gap={0.8} flexWrap="wrap">
                       <Button onClick={copyPortalLink} variant="outlined" sx={outlineButtonSx}>Copy Link</Button>
                       <Button component="a" href={portalUrl()} target="_blank" rel="noreferrer" variant="outlined" endIcon={<OpenInNewIcon />} sx={outlineButtonSx}>Open</Button>
-                      <Button
-                        onClick={() => void setPortalPublished({ portalId: portal._id, published: !portal.published })}
-                        sx={{ color: portal.published ? dangerColor : accent }}
-                      >
-                        {portal.published ? "Unpublish" : "Republish"}
+                      <Button onClick={regeneratePortalLink} disabled={!canEdit || busy === "regenerate"} sx={{ color: dangerColor }}>
+                        {busy === "regenerate" ? "Regenerating..." : "Regenerate Link"}
                       </Button>
                     </Stack>
                   ) : null}
                 </Stack>
               </Paper>
+
+              {portal ? (
+                <Paper sx={{ ...panelSx, p: 2 }}>
+                  <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Access Controls</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>Disable access immediately or set an optional expiry for this public link.</Typography>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) minmax(220px, 1fr) auto" }, gap: 1.2, alignItems: "center", mt: 1.5 }}>
+                    <Stack direction="row" alignItems="center" gap={0.8}>
+                      <Switch
+                        checked={accessEnabled}
+                        onChange={(event) => setAccessEnabled(event.target.checked)}
+                        disabled={!canEdit}
+                        slotProps={{ input: { "aria-label": "Portal access" } }}
+                      />
+                      <Box>
+                        <Typography sx={{ color: ink, fontSize: 13, fontWeight: 700 }}>Portal access</Typography>
+                        <Typography sx={{ color: muted, fontSize: 11.5 }}>{accessEnabled ? "Anyone with the current link can access it." : "The public link is blocked."}</Typography>
+                      </Box>
+                    </Stack>
+                    <TextField
+                      label="Expires"
+                      type="datetime-local"
+                      value={expiresAt}
+                      onChange={(event) => setExpiresAt(event.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                      helperText="Optional. Uses your local time."
+                      disabled={!canEdit}
+                    />
+                    <Button variant="outlined" onClick={saveAccessControls} disabled={!canEdit || busy === "access"} sx={outlineButtonSx}>
+                      {busy === "access" ? "Saving..." : "Save Access"}
+                    </Button>
+                  </Box>
+                </Paper>
+              ) : null}
+
+              {portal ? (
+                <Paper sx={{ ...panelSx, p: 2 }}>
+                  <Stack direction="row" alignItems="center" gap={0.8}>
+                    <LockOutlinedIcon sx={{ color: accent, fontSize: 20 }} />
+                    <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>PIN Or Password</Typography>
+                    <Chip
+                      label={portal.passwordProtected ? "Protected" : "Not protected"}
+                      size="small"
+                      sx={{ bgcolor: portal.passwordProtected ? activeBg : softPanel, color: portal.passwordProtected ? accent : muted, borderRadius: "5px" }}
+                    />
+                  </Stack>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.45 }}>
+                    Optional. The credential is hashed before storage and cannot be viewed after saving.
+                  </Typography>
+                  <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) auto auto" }, gap: 1, alignItems: "start", mt: 1.4 }}>
+                    <TextField
+                      label={portal.passwordProtected ? "New PIN or password" : "PIN or password"}
+                      type="password"
+                      value={portalPassword}
+                      onChange={(event) => setPortalPassword(event.target.value)}
+                      inputProps={{ minLength: 4, maxLength: 128 }}
+                      helperText="4-128 characters. Leave blank to keep the current setting."
+                      autoComplete="new-password"
+                      disabled={!canEdit}
+                    />
+                    <Button variant="outlined" onClick={savePortalPassword} disabled={!canEdit || portalPassword.length < 4 || busy === "password"} sx={outlineButtonSx}>
+                      {busy === "password" ? "Saving..." : portal.passwordProtected ? "Update" : "Enable"}
+                    </Button>
+                    {portal.passwordProtected ? (
+                      <Button onClick={removePortalPassword} disabled={!canEdit || busy === "password-remove"} sx={{ color: dangerColor }}>
+                        {busy === "password-remove" ? "Removing..." : "Remove"}
+                      </Button>
+                    ) : null}
+                  </Box>
+                </Paper>
+              ) : null}
 
               <Paper sx={{ ...panelSx, p: 2 }}>
                 <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760, mb: 1.4 }}>Client-Facing Project Details</Typography>
@@ -5823,7 +6324,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                     <TextField label="Included revisions" type="number" value={revisionLimit} onChange={(event) => setRevisionLimit(Math.max(0, Math.min(20, Number(event.target.value) || 0)))} inputProps={{ min: 0, max: 20 }} disabled={!canEdit} />
                     <Box>
                       <Typography sx={{ color: muted, fontSize: 11, fontWeight: 700, mb: 0.55 }}>Client workflow stage</Typography>
-                      <CompactSelect value={clientStage} options={["Planning", "In Progress", "Review", "Delivered"]} onChange={setClientStage} width="100%" />
+                      <CompactSelect value={clientStage} options={[...CLIENT_PORTAL_STAGE_VALUES]} onChange={(value) => setClientStage(value as ClientPortalStage)} width="100%" />
                     </Box>
                   </Box>
                   <Button variant="contained" onClick={savePortal} disabled={!canEdit || busy === "publish"} sx={{ alignSelf: "flex-start", bgcolor: accent, "&:hover": { bgcolor: accent } }}>
@@ -5847,8 +6348,8 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                             </Box>
                             <Stack direction="row" alignItems="center" gap={0.6}>
                               {canEdit ? (
-                                <CompactSelect value={item.status} options={["Pending", "In Progress", "Ready", "Delivered"]} onChange={(status) => changeDeliverableStatus(item._id, status)} width={145} />
-                              ) : <Chip label={item.status} size="small" />}
+                                <CompactSelect value={item.status} options={[...DELIVERABLE_STATUS_VALUES]} labels={APPROVAL_STATUS_LABELS} onChange={(status) => changeDeliverableStatus(item._id, status as DeliverableStatus)} width={164} />
+                              ) : <Chip label={approvalStatusLabel(item.status)} size="small" />}
                               {canEdit ? <Button onClick={() => deleteDeliverable(item._id)} disabled={busy === `remove-${item._id}`} sx={{ color: dangerColor, minWidth: 0 }}>Remove</Button> : null}
                             </Stack>
                           </Stack>
@@ -5869,8 +6370,9 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
                                 <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>{revision.clientName}</Typography>
                                 <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.2 }}>{formatShortDateTime(revision.createdAt)}</Typography>
                               </Box>
-                              {canEdit ? <CompactSelect value={revision.status} options={["Submitted", "In Review", "Resolved"]} onChange={(status) => changeRevisionStatus(revision._id, status)} width={{ xs: "100%", sm: 150 }} /> : <Chip label={revision.status} size="small" />}
+                              {canEdit ? <CompactSelect value={revision.status} options={[...REVISION_STATUS_VALUES]} onChange={(status) => changeRevisionStatus(revision._id, status as RevisionStatus)} width={{ xs: "100%", sm: 150 }} /> : <Chip label={revision.status} size="small" />}
                             </Stack>
+                            <TimecodeChip value={revision.timecode} />
                             <Typography sx={{ color: ink, fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap", mt: 0.8 }}>{revision.message}</Typography>
                           </Box>
                         ))}
@@ -5900,10 +6402,19 @@ function formatShortDateTime(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
 }
 
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  const localTime = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localTime.toISOString().slice(0, 16);
+}
+
 function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: { project: WorkItem; teamMembers: WorkspaceMemberOption[]; canComment: boolean }) {
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
   const addProjectComment = useMutation(api.team.addProjectComment);
   const [commentBody, setCommentBody] = useState("");
+  const [commentTimecode, setCommentTimecode] = useState("");
   const [commentError, setCommentError] = useState("");
   const projectComments = useQuery(
     api.team.listProjectComments,
@@ -5915,8 +6426,15 @@ function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: {
     if (!isConvexAuthenticated || !project.teamId || !commentBody.trim()) return;
     setCommentError("");
     try {
-      await addProjectComment({ teamId: project.teamId, projectId: project.id, body: commentBody });
+      const normalizedTimecode = normalizeOptionalTimecode(commentTimecode);
+      await addProjectComment({
+        teamId: project.teamId,
+        projectId: project.id,
+        body: commentBody,
+        ...(normalizedTimecode ? { timecode: normalizedTimecode } : {}),
+      });
       setCommentBody("");
+      setCommentTimecode("");
     } catch (error) {
       setCommentError(error instanceof Error ? error.message : "Could not post comment.");
     }
@@ -5952,6 +6470,7 @@ function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: {
             <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760 }}>
               {comment.authorName} <Box component="span" sx={{ color: muted, fontSize: 11, fontWeight: 500 }}>{formatShortDateTime(comment.createdAt)}</Box>
             </Typography>
+            <TimecodeChip value={comment.timecode} />
             <Typography sx={{ color: ink, fontSize: 13, mt: 0.5, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{comment.body}</Typography>
           </Box>
         )) : (
@@ -5961,6 +6480,19 @@ function ProjectDetailCollaborationPanel({ project, teamMembers, canComment }: {
 
       {canComment ? (
         <Stack direction={{ xs: "column", md: "row" }} gap={1}>
+          <TextField
+            label="Timecode (optional)"
+            value={commentTimecode}
+            size="small"
+            placeholder="00:12"
+            sx={{ width: { xs: "100%", md: 180 }, flexShrink: 0 }}
+            slotProps={{ htmlInput: { maxLength: 8, inputMode: "numeric" } }}
+            helperText={TIMECODE_FORMAT_HINT}
+            onChange={(event) => {
+              setCommentTimecode(event.target.value);
+              if (commentError) setCommentError("");
+            }}
+          />
           <TextField
             label="Team comment"
             value={commentBody}
@@ -6047,6 +6579,7 @@ function ProjectDialog({
           </Stack>
           <TextField label="Earnings" type="number" value={form.earnings} disabled={typeConfig.earningsMode === "batch"} helperText={typeConfig.earningsMode === "batch" ? `${settings.salaryWorkType} earnings are batch tracked in settings.` : ""} onChange={(event) => setForm({ ...form, earnings: Number(event.target.value || 0) })} fullWidth />
           <TextField label="Notes" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} fullWidth multiline minRows={3} />
+          <TemplateSetupEditor form={form} setForm={setForm} />
           {form.teamId && teamMembers.length ? (
             <Autocomplete
               multiple
@@ -6091,6 +6624,124 @@ function ProjectDialog({
   );
 }
 
+function TemplateSetupEditor({
+  form,
+  setForm,
+}: {
+  form: WorkItem;
+  setForm: (form: WorkItem) => void;
+}) {
+  const hasTemplateSetup = Boolean(
+    form.templateId ||
+    form.workflowStages?.length ||
+    form.templateDeliverables?.length ||
+    form.checklistItems?.length
+  );
+  if (!hasTemplateSetup) return null;
+
+  const deliverables = form.templateDeliverables ?? [];
+  return (
+    <Box sx={{ border: `1px solid ${border}`, borderRadius: "6px", p: 1.5, bgcolor: softPanel }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+        <Box>
+          <Typography sx={{ color: ink, fontSize: 15, fontWeight: 760 }}>Template Setup</Typography>
+          <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.25 }}>These are suggestions, not locked rules. Edit or remove anything.</Typography>
+        </Box>
+        <Chip label="Editable" size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
+      </Stack>
+      <Stack gap={1.3} sx={{ mt: 1.5 }}>
+        <TextField
+          label="Project type"
+          value={form.templateProjectType ?? ""}
+          onChange={(event) => setForm({ ...form, templateProjectType: event.target.value })}
+          helperText="A descriptive type for this workflow; the project tag above still controls reporting and salary batches."
+        />
+        <TextField
+          label="Workflow stages"
+          value={(form.workflowStages ?? []).join("\n")}
+          onChange={(event) => setForm({
+            ...form,
+            workflowStages: event.target.value.split("\n").slice(0, 12),
+          })}
+          multiline
+          minRows={3}
+          helperText="One stage per line."
+        />
+        <Box>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ mb: 0.8 }}>
+            <Typography sx={{ color: ink, fontSize: 13, fontWeight: 740 }}>Suggested deliverables</Typography>
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setForm({
+                ...form,
+                templateDeliverables: [...deliverables, { title: "New deliverable", category: "Deliverable", initialStatus: "draft" }],
+              })}
+              sx={{ color: accent }}
+            >
+              Add
+            </Button>
+          </Stack>
+          <Stack gap={0.8}>
+            {deliverables.map((deliverable, index) => (
+              <Box key={`template-deliverable-${index}`} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) 140px 170px auto" }, gap: 0.8, alignItems: "center" }}>
+                <TextField
+                  label="Deliverable"
+                  size="small"
+                  value={deliverable.title}
+                  onChange={(event) => setForm({
+                    ...form,
+                    templateDeliverables: deliverables.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item),
+                  })}
+                />
+                <DialogSelect
+                  label="Category"
+                  value={deliverable.category}
+                  options={FILE_CATEGORY_VALUES}
+                  onChange={(category) => setForm({
+                    ...form,
+                    templateDeliverables: deliverables.map((item, itemIndex) => itemIndex === index ? { ...item, category } : item),
+                  })}
+                />
+                <DialogSelect
+                  label="Initial status"
+                  value={deliverable.initialStatus}
+                  options={FILE_STATUS_VALUES}
+                  labels={APPROVAL_STATUS_LABELS}
+                  onChange={(initialStatus) => setForm({
+                    ...form,
+                    templateDeliverables: deliverables.map((item, itemIndex) => itemIndex === index ? { ...item, initialStatus } : item),
+                  })}
+                />
+                <Tooltip title="Remove deliverable">
+                  <Button
+                    aria-label={`Remove ${deliverable.title}`}
+                    onClick={() => setForm({ ...form, templateDeliverables: deliverables.filter((_, itemIndex) => itemIndex !== index) })}
+                    sx={{ minWidth: 36, color: dangerColor }}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
+              </Box>
+            ))}
+          </Stack>
+        </Box>
+        <TextField
+          label="Checklist"
+          value={(form.checklistItems ?? []).join("\n")}
+          onChange={(event) => setForm({
+            ...form,
+            checklistItems: event.target.value.split("\n").slice(0, 20),
+          })}
+          multiline
+          minRows={3}
+          helperText="One checklist item per line."
+        />
+      </Stack>
+    </Box>
+  );
+}
+
 function DeleteProjectDialog({ project, onCancel, onConfirm }: { project: WorkItem | null; onCancel: () => void; onConfirm: () => void }) {
   return (
     <Dialog open={Boolean(project)} onClose={onCancel} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
@@ -6108,11 +6759,12 @@ function DeleteProjectDialog({ project, onCancel, onConfirm }: { project: WorkIt
   );
 }
 
-function DialogSelect({ label, value, options, labels, onChange }: { label: string; value: string; options: string[]; labels?: Record<string, string>; onChange: (value: string) => void }) {
+function DialogSelect<T extends string>({ label, value, options, labels, onChange }: { label: string; value: T; options: readonly T[]; labels?: Record<string, string>; onChange: (value: T) => void }) {
+  const labelId = useId();
   return (
     <FormControl fullWidth>
-      <InputLabel>{label}</InputLabel>
-      <Select label={label} value={value} onChange={(event: SelectChangeEvent) => onChange(event.target.value)}>
+      <InputLabel id={labelId}>{label}</InputLabel>
+      <Select labelId={labelId} label={label} value={value} onChange={(event: SelectChangeEvent) => onChange(event.target.value as T)}>
         {options.map((option) => <MenuItem key={option} value={option}>{labels?.[option] ?? option}</MenuItem>)}
       </Select>
     </FormControl>

@@ -36,7 +36,7 @@ CutLab Studio is built around that real production rhythm.
 | Command dashboard | Shows urgent deliveries, workflow stage health, feedback queues, earnings, salary batch progress, and activity before the project table. |
 | Project workspaces | Keeps personal projects separate from team projects, with timeline and calendar views folded into contextual navigation. |
 | Project files | Stores deliverables, reference files, assets, upload history, immutable versions, file size, upload date, uploader, and provider metadata. |
-| Client portal | Publishes a client-safe project link for progress, approved deliverables, downloads, revision requests, and delivery history. |
+| Client portal | Publishes a client-safe project link with optional expiry, access disabling, token regeneration, and PIN/password protection. |
 | Team collaboration | Supports owners, editors, reviewers, invites, assignments, comments, mentions, notifications, activity, and team chat. |
 | Public profiles | Gives editors shareable profile pages with portfolio metrics, projects, bio, location, time zone, and turnaround. |
 
@@ -61,6 +61,7 @@ CutLab Studio is built around that real production rhythm.
 ### Client-Facing Delivery
 
 - Unique client portal links require no client account.
+- Editors can disable, expire, regenerate, or optionally password-protect a portal.
 - Clients can monitor progress, download approved files, and submit revision requests.
 - Internal notes, earnings, assets, references, uploader IDs, and team data stay private.
 - Editors control which deliverables are visible and downloadable.
@@ -74,6 +75,12 @@ Projects, Timeline, and Calendar are grouped together so the sidebar stays clean
 ![CutLab Studio team workspace](assets/readme-features.png)
 
 The Team area keeps collaboration operational: members, client contacts, notifications, shared activity, and chat stay close to the work without mixing personal and team projects.
+
+## Demo
+
+The [60-90 second product demo flow](DEMO_FLOW.md) covers the full editor-to-client
+story, including project setup, versioned delivery, a timecoded revision request,
+final delivery, and the resulting dashboard update.
 
 ## Architecture Snapshot
 
@@ -110,6 +117,12 @@ Current automated coverage includes:
 - Project uploads, external providers, version history, storage uniqueness, portal privacy, and revision limits.
 - Route, link, metadata, screenshot asset, and source-invariant verification across the app.
 
+The Convex-backed Team workspace has a static invariant check with
+`npm run verify:team`. Authenticated realtime behavior is covered by the
+`npm run verify:team:live` live two-account Clerk/Convex smoke test.
+
 ## Current State
 
-CutLab Studio currently includes the command dashboard, separated personal/team projects, project file management, client portals, public profiles, account settings, consolidated navigation, branded empty states, Clerk authentication, Convex synchronization, Vercel analytics, and fresh README screenshots captured from the current UI.
+CutLab Studio currently includes the command dashboard, separated personal/team projects, project file management, secured client portals, public profiles, account settings, consolidated navigation, branded empty states, Clerk authentication, Convex synchronization, Vercel analytics, and fresh README screenshots captured from the current UI.
+
+Client portal security currently includes enable/disable controls, optional expiry, token regeneration, and optional PBKDF2-hashed PIN/password protection. See [Security](SECURITY.md) for the storage and access contract.

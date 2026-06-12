@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
+import type { ProjectActivityKind } from "../src/lib/domain-values";
 
 const MAX_PROJECT_EVENTS = 150;
 
@@ -34,7 +35,7 @@ export async function recordProjectActivity(
     project: Pick<Doc<"workItems">, "id" | "userId" | "teamId">;
     actorUserId: string;
     actorName: string;
-    kind: string;
+    kind: ProjectActivityKind;
     message: string;
     detail?: string;
     createdAt?: string;
@@ -54,7 +55,7 @@ export async function recordProjectActivity(
     teamId: args.project.teamId,
     actorUserId: args.actorUserId,
     actorName: args.actorName.trim().slice(0, 120) || "CutLab user",
-    kind: args.kind.trim().slice(0, 80) || "project_update",
+    kind: args.kind,
     message: args.message.trim().slice(0, 500),
     detail: args.detail?.trim().slice(0, 1000),
     createdAt: args.createdAt ?? new Date().toISOString(),

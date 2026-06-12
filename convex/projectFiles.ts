@@ -2,31 +2,27 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { recordProjectActivity } from "./projectActivity";
+import {
+  fileCategoryValidator,
+  fileProviderValidator,
+  fileStatusValidator,
+} from "./domainValidators";
+import {
+  approvalStatusLabel,
+  normalizeFileStatus,
+} from "../src/lib/domain-values";
+import type {
+  FileCategory,
+  FileProvider,
+  FileStatus,
+  ProjectActivityKind,
+  TeamActivityKind,
+} from "../src/lib/domain-values";
 
 const MAX_PROJECT_FILES = 100;
 const MAX_PROJECT_VERSIONS = 500;
 const MAX_VERSIONS_PER_FILE = 20;
-const categories = ["Deliverable", "Reference", "Asset"] as const;
-const providers = ["convex", "external", "google_drive", "frame_io"] as const;
-const statuses = ["Working", "In Review", "Approved", "Delivered"] as const;
-
-const categoryValidator = v.union(
-  v.literal("Deliverable"),
-  v.literal("Reference"),
-  v.literal("Asset")
-);
-const providerValidator = v.union(
-  v.literal("convex"),
-  v.literal("external"),
-  v.literal("google_drive"),
-  v.literal("frame_io")
-);
-const statusValidator = v.union(
-  v.literal("Working"),
-  v.literal("In Review"),
-  v.literal("Approved"),
-  v.literal("Delivered")
-);
+type FileActivityKind = ProjectActivityKind & TeamActivityKind;
 
 async function requireIdentity(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -89,7 +85,7 @@ async function logFileActivity(
   ctx: MutationCtx,
   project: Doc<"workItems">,
   identity: Awaited<ReturnType<typeof requireIdentity>>,
-  kind: string,
+  kind: FileActivityKind,
   message: string,
   detail?: string
 ) {
@@ -131,13 +127,13 @@ async function insertVersion(
     project: Doc<"workItems">;
     identity: Awaited<ReturnType<typeof requireIdentity>>;
     projectFileId?: Id<"projectFiles">;
-    category: typeof categories[number];
+    category: FileCategory;
     title: string;
     description: string;
-    status: typeof statuses[number];
+    status: FileStatus;
     clientVisible: boolean;
     downloadable: boolean;
-    provider: typeof providers[number];
+    provider: FileProvider;
     storageId?: Id<"_storage">;
     externalUrl?: string;
     externalId?: string;
@@ -165,9 +161,11 @@ async function insertVersion(
     }
   }
   let fileId = args.projectFileId;
+  let previousStatus: FileStatus | null = null;
   if (fileId) {
     const existing = await ctx.db.get(fileId);
     if (!existing || existing.projectId !== args.project.id) throw new Error("Project file not found");
+    previousStatus = normalizeFileStatus(existing.status);
   } else {
     const existingFiles = await ctx.db
       .query("projectFiles")
@@ -195,6 +193,7 @@ async function insertVersion(
     projectId: args.project.id,
     projectFileId: fileId,
     versionNumber,
+    status: args.status,
     provider: args.provider,
     storageId: args.storageId,
     externalUrl: args.externalUrl,
@@ -207,7 +206,10 @@ async function insertVersion(
     uploadedAt: now,
     notes: cleanText(args.notes, 500),
   });
-  await ctx.db.patch(fileId, { updatedAt: now });
+  await ctx.db.patch(fileId, {
+    status: args.status,
+    updatedAt: now,
+  });
   const file = await ctx.db.get(fileId);
   await logFileActivity(
     ctx,
@@ -217,8 +219,17 @@ async function insertVersion(
     versionNumber === 1
       ? `${file?.title ?? args.fileName} was added to ${args.category.toLowerCase()} files.`
       : `${file?.title ?? args.fileName} version ${versionNumber} was uploaded.`,
-    `${args.fileName} · ${args.provider}`
+    `${args.fileName} · ${args.provider} · ${approvalStatusLabel(args.status)}`
   );
+  if (previousStatus && previousStatus !== args.status) {
+    await logFileActivity(
+      ctx,
+      args.project,
+      args.identity,
+      "project_file_updated",
+      `${file?.title ?? args.fileName} approval changed from ${approvalStatusLabel(previousStatus)} to ${approvalStatusLabel(args.status)}.`
+    );
+  }
   return fileId;
 }
 
@@ -243,6 +254,7 @@ export const listForProject = query({
         _id: version._id,
         projectFileId: version.projectFileId,
         versionNumber: version.versionNumber,
+        status: version.status,
         provider: version.provider,
         url: version.storageId ? await ctx.storage.getUrl(version.storageId) : version.externalUrl,
         externalId: version.externalId,
@@ -260,7 +272,7 @@ export const listForProject = query({
         category: file.category,
         title: file.title,
         description: file.description,
-        status: file.status,
+        status: normalizeFileStatus(file.status),
         clientVisible: file.clientVisible,
         downloadable: file.downloadable,
         createdByName: file.createdByName,
@@ -286,10 +298,10 @@ export const saveStorageVersion = mutation({
     projectId: v.string(),
     projectFileId: v.optional(v.id("projectFiles")),
     storageId: v.id("_storage"),
-    category: categoryValidator,
+    category: fileCategoryValidator,
     title: v.string(),
     description: v.string(),
-    status: statusValidator,
+    status: fileStatusValidator,
     clientVisible: v.boolean(),
     downloadable: v.boolean(),
     fileName: v.string(),
@@ -315,13 +327,13 @@ export const saveExternalVersion = mutation({
   args: {
     projectId: v.string(),
     projectFileId: v.optional(v.id("projectFiles")),
-    category: categoryValidator,
+    category: fileCategoryValidator,
     title: v.string(),
     description: v.string(),
-    status: statusValidator,
+    status: fileStatusValidator,
     clientVisible: v.boolean(),
     downloadable: v.boolean(),
-    provider: providerValidator,
+    provider: fileProviderValidator,
     externalUrl: v.string(),
     externalId: v.optional(v.string()),
     fileName: v.string(),
@@ -340,10 +352,10 @@ export const saveExternalVersion = mutation({
 export const updateFile = mutation({
   args: {
     fileId: v.id("projectFiles"),
-    category: categoryValidator,
+    category: fileCategoryValidator,
     title: v.string(),
     description: v.string(),
-    status: statusValidator,
+    status: fileStatusValidator,
     clientVisible: v.boolean(),
     downloadable: v.boolean(),
   },
@@ -351,6 +363,14 @@ export const updateFile = mutation({
     const { file, identity, project } = await requireEditableFile(ctx, args.fileId);
     const title = cleanText(args.title, 160);
     if (!title) throw new Error("File title is required");
+    const previousStatus = normalizeFileStatus(file.status);
+    const latestVersion = previousStatus !== args.status
+      ? await ctx.db
+          .query("projectFileVersions")
+          .withIndex("by_projectFileId_and_versionNumber", (q) => q.eq("projectFileId", args.fileId))
+          .order("desc")
+          .first()
+      : null;
     await ctx.db.patch(args.fileId, {
       category: args.category,
       title,
@@ -360,7 +380,19 @@ export const updateFile = mutation({
       downloadable: args.downloadable,
       updatedAt: new Date().toISOString(),
     });
-    await logFileActivity(ctx, project, identity, "project_file_updated", `${file.title} file details were updated.`);
+    if (latestVersion) {
+      await ctx.db.patch(latestVersion._id, { status: args.status });
+    }
+    const statusChanged = previousStatus !== args.status;
+    await logFileActivity(
+      ctx,
+      project,
+      identity,
+      "project_file_updated",
+      statusChanged
+        ? `${file.title} approval changed from ${approvalStatusLabel(previousStatus)} to ${approvalStatusLabel(args.status)}.`
+        : `${file.title} file details were updated.`
+    );
     return null;
   },
 });

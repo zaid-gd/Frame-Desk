@@ -1,5 +1,22 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  clientPortalStageValidator,
+  fileCategoryValidator,
+  fileProviderValidator,
+  fileStatusValidator,
+  memberStatusValidator,
+  notificationKindValidator,
+  portalEventKindValidator,
+  projectActivityKindValidator,
+  revisionStatusValidator,
+  settingsTeamRoleValidator,
+  storedDeliverableStatusValidator,
+  storedFileStatusValidator,
+  storedProjectStatusValidator,
+  storedTeamRoleValidator,
+  teamActivityKindValidator,
+} from "./domainValidators";
 
 export default defineSchema({
   workItems: defineTable({
@@ -11,12 +28,21 @@ export default defineSchema({
     profileId: v.string(),
     title: v.string(),
     client: v.optional(v.string()),
-    status: v.string(),
+    status: storedProjectStatusValidator,
     workType: v.string(),
     startDate: v.string(),
     dueDate: v.string(),
     earnings: v.number(),
     notes: v.string(),
+    templateId: v.optional(v.string()),
+    templateProjectType: v.optional(v.string()),
+    workflowStages: v.optional(v.array(v.string())),
+    templateDeliverables: v.optional(v.array(v.object({
+      title: v.string(),
+      category: fileCategoryValidator,
+      initialStatus: fileStatusValidator,
+    }))),
+    checklistItems: v.optional(v.array(v.string())),
     integrationLinks: v.optional(v.record(
       v.string(),
       v.object({
@@ -28,7 +54,7 @@ export default defineSchema({
     )),
     createdAt: v.optional(v.string()),
   })
-    .index("by_userId", ["userId"])
+    .index("by_userId_and_teamId", ["userId", "teamId"])
     .index("by_workItemId", ["id"])
     .index("by_teamId", ["teamId"])
     .index("by_teamId_and_id", ["teamId", "id"]),
@@ -40,8 +66,8 @@ export default defineSchema({
     title: v.string(),
     clientName: v.string(),
     projectType: v.string(),
-    status: v.string(),
-    sourceStatus: v.string(),
+    status: clientPortalStageValidator,
+    sourceStatus: storedProjectStatusValidator,
     startDate: v.string(),
     dueDate: v.string(),
     progress: v.number(),
@@ -50,6 +76,12 @@ export default defineSchema({
     estimatedCompletion: v.string(),
     revisionLimit: v.number(),
     published: v.boolean(),
+    // Optional during the compatibility window. Legacy portals derive access from published.
+    enabled: v.optional(v.boolean()),
+    expiresAt: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
+    passwordSalt: v.optional(v.string()),
+    passwordIterations: v.optional(v.number()),
     createdAt: v.string(),
     updatedAt: v.string(),
   })
@@ -61,7 +93,7 @@ export default defineSchema({
     title: v.string(),
     detail: v.string(),
     url: v.string(),
-    status: v.string(),
+    status: storedDeliverableStatusValidator,
     downloadable: v.boolean(),
     createdAt: v.string(),
     updatedAt: v.string(),
@@ -71,14 +103,15 @@ export default defineSchema({
     portalId: v.id("clientPortals"),
     clientName: v.string(),
     message: v.string(),
-    status: v.string(),
+    timecode: v.optional(v.string()),
+    status: revisionStatusValidator,
     createdAt: v.string(),
     updatedAt: v.string(),
   }).index("by_portalId_and_createdAt", ["portalId", "createdAt"]),
 
   portalEvents: defineTable({
     portalId: v.id("clientPortals"),
-    kind: v.string(),
+    kind: portalEventKindValidator,
     title: v.string(),
     body: v.string(),
     createdAt: v.string(),
@@ -90,7 +123,7 @@ export default defineSchema({
     teamId: v.optional(v.string()),
     actorUserId: v.string(),
     actorName: v.string(),
-    kind: v.string(),
+    kind: projectActivityKindValidator,
     message: v.string(),
     detail: v.optional(v.string()),
     createdAt: v.string(),
@@ -100,10 +133,10 @@ export default defineSchema({
     projectId: v.string(),
     ownerUserId: v.string(),
     teamId: v.optional(v.string()),
-    category: v.string(),
+    category: fileCategoryValidator,
     title: v.string(),
     description: v.string(),
-    status: v.string(),
+    status: storedFileStatusValidator,
     clientVisible: v.boolean(),
     downloadable: v.boolean(),
     createdByUserId: v.string(),
@@ -123,7 +156,8 @@ export default defineSchema({
     projectId: v.string(),
     projectFileId: v.id("projectFiles"),
     versionNumber: v.number(),
-    provider: v.string(),
+    status: v.optional(fileStatusValidator),
+    provider: fileProviderValidator,
     storageId: v.optional(v.id("_storage")),
     externalUrl: v.optional(v.string()),
     externalId: v.optional(v.string()),
@@ -153,14 +187,14 @@ export default defineSchema({
     userId: v.string(),
     email: v.string(),
     name: v.string(),
-    role: v.string(),
-    status: v.string(),
+    role: storedTeamRoleValidator,
+    status: memberStatusValidator,
     permissions: v.record(v.string(), v.boolean()),
     createdAt: v.string(),
     joinedAt: v.optional(v.string()),
   })
     .index("by_teamId", ["teamId"])
-    .index("by_userId", ["userId"])
+    .index("by_userId_and_status", ["userId", "status"])
     .index("by_teamId_and_userId", ["teamId", "userId"])
     .index("by_teamId_and_email", ["teamId", "email"]),
 
@@ -168,7 +202,7 @@ export default defineSchema({
     teamId: v.string(),
     actorUserId: v.string(),
     actorName: v.string(),
-    kind: v.string(),
+    kind: teamActivityKindValidator,
     projectId: v.optional(v.string()),
     message: v.string(),
     createdAt: v.string(),
@@ -189,6 +223,7 @@ export default defineSchema({
     authorUserId: v.string(),
     authorName: v.string(),
     body: v.string(),
+    timecode: v.optional(v.string()),
     mentions: v.array(v.string()),
     createdAt: v.string(),
   })
@@ -198,15 +233,14 @@ export default defineSchema({
   teamNotifications: defineTable({
     teamId: v.string(),
     userId: v.string(),
-    kind: v.string(),
+    kind: notificationKindValidator,
     projectId: v.optional(v.string()),
     message: v.string(),
     read: v.boolean(),
     createdAt: v.string(),
   })
-    .index("by_userId_and_read", ["userId", "read"])
-    .index("by_teamId_and_userId", ["teamId", "userId"])
-    .index("by_teamId_and_userId_and_createdAt", ["teamId", "userId", "createdAt"]),
+    .index("by_teamId_and_userId_and_createdAt", ["teamId", "userId", "createdAt"])
+    .index("by_teamId_and_userId_and_read_and_createdAt", ["teamId", "userId", "read", "createdAt"]),
 
   publicProfiles: defineTable({
     ownerUserId: v.string(),
@@ -227,7 +261,7 @@ export default defineSchema({
     avgTurnaroundDays: v.number(),
     projects: v.array(v.object({
       title: v.string(),
-      status: v.string(),
+      status: storedProjectStatusValidator,
       workType: v.string(),
       dueDate: v.string(),
     })),
@@ -270,12 +304,12 @@ export default defineSchema({
         updatedAt: v.string(),
       })
     )),
-    teamRole: v.string(),
+    teamRole: settingsTeamRoleValidator,
     teamMembers: v.array(
       v.object({
         id: v.string(),
         name: v.string(),
-        role: v.string(),
+        role: storedTeamRoleValidator,
         email: v.string(),
       })
     ),
@@ -306,6 +340,9 @@ export default defineSchema({
     completedDate: v.string(),
     archived: v.boolean(),
     archivedDate: v.string(),
+    amount: v.optional(v.number()),
+    paid: v.optional(v.boolean()),
+    paidDate: v.optional(v.string()),
   }).index("by_userId", ["userId"]),
 
   resourceLinks: defineTable({
