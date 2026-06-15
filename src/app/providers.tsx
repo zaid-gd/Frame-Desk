@@ -8,6 +8,8 @@ import { ThemeProvider } from "@mui/material/styles";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import { theme } from "./theme";
 import { DataProvider } from "@/lib/data-context";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "sonner";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -34,7 +36,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <AppRouterCacheProvider>
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          {children}
+          <TooltipProvider delayDuration={250}>
+            {children}
+            <Toaster
+              className="cutlab-sonner"
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  background: "var(--app-panel)",
+                  border: "1px solid var(--app-border)",
+                  color: "var(--app-ink)",
+                },
+              }}
+            />
+          </TooltipProvider>
         </ThemeProvider>
       </AppRouterCacheProvider>
     </DataProvider>

@@ -127,8 +127,8 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false,
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Dark",
-  accentColor: "#2D8C97",
+  theme: "Light",
+  accentColor: "#3478F6",
   density: "Comfortable",
 };
 
@@ -678,7 +678,7 @@ export function DataProvider({ children, mode = "local" }: { children: React.Rea
 
 function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const [items, setItemsState] = useState<WorkItem[]>([]);
-  const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [settings, setSettingsState] = useState<SettingsState>(() => freshDefaultSettings());
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -780,7 +780,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
   const { isLoading: convexAuthLoading, isAuthenticated: convexAuthenticated } = useConvexAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
-  const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [settings, setSettingsState] = useState<SettingsState>(() => freshDefaultSettings());
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);

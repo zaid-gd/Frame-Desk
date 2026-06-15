@@ -3,10 +3,10 @@ import { cutlab } from "./design-system";
 
 export const theme = createTheme({
   palette: {
-    mode: "dark",
+    mode: "light",
     background: {
-      default: cutlab.color.charcoal,
-      paper: cutlab.color.graphite
+      default: "#F7F8FA",
+      paper: "#FFFFFF"
     },
     primary: {
       main: cutlab.color.teal,
@@ -27,10 +27,10 @@ export const theme = createTheme({
       main: cutlab.color.success
     },
     text: {
-      primary: cutlab.color.softWhite,
-      secondary: "#A5ADB4"
+      primary: "#171A21",
+      secondary: "#667085"
     },
-    divider: "#2A3138"
+    divider: "#E1E5EB"
   },
   shape: {
     borderRadius: cutlab.radius.sm
@@ -39,14 +39,14 @@ export const theme = createTheme({
     fontFamily: cutlab.font.body,
     h1: {
       fontFamily: cutlab.font.heading,
-      fontWeight: 700,
-      letterSpacing: "-0.015em",
-      lineHeight: 1.1
+      fontWeight: 680,
+      letterSpacing: 0,
+      lineHeight: 1.05
     },
     h2: {
       fontFamily: cutlab.font.heading,
       fontWeight: 600,
-      letterSpacing: "-0.005em"
+      letterSpacing: 0
     },
     h3: {
       fontFamily: cutlab.font.heading,
@@ -65,7 +65,8 @@ export const theme = createTheme({
       },
       styleOverrides: {
         root: {
-          borderColor: "var(--app-border, #2A3138)",
+          borderColor: "var(--app-border, #263137)",
+          borderRadius: cutlab.radius.sm,
           color: `var(--app-ink, ${cutlab.color.softWhite})`,
           backgroundImage: "none",
           boxShadow: "none"
@@ -78,7 +79,8 @@ export const theme = createTheme({
       },
       styleOverrides: {
         root: {
-          borderRadius: cutlab.radius.sm,
+          minHeight: 38,
+          borderRadius: cutlab.radius.xs,
           transition: "background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease",
           "&:active": { transform: "translateY(1px)" },
           "&:focus-visible": {
@@ -87,8 +89,9 @@ export const theme = createTheme({
           }
         },
         containedPrimary: {
-          backgroundColor: "var(--app-accent, #2D8C97)",
-          "&:hover": { backgroundColor: "var(--app-highlight, #69C4CE)", color: cutlab.color.charcoal }
+          backgroundColor: "var(--app-accent, #2EC4A6)",
+          color: cutlab.color.charcoal,
+          "&:hover": { backgroundColor: "var(--app-highlight, #71E2CA)", color: cutlab.color.charcoal }
         }
       }
     },
@@ -157,7 +160,7 @@ export const theme = createTheme({
         root: {
           backgroundColor: `var(--app-panel, ${cutlab.color.graphite})`,
           color: `var(--app-ink, ${cutlab.color.softWhite})`,
-          borderColor: "var(--app-border, #2A3138)",
+          borderColor: "var(--app-border, #263137)",
           backgroundImage: "none"
         }
       }
@@ -209,10 +212,10 @@ export const theme = createTheme({
           borderColor: "var(--app-border, #2A3138)"
         },
         head: {
-          color: "var(--app-muted, #A5ADB4)",
-          fontSize: 12,
-          fontWeight: 600,
-          letterSpacing: "0.04em"
+          color: "var(--app-muted, #A4AFB3)",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0
         }
       }
     }

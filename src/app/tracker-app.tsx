@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useId, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
@@ -75,6 +76,7 @@ import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
+import { useHydratedReducedMotion } from "@/lib/motion";
 import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink, SalaryBatch } from "@/lib/types";
 import {
   buildPayoutReport,
@@ -127,6 +129,14 @@ import {
 import { cutlab, cutlabOutlineButtonSx, cutlabPanelSx, cutlabThemeVariables } from "./design-system";
 import { CutLabLockup, CutLabMark } from "./cutlab-brand";
 import { emptyStateAssetFor, emptyStateAssets } from "./brand-assets";
+import { MetricRail, SectionEyebrow, SectionModule, SplitWorkspace } from "./production-ui";
+import { WorkflowDistributionChart, WorkMixChart } from "./production-charts";
+import { WorkspaceShell } from "@/components/workspace-shell";
+import { PrecisionDashboard } from "@/components/precision-dashboard";
+import { PrecisionProjects } from "@/components/precision-projects";
+import { PrecisionCalendar, PrecisionTimeline } from "@/components/precision-schedule";
+import { PrecisionClients, PrecisionFeedback, PrecisionReports } from "@/components/precision-workspaces";
+import { PrecisionMedia } from "@/components/precision-media";
 
 const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
 const defaultSalaryWorkType = "Job / Salary";
@@ -172,11 +182,6 @@ type NavigationItem = {
   label: string;
   icon: React.ReactNode;
   pages: PageKey[];
-};
-type SubNavigationItem = {
-  key: PageKey;
-  href: string;
-  label: string;
 };
 type ProjectKind = string;
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
@@ -346,35 +351,6 @@ const navigationItems: NavigationItem[] = [
   { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon />, pages: ["settings", "account"] }
 ];
 
-const subNavigationGroups: PageKey[][] = [
-  ["projects", "timeline", "calendar"],
-  ["clients", "feedback"],
-  ["media", "resources", "templates", "integrations"],
-  ["team", "team-chat"],
-  ["settings", "account"]
-];
-
-const subNavigationItems: Record<PageKey, SubNavigationItem> = {
-  dashboard: { key: "dashboard", href: "/", label: "Dashboard" },
-  projects: { key: "projects", href: "/projects", label: "Projects" },
-  timeline: { key: "timeline", href: "/timeline", label: "Timeline" },
-  calendar: { key: "calendar", href: "/calendar", label: "Calendar" },
-  clients: { key: "clients", href: "/clients", label: "Clients" },
-  feedback: { key: "feedback", href: "/feedback", label: "Feedback" },
-  media: { key: "media", href: "/media", label: "Media" },
-  resources: { key: "resources", href: "/resources", label: "Resources" },
-  templates: { key: "templates", href: "/templates", label: "Templates" },
-  integrations: { key: "integrations", href: "/integrations", label: "Integrations" },
-  reports: { key: "reports", href: "/reports", label: "Reports" },
-  team: { key: "team", href: "/team", label: "Members & Activity" },
-  "team-chat": { key: "team-chat", href: "/team-chat", label: "Chat" },
-  settings: { key: "settings", href: "/settings", label: "Workspace" },
-  account: { key: "account", href: "/account", label: "Account" },
-  profile: { key: "profile", href: "/profile", label: "Public Profile" },
-  "profile-edit": { key: "profile-edit", href: "/profile/edit", label: "Edit Profile" },
-  "organization-profile": { key: "organization-profile", href: "/organization", label: "Organization" }
-};
-
 const defaultSettings: SettingsState = {
   studioName: "",
   profileName: "",
@@ -427,7 +403,7 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Dark",
+  theme: "Light",
   accentColor: defaultAccent,
   density: "Comfortable"
 };
@@ -823,7 +799,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }
 
   const pageContent = page === "dashboard" ? (
-    <DashboardPage
+    <PrecisionDashboard
+      settings={settings}
       stats={stats}
       projects={personalProjects}
       visibleProjects={filteredProjects.filter((project) => !project.teamId)}
@@ -856,7 +833,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
       canDeleteProject={canDeleteProject}
     />
   ) : page === "projects" ? (
-    <ProjectDirectoryPage
+    <PrecisionProjects
+      settings={settings}
       personalProjects={personalProjects}
       teamProjects={teamProjects}
       teamName={teamData?.workspace?.name}
@@ -870,26 +848,27 @@ export function TrackerApp({ page }: { page: PageKey }) {
       canDeleteProject={canDeleteProject}
     />
   ) : page === "clients" ? (
-    <ClientsDesignPage projects={personalProjects} projectTagOptions={projectTagOptions} settings={settings} onAddClient={handleAddClient} />
+    <PrecisionClients projects={personalProjects} settings={settings} onAddClient={handleAddClient} onViewProject={openProjectDetails} />
   ) : page === "timeline" ? (
-    <TimelineDesignPage projects={personalProjects} />
+    <PrecisionTimeline projects={personalProjects} onViewProject={openProjectDetails} />
   ) : page === "calendar" ? (
-    <CalendarDesignPage projects={personalProjects} settings={settings} />
+    <PrecisionCalendar projects={personalProjects} settings={settings} onViewProject={openProjectDetails} />
   ) : page === "media" ? (
-    <MediaDesignPage projects={personalProjects} />
+    <PrecisionMedia projects={personalProjects} onViewProject={openProjectDetails} />
   ) : page === "resources" ? (
     <ResourcesDesignPage resources={resourceLinks} projects={personalProjects} setResources={setResourceLinks} notify={notify} />
   ) : page === "feedback" ? (
-    <FeedbackDesignPage projects={personalProjects} />
+    <PrecisionFeedback projects={personalProjects} onViewProject={openProjectDetails} />
   ) : page === "templates" ? (
     <TemplatesDesignPage
       onUseBlank={() => openBlankProject("personal")}
       onUseTemplate={(template) => openTemplateProject(template, "personal")}
     />
   ) : page === "reports" ? (
-    <ReportsDesignPage
+    <PrecisionReports
       projects={projects}
       salaryBatches={salaryBatches}
+      settings={settings}
       editors={activeTeamMembers.map((member) => ({ userId: member.userId, name: member.name }))}
       onUpdateBatchPayment={updateSalaryBatchPayment}
     />
@@ -968,7 +947,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
   if (page === "profile") {
     return (
-      <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink }}>
+      <Box className="motion-enter" sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink }}>
       <PageContext.Provider value={page}>
         <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
       </PageContext.Provider>
@@ -987,32 +966,26 @@ export function TrackerApp({ page }: { page: PageKey }) {
 }
 
   return (
-    <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink, display: "flex" }}>
-    <Sidebar
-      page={page}
-      settings={settings}
-      collapsed={sidebarCollapsed}
-      onToggle={() => {
-        const next = !sidebarCollapsed;
-        setSidebarCollapsed(next);
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-      }}
-    />
-      <MobileNav page={page} settings={settings} />
-      <Box
-        component="main"
-        sx={{
-          ml: { xs: 0, lg: `${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px` },
-          width: { xs: "100%", lg: `calc(100% - ${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px)` },
-          minHeight: "100dvh",
-          pt: { xs: "88px", lg: 0 },
-          transition: "margin-left 180ms ease, width 180ms ease"
+    <>
+      <WorkspaceShell
+        page={page}
+        settings={settings}
+        collapsed={sidebarCollapsed}
+        onToggle={() => {
+          const next = !sidebarCollapsed;
+          setSidebarCollapsed(next);
+          window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
         }}
+        onNewProject={() => openNewProject("personal")}
+        canCreateProject={canCreateProjects}
+        notificationSlot={<NotificationBell settings={settings} />}
       >
-        <PageContext.Provider value={page}>
-          <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
-        </PageContext.Provider>
-      </Box>
+        <Box sx={{ ...appSurfaceSx(settings), minHeight: "calc(100dvh - 56px)", bgcolor: canvas, color: ink }}>
+          <PageContext.Provider value={page}>
+            <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+          </PageContext.Provider>
+        </Box>
+      </WorkspaceShell>
       <AppToast toast={toast} onClose={() => setToast(null)} />
       {projectDialog}
       {deleteDialog}
@@ -1024,7 +997,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
         onCreateAccount={() => launchAccountFlow("sign-up")}
         onSignIn={() => launchAccountFlow("sign-in")}
       />
-    </Box>
+    </>
   );
 }
 
@@ -1053,26 +1026,18 @@ function Sidebar({
         zIndex: 15,
         inset: "0 auto 0 0",
         width,
-        bgcolor: panel,
+        bgcolor: "var(--app-sidebar, #0C1112)",
         borderRight: `1px solid ${border}`,
-        px: collapsed ? 1.25 : 2.5,
-        py: 2.5,
+        px: collapsed ? 1.25 : 2.25,
+        py: 2,
         transition: "width 180ms ease, padding 180ms ease"
       }}
     >
       <Stack direction="row" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} gap={1.5}>
         <Tooltip title={collapsed ? "Dashboard" : ""} placement="right">
-          <Stack
-            component={Link}
-            href="/"
-            direction="row"
-            alignItems="center"
-            gap={1.2}
-            aria-label="Go to dashboard"
-            sx={{ minWidth: 0, flex: collapsed ? "0 0 auto" : 1, color: "inherit", textDecoration: "none" }}
-          >
-            <CutLabMark size={collapsed ? 18 : 48} />
-          </Stack>
+          {collapsed
+            ? <Box component={Link} href="/" aria-label="Go to dashboard" sx={{ display: "block" }}><CutLabMark size={18} /></Box>
+            : <CutLabLockup compact subtitle="Production workspace" sx={{ minWidth: 0, flex: 1 }} />}
         </Tooltip>
         {!collapsed ? (
           <Tooltip title="Collapse sidebar">
@@ -1083,7 +1048,10 @@ function Sidebar({
         ) : null}
       </Stack>
       {!collapsed ? (
-        <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mt: 0.6, mb: 4 }}>Video editing tracker</Typography>
+        <Box sx={{ mt: 2.25, mb: 2.75, px: 1.25, py: 1.1, borderLeft: `2px solid ${accent}`, bgcolor: activeBg }}>
+          <Typography sx={{ color: ink, fontSize: 12, fontWeight: 760 }}>{settings.studioName || "Personal workspace"}</Typography>
+          <Typography sx={{ color: muted, fontSize: 10.5, mt: 0.2 }}>Editing operations</Typography>
+        </Box>
       ) : (
         <Tooltip title="Expand sidebar" placement="right">
           <Button aria-label="Expand sidebar" onClick={onToggle} sx={{ minWidth: 40, width: 40, height: 34, p: 0, color: muted, mx: "auto", my: 1.5, display: "flex" }}>
@@ -1099,13 +1067,22 @@ function Sidebar({
           scrollbarWidth: "thin"
         }}
       >
-        <Stack gap="8px">
-          {navigationItems.map((item) => (
+        {!collapsed ? <Typography sx={{ px: 1.25, mb: 0.75, color: muted, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Production</Typography> : null}
+        <Stack gap="3px">
+          {navigationItems.slice(0, 5).map((item) => (
             <NavButton key={item.key} active={item.pages.includes(page)} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
           ))}
         </Stack>
+        <Box sx={{ borderTop: `1px solid ${border}`, mt: 2, pt: 1.5 }}>
+          {!collapsed ? <Typography sx={{ px: 1.25, mb: 0.75, color: muted, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>Workspace</Typography> : null}
+          <Stack gap="3px">
+            {navigationItems.slice(5).map((item) => (
+              <NavButton key={item.key} active={item.pages.includes(page)} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
+            ))}
+          </Stack>
+        </Box>
       </Box>
-      <Box sx={{ position: "absolute", left: collapsed ? 10 : 24, right: collapsed ? 10 : 24, bottom: 24, pt: 2, borderTop: `1px solid ${border}` }}>
+      <Box sx={{ position: "absolute", left: collapsed ? 10 : 18, right: collapsed ? 10 : 18, bottom: 18, pt: 1.5, borderTop: `1px solid ${border}` }}>
         {!collapsed ? <Stack direction="row" gap={1.2} sx={{ mb: 1.2 }}>
           <Link href="/privacy" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Privacy</Link>
           <Typography component="span" sx={{ color: muted, fontSize: 12 }}>·</Typography>
@@ -1122,7 +1099,7 @@ function Sidebar({
             p: 0.75,
             minWidth: collapsed ? 44 : undefined,
             width: collapsed ? 44 : "100%",
-            borderRadius: "8px",
+            borderRadius: "6px",
             color: ink,
             textAlign: "left",
             "&:hover": { bgcolor: hoverBg }
@@ -1329,38 +1306,49 @@ function MobileNav({ page, settings }: { page: PageKey; settings: SettingsState 
 }
 
 function AppToast({ toast, onClose }: { toast: ToastState | null; onClose: () => void }) {
-  if (!toast) return null;
-  const palette = toast.tone === "warning"
+  const reduceMotion = useHydratedReducedMotion();
+  const palette = toast?.tone === "warning"
     ? { bg: "var(--app-warning-bg, rgba(245,166,35,0.14))", fg: warningColor, border }
-    : toast.tone === "info"
+    : toast?.tone === "info"
       ? { bg: activeBg, fg: accent, border }
       : { bg: "var(--app-success-bg, rgba(35,181,142,0.14))", fg: successColor, border };
 
   return (
-    <Paper
-      role="status"
-      sx={{
-        position: "fixed",
-        right: { xs: 16, md: 24 },
-        bottom: { xs: 16, md: 24 },
-        zIndex: 50,
-        px: 1.5,
-        py: 1.1,
-        bgcolor: palette.bg,
-        color: palette.fg,
-        border: `1px solid ${palette.border}`,
-        borderRadius: "6px",
-        display: "flex",
-        alignItems: "center",
-        gap: 1.2,
-        maxWidth: 360
-      }}
-    >
-      <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{toast.message}</Typography>
-      <Button size="small" aria-label="Dismiss notification" onClick={onClose} sx={{ minWidth: 28, width: 28, height: 28, color: palette.fg, p: 0 }}>
-        <CloseIcon sx={{ fontSize: 16 }} />
-      </Button>
-    </Paper>
+    <AnimatePresence>
+      {toast ? (
+        <motion.div
+          key={toast.message}
+          initial={reduceMotion ? false : { opacity: 0, y: 12, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8, scale: 0.98 }}
+          transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className="app-toast-position"
+          style={{ position: "fixed", right: 16, zIndex: 50, width: "min(360px, calc(100vw - 32px))" }}
+        >
+          <Paper
+            role="status"
+            sx={{
+              px: 1.5,
+              py: 1.1,
+              bgcolor: palette.bg,
+              color: palette.fg,
+              border: `1px solid ${palette.border}`,
+              borderRadius: "6px",
+              display: "flex",
+              alignItems: "center",
+              gap: 1.2,
+              maxWidth: 360,
+              boxShadow: "var(--app-shadow-2)"
+            }}
+          >
+            <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{toast.message}</Typography>
+            <Button size="small" aria-label="Dismiss notification" onClick={onClose} sx={{ minWidth: 28, width: 28, height: 28, color: palette.fg, p: 0 }}>
+              <CloseIcon sx={{ fontSize: 16 }} />
+            </Button>
+          </Paper>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 
@@ -1379,14 +1367,15 @@ function NavButton({ active, href, icon, children, collapsed = false }: { active
         width: collapsed ? 48 : "100%",
         px: collapsed ? 0 : 1.5,
         mx: collapsed ? "auto" : 0,
-        borderRadius: "6px",
-        color: active ? accent : muted,
+        borderRadius: "4px",
+        color: active ? ink : muted,
         bgcolor: active ? activeBg : "transparent",
         fontSize: 14,
         fontWeight: active ? 760 : 600,
+        borderLeft: `2px solid ${active ? accent : "transparent"}`,
         "& .MuiButton-startIcon": { mr: collapsed ? 0 : 1 },
         "& .MuiButton-startIcon svg": { fontSize: 19 },
-        "&:hover": { bgcolor: hoverBg }
+        "&:hover": { bgcolor: hoverBg, color: active ? accent : ink }
       }}
     >
       {collapsed ? null : children}
@@ -1397,27 +1386,20 @@ function NavButton({ active, href, icon, children, collapsed = false }: { active
 
 function AppLoadingStatus() {
   return (
-    <Paper
+    <LinearProgress
+      variant="indeterminate"
       aria-live="polite"
       sx={{
         position: "fixed",
-        right: { xs: 16, md: 24 },
-        bottom: { xs: 16, md: 24 },
+        top: { xs: 86, lg: 0 },
+        left: { xs: 0, lg: `${sidebarWidth}px` },
+        right: 0,
+        height: 2,
         zIndex: 1450,
-        bgcolor: panel,
-        color: ink,
-        border: `1px solid ${border}`,
-        borderRadius: "6px",
-        px: 1.4,
-        py: 1,
-        boxShadow: "0 12px 32px rgba(0,0,0,0.14)"
+        bgcolor: "transparent",
+        "& .MuiLinearProgress-bar": { bgcolor: accent }
       }}
-    >
-      <Stack direction="row" alignItems="center" gap={1}>
-        <CircularProgress size={15} sx={{ color: accent }} />
-        <Typography sx={{ color: ink, fontSize: 12, fontWeight: 720 }}>Loading workspace</Typography>
-      </Stack>
-    </Paper>
+    />
   );
 }
 
@@ -1544,11 +1526,12 @@ function DashboardPage(props: {
   }
 
   return (
-    <Box sx={{ px: { xs: 2, md: 4, xl: 5 }, pt: { xs: 2.5, md: 3 }, pb: 4 }}>
+    <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto", px: { xs: 2, md: 4, xl: 5 }, pt: { xs: 2.5, md: 3.5 }, pb: 5 }}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={1.5} sx={{ mb: 1.75 }}>
         <Box>
-          <Typography sx={{ fontSize: { xs: 30, md: 34 }, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Dashboard</Typography>
-          <Typography sx={{ fontSize: 13.5, color: muted, mt: 0.55 }}>Production priorities, workflow health, and current workload.</Typography>
+          <SectionEyebrow>CutLab / Command center</SectionEyebrow>
+          <Typography sx={{ fontSize: { xs: 34, md: 44 }, color: ink, fontWeight: 660, lineHeight: 1.02, fontFamily: headingFont, mt: 0.7 }}>Production overview</Typography>
+          <Typography sx={{ fontSize: 13.5, color: muted, mt: 0.7 }}>Deadlines, project flow, earnings, and team activity in one working view.</Typography>
         </Box>
         <Stack direction="row" alignItems="center" justifyContent={{ xs: "space-between", sm: "flex-end" }} gap={1.5}>
           <Button
@@ -1577,7 +1560,7 @@ function DashboardPage(props: {
         </Stack>
       </Stack>
 
-      <Paper sx={{ bgcolor: panel, border: `1px solid ${border}`, borderRadius: "6px", p: 1.25, mb: 1.5 }}>
+      <Box sx={{ borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`, py: 1.5, mb: 2 }}>
         <Box
           sx={{
             display: "grid",
@@ -1648,47 +1631,55 @@ function DashboardPage(props: {
             </Box>
           </AccordionDetails>
         </Accordion>
-      </Paper>
-
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(360px, 0.85fr) minmax(0, 1.45fr)" }, gap: 1.5, mb: 1.5 }}>
-        <DashboardSection
-          title="Upcoming Deliveries"
-          subtitle="Next deadlines"
-          compact
-          action={<Button component={Link} href="/calendar" size="small" sx={{ color: accent, fontWeight: 720, minWidth: 0 }}>Calendar</Button>}
-        >
-          <UpcomingDeliveries projects={upcomingDeliveries} settings={settings} onViewProject={props.onViewProject} onNewProject={props.onNewProject} compact />
-        </DashboardSection>
-        <DashboardSection title="Workflow Pipeline" subtitle="Click a stage to filter projects" compact>
-          <WorkflowPipeline
-            stages={pipeline}
-            activeStage={pipelineFilter}
-            onSelect={(stage) => setPipelineFilter((current) => current === stage ? "All" : stage)}
-            compact
-          />
-        </DashboardSection>
       </Box>
 
-      <DashboardSection
-        title="Performance Overview & Salary Batch Progress"
-        subtitle={projectsCreatedThisWeek ? `${projectsCreatedThisWeek} project${projectsCreatedThisWeek === 1 ? "" : "s"} created this week` : "Live production metrics"}
-        compact
-        sx={{ mb: 1.5 }}
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={[
+          { label: "Active projects", value: String(activeProjectCount), helper: `${props.stats.total} tracked`, icon: <PlayArrowRoundedIcon />, tone: "accent" },
+          { label: "Delivered", value: String(props.projects.filter((project) => isDoneStatus(project.status)).length), helper: "Completed work", icon: <CheckCircleOutlineIcon />, tone: "success" },
+          { label: "In review", value: String(pendingFeedback), helper: "Awaiting feedback", icon: <ChatBubbleOutlineOutlinedIcon />, tone: "warning" },
+          { label: "Collected", value: money(props.stats.earned, settings.currencyCode), helper: "Delivered earnings", icon: <InsertChartOutlinedIcon /> },
+          { label: "Batch progress", value: `${salaryProgress}/${salaryBatchSize}`, helper: `${salaryPercent}% complete`, icon: <FileDownloadOutlinedIcon />, tone: "accent" }
+        ]}
+      />
+
+      <SectionModule
+        title="Production flow"
+        description={projectsCreatedThisWeek ? `${projectsCreatedThisWeek} new project${projectsCreatedThisWeek === 1 ? "" : "s"} entered the workspace this week.` : "Live distribution across the editing pipeline."}
+        sx={{ mb: 3 }}
+        aside={
+          <Stack gap={2.25}>
+            <Box>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Box>
+                  <Typography sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>Deadline queue</Typography>
+                  <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.2 }}>Next deliveries</Typography>
+                </Box>
+                <Button component={Link} href="/calendar" size="small" sx={{ color: accent, minWidth: 0, px: 0.5 }}>Calendar</Button>
+              </Stack>
+              <UpcomingDeliveries projects={upcomingDeliveries} settings={settings} onViewProject={props.onViewProject} onNewProject={props.onNewProject} compact />
+            </Box>
+            <Box sx={{ borderTop: `1px solid ${border}`, pt: 1.75 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="baseline">
+                <Typography sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>Salary batch</Typography>
+                <Typography sx={{ color: salaryPercent >= 100 ? successColor : accent, fontSize: 20, fontWeight: 700 }}>{salaryPercent}%</Typography>
+              </Stack>
+              <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.25 }}>{money(normalizedSalaryBatchAmount(settings.salaryBatchAmount), settings.currencyCode)} payout target</Typography>
+              <LinearProgress variant="determinate" value={salaryPercent} sx={{ height: 5, mt: 1.25, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: salaryPercent >= 100 ? successColor : accent } }} />
+              <Typography sx={{ color: muted, fontSize: 11, mt: 0.65 }}>{Math.max(0, salaryBatchSize - salaryProgress)} edits remaining</Typography>
+            </Box>
+          </Stack>
+        }
       >
-        <UnifiedOperationsMetrics
-          metrics={[
-            { label: "Active Projects", value: String(activeProjectCount), helper: `${props.stats.total} total`, icon: <PlayArrowRoundedIcon />, accent: true },
-            { label: "Delivered Projects", value: String(props.projects.filter((project) => isDoneStatus(project.status)).length), helper: "Completed", icon: <CheckCircleOutlineIcon /> },
-            { label: "Pending Feedback", value: String(pendingFeedback), helper: "In review", icon: <ChatBubbleOutlineOutlinedIcon /> },
-            { label: "Revenue / Earnings", value: money(props.stats.earned, settings.currencyCode), helper: "Delivered work", icon: <InsertChartOutlinedIcon /> }
-          ]}
-          progress={salaryProgress}
-          size={salaryBatchSize}
-          percentage={salaryPercent}
-          amount={normalizedSalaryBatchAmount(settings.salaryBatchAmount)}
-          currency={settings.currencyCode}
+        <WorkflowDistributionChart data={pipeline.map((stage) => ({ label: stage.key, value: stage.count }))} />
+        <WorkflowPipeline
+          stages={pipeline}
+          activeStage={pipelineFilter}
+          onSelect={(stage) => setPipelineFilter((current) => current === stage ? "All" : stage)}
+          compact
         />
-      </DashboardSection>
+      </SectionModule>
 
       <DashboardSection
         title="Activity"
@@ -1795,6 +1786,9 @@ function ProjectDirectoryPage({
   const [workspace, setWorkspace] = useState<"personal" | "team">("personal");
   const projects = workspace === "personal" ? personalProjects : teamProjects;
   const hasTeam = Boolean(teamName);
+  const activeCount = projects.filter((project) => !isDoneStatus(project.status) && project.status !== "Cancelled").length;
+  const deliveredCount = projects.filter((project) => isDoneStatus(project.status)).length;
+  const reviewCount = projects.filter((project) => dashboardProjectStage(project) === "Review").length;
 
   useEffect(() => {
     if (!hasTeam && workspace === "team") setWorkspace("personal");
@@ -1816,17 +1810,19 @@ function ProjectDirectoryPage({
         </Button>
       }
     >
-      <Paper sx={{ ...panelSx, p: 0.75, mb: 1.5, width: "fit-content", maxWidth: "100%" }}>
-        <Stack direction="row" gap={0.5}>
+      <Box sx={{ mb: 2, maxWidth: "100%", borderBottom: `1px solid ${border}` }}>
+        <Stack direction="row" gap={2}>
           <Button
             onClick={() => setWorkspace("personal")}
             sx={{
-              minHeight: 42,
-              px: 1.6,
+              minHeight: 44,
+              px: 0,
               color: workspace === "personal" ? accent : muted,
-              bgcolor: workspace === "personal" ? activeBg : "transparent",
+              bgcolor: "transparent",
               fontWeight: workspace === "personal" ? 780 : 650,
-              "&:hover": { bgcolor: workspace === "personal" ? activeBg : hoverBg }
+              borderRadius: 0,
+              borderBottom: `2px solid ${workspace === "personal" ? accent : "transparent"}`,
+              "&:hover": { bgcolor: "transparent", color: ink }
             }}
           >
             My Projects
@@ -1838,12 +1834,14 @@ function ProjectDirectoryPage({
                 disabled={!hasTeam}
                 onClick={() => setWorkspace("team")}
                 sx={{
-                  minHeight: 42,
-                  px: 1.6,
+                  minHeight: 44,
+                  px: 0,
                   color: workspace === "team" ? accent : muted,
-                  bgcolor: workspace === "team" ? activeBg : "transparent",
+                  bgcolor: "transparent",
                   fontWeight: workspace === "team" ? 780 : 650,
-                  "&:hover": { bgcolor: workspace === "team" ? activeBg : hoverBg }
+                  borderRadius: 0,
+                  borderBottom: `2px solid ${workspace === "team" ? accent : "transparent"}`,
+                  "&:hover": { bgcolor: "transparent", color: ink }
                 }}
               >
                 Team Projects
@@ -1852,27 +1850,35 @@ function ProjectDirectoryPage({
             </span>
           </Tooltip>
         </Stack>
-      </Paper>
-      <Paper sx={panelSx}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ px: 2, py: 2 }}>
-          <Box>
-            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>{workspace === "team" ? teamName : "Personal Workspace"}</Typography>
-            <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>{workspace === "team" ? "Visible to members based on their team permissions." : "Private projects visible only in your account."}</Typography>
-          </Box>
-          <Typography sx={{ color: muted, fontSize: 13 }}>{projects.length} records</Typography>
-        </Stack>
-        <ProjectTableHeader />
-        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-          {projects.length ? projects.map((project) => (
-            <ProjectRow key={project.id} project={project} canEdit={canEditProjects || !project.teamId} canDelete={canDeleteProject(project)} onView={() => onViewProject(project)} onEdit={() => onEditProject(project)} onDelete={() => onDeleteProject(project.id)} />
-          )) : (
-            <EmptyPanel
-              title={workspace === "team" ? "No team projects yet" : "No personal projects yet"}
-              body={workspace === "team" ? "Create a shared project for assignments, comments, and team activity." : "Create a private project for your own editing work."}
-            />
-          )}
-        </Stack>
-      </Paper>
+      </Box>
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={[
+          { label: "All projects", value: String(projects.length), helper: workspace === "team" ? "Shared workspace" : "Personal workspace", icon: <FolderOpenOutlinedIcon />, tone: "accent" },
+          { label: "Active", value: String(activeCount), helper: "In production", icon: <PlayArrowRoundedIcon /> },
+          { label: "In review", value: String(reviewCount), helper: "Client feedback", icon: <ChatBubbleOutlineOutlinedIcon />, tone: "warning" },
+          { label: "Delivered", value: String(deliveredCount), helper: "Completed edits", icon: <CheckCircleOutlineIcon />, tone: "success" }
+        ]}
+      />
+      <SectionModule
+        title={workspace === "team" ? teamName || "Team workspace" : "Personal workspace"}
+        description={workspace === "team" ? "Projects visible to members based on workspace permissions." : "Private projects visible only to your account."}
+        action={<Typography sx={{ color: muted, fontSize: 12 }}>{projects.length} records</Typography>}
+      >
+        <Box sx={{ bgcolor: panel, borderBottom: `1px solid ${border}` }}>
+          <ProjectTableHeader />
+          <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+            {projects.length ? projects.map((project) => (
+              <ProjectRow key={project.id} project={project} canEdit={canEditProjects || !project.teamId} canDelete={canDeleteProject(project)} onView={() => onViewProject(project)} onEdit={() => onEditProject(project)} onDelete={() => onDeleteProject(project.id)} />
+            )) : (
+              <EmptyPanel
+                title={workspace === "team" ? "No team projects yet" : "No personal projects yet"}
+                body={workspace === "team" ? "Create a shared project for assignments, comments, and team activity." : "Create a private project for your own editing work."}
+              />
+            )}
+          </Stack>
+        </Box>
+      </SectionModule>
     </PageFrame>
   );
 }
@@ -1962,11 +1968,15 @@ function ClientsDesignPage({
         <Button variant="outlined" startIcon={<AddIcon />} onClick={() => { setAddClientError(""); setAddClientOpen(true); }} sx={outlineButtonSx}>New Client</Button>
       }
     >
-      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Tracked Projects" value={String(projects.length)} helper="Real local project records" /></Grid>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Clients" value={String(clients.length)} helper="Named clients from projects" /></Grid>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Delivered" value={String(deliveredProjects)} helper="Completed projects in storage" /></Grid>
-      </Grid>
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={[
+          { label: "Clients", value: String(clients.length), helper: "Saved relationships", icon: <PeopleAltOutlinedIcon />, tone: "accent" },
+          { label: "Active projects", value: String(activeProjects), helper: "Currently in production", icon: <PlayArrowRoundedIcon /> },
+          { label: "Delivered", value: String(deliveredProjects), helper: "Completed client work", icon: <CheckCircleOutlineIcon />, tone: "success" },
+          { label: "Awaiting feedback", value: String(projects.filter((project) => dashboardProjectStage(project) === "Review").length), helper: "Review queue", icon: <ChatBubbleOutlineOutlinedIcon />, tone: "warning" }
+        ]}
+      />
       {!clients.length ? (
         <Paper sx={panelSx}>
           <EmptyPanel
@@ -1977,8 +1987,8 @@ function ClientsDesignPage({
           />
         </Paper>
       ) : (
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 390px" }, gap: 2 }}>
-        <Paper sx={panelSx}>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 390px" }, borderBlock: `1px solid ${border}`, bgcolor: panel }}>
+        <Box sx={{ minWidth: 0, borderRight: { xl: `1px solid ${border}` } }}>
           <Stack direction={{ xs: "column", md: "row" }} alignItems={{ xs: "stretch", md: "end" }} gap={1.2} sx={{ px: 2, py: 2 }}>
             <TextField
               value={clientQuery}
@@ -2059,8 +2069,8 @@ function ClientsDesignPage({
               <EmptyPanel title="No clients match these filters" body="Clear filters or edit a project client name to change this list." />
             ) : null}
           </Stack>
-        </Paper>
-        <Paper sx={{ ...panelSx, p: 2 }}>
+        </Box>
+        <Box sx={{ p: 2.25, minWidth: 0, bgcolor: softPanel }}>
           {selectedClient ? (
             <>
               <Stack direction="row" alignItems="flex-start" justifyContent="space-between" gap={2}>
@@ -2100,7 +2110,7 @@ function ClientsDesignPage({
               <Typography sx={{ color: muted, fontSize: 13, mt: 1 }}>Add a client name to a project to build this view.</Typography>
               </Box>
           )}
-        </Paper>
+        </Box>
       </Box>
       )}
       <Dialog open={addClientOpen} onClose={() => setAddClientOpen(false)} fullWidth maxWidth="xs" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
@@ -2401,21 +2411,47 @@ function MediaDesignPage({ projects }: { projects: WorkItem[] }) {
 
   return (
     <PageFrame title="Media" subtitle="Organize project packages, exports, and handoff assets.">
-      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        {mediaGroups.map((group) => (
-          <Grid key={group.label} size={{ xs: 12, md: 4 }}><StatCard label={group.label} value={String(group.value)} helper={group.helper} /></Grid>
-        ))}
-      </Grid>
-      <Paper sx={panelSx}>
-        <Stack sx={{ px: 2, py: 2 }}>
-          <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Media Packages</Typography>
-          <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>Generated from current project records for briefs, exports, and handoff tracking.</Typography>
-        </Stack>
-        <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
-          {projects.length ? projects.slice(0, 10).map((project, index) => (
-            <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "64px minmax(0, 1fr)", lg: "92px minmax(0, 1fr) 150px 160px 130px" }, gap: 2, alignItems: "center", px: 2, py: 1.5 }}>
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={mediaGroups.map((group, index) => ({
+          label: group.label,
+          value: String(group.value),
+          helper: group.helper,
+          icon: index === 0 ? <InsertDriveFileOutlinedIcon /> : index === 1 ? <CloudUploadOutlinedIcon /> : <HistoryOutlinedIcon />,
+          tone: index === 1 ? "warning" as const : index === 2 ? "success" as const : "accent" as const
+        }))}
+      />
+      <SplitWorkspace
+        rail={
+          <Box sx={{ p: 2 }}>
+            <SectionEyebrow>Collections</SectionEyebrow>
+            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 720, mt: 0.65 }}>Library index</Typography>
+            <Stack sx={{ mt: 1.5 }} divider={<Divider sx={{ borderColor: border }} />}>
+              {mediaGroups.map((group, index) => (
+                <Stack key={group.label} direction="row" alignItems="center" justifyContent="space-between" sx={{ py: 1.25 }}>
+                  <Stack direction="row" alignItems="center" gap={1}>
+                    <Box sx={{ color: index === 1 ? warningColor : index === 2 ? successColor : accent, display: "grid", "& svg": { fontSize: 18 } }}>
+                      {index === 0 ? <InsertDriveFileOutlinedIcon /> : index === 1 ? <CloudUploadOutlinedIcon /> : <HistoryOutlinedIcon />}
+                    </Box>
+                    <Typography sx={{ color: ink, fontSize: 13, fontWeight: 680 }}>{group.label}</Typography>
+                  </Stack>
+                  <Typography sx={{ color: muted, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{group.value}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+          </Box>
+        }
+        detail={
+          <Box>
+            <Stack sx={{ px: 2.25, py: 2 }}>
+              <Typography sx={{ color: ink, fontSize: 20, fontWeight: 720 }}>Project packages</Typography>
+              <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.45 }}>Briefs, active exports, and handoff archives generated from tracked work.</Typography>
+            </Stack>
+            <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
+              {projects.length ? projects.slice(0, 10).map((project, index) => (
+                <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "64px minmax(0, 1fr)", lg: "92px minmax(0, 1fr) 150px 160px 130px" }, gap: 2, alignItems: "center", px: 2.25, py: 1.6 }}>
               <Box sx={{ width: { xs: 54, lg: 78 }, height: { xs: 40, lg: 48 }, borderRadius: "6px", bgcolor: projectThumbColor(project.id || String(index)), border: `1px solid ${border}`, position: "relative", overflow: "hidden" }}>
-                <Box sx={{ position: "absolute", left: 10, right: 10, bottom: 10, height: 3, borderRadius: 99, bgcolor: "rgba(91,63,160,0.28)" }} />
+                <Box sx={{ position: "absolute", left: 10, right: 10, bottom: 10, height: 3, borderRadius: 99, bgcolor: activeBg }} />
                 <MovieCreationOutlinedIcon sx={{ position: "absolute", right: 9, top: 8, color: thumbIcon, fontSize: 22 }} />
               </Box>
               <Box sx={{ minWidth: 0 }}>
@@ -2431,10 +2467,12 @@ function MediaDesignPage({ projects }: { projects: WorkItem[] }) {
                 <LinearProgress variant="determinate" value={projectProgress(project.status)} sx={{ height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
               </Box>
               <StatusChip status={project.status} />
-            </Box>
-          )) : <EmptyPanel title="No media packages" body="Projects will appear here as package rows once added." />}
-        </Stack>
-      </Paper>
+                </Box>
+              )) : <EmptyPanel title="No media packages" body="Projects will appear here as package rows once added." />}
+            </Stack>
+          </Box>
+        }
+      />
     </PageFrame>
   );
 }
@@ -2622,7 +2660,6 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
             title="No feedback items"
             body="Feedback and revision activity will appear here after you create a project and move it into review."
             assetKey="feedback"
-            action={<Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Open Projects</Button>}
           />
         </Paper>
       ) : (
@@ -2676,27 +2713,31 @@ function TemplatesDesignPage({
     >
       <Grid container spacing={settings.density === "Compact" ? 1 : 1.5}>
         {PROJECT_TEMPLATES.map((template) => (
-          <Grid key={template.id} size={{ xs: 12, md: 6, xl: 3 }}>
-            <Paper sx={{ ...panelSx, p: 2.2, minHeight: 310, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <Grid key={template.id} size={{ xs: 12, md: 6 }}>
+            <Box component="article" sx={{ borderTop: `1px solid ${border}`, py: { xs: 2.25, md: 2.75 }, pr: { md: 3 }, minHeight: 250, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <Box>
-                <Box sx={{ width: 44, height: 44, borderRadius: "6px", border: `1px solid ${border}`, display: "grid", placeItems: "center", color: accent, mb: 2 }}>
-                  <InsertDriveFileOutlinedIcon sx={{ fontSize: 24 }} />
-                </Box>
-                <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>{template.name}</Typography>
-                <Typography sx={{ color: muted, fontSize: 13, mt: 1, lineHeight: 1.5 }}>{template.description}</Typography>
-                <Stack direction="row" gap={0.6} flexWrap="wrap" sx={{ mt: 1.5 }}>
-                  <Chip label={template.projectType} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
-                  <Chip label={`${template.durationDays} days`} size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px" }} />
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 19, fontWeight: 740 }}>{template.name}</Typography>
+                    <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, lineHeight: 1.55, maxWidth: 520 }}>{template.description}</Typography>
+                  </Box>
+                  <Box sx={{ color: accent, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <InsertDriveFileOutlinedIcon sx={{ fontSize: 24 }} />
+                  </Box>
                 </Stack>
-                <Typography sx={{ color: muted, fontSize: 11, fontWeight: 760, textTransform: "uppercase", mt: 1.6 }}>Workflow</Typography>
-                <Typography sx={{ color: ink, fontSize: 12, lineHeight: 1.5, mt: 0.45 }}>{template.workflowStages.join(" → ")}</Typography>
-                <Typography sx={{ color: muted, fontSize: 11.5, mt: 1 }}>{template.deliverables.length} suggested deliverables · {template.checklistItems.length} checklist items</Typography>
+                <Stack direction="row" gap={1.25} flexWrap="wrap" sx={{ mt: 1.5 }}>
+                  <Typography sx={{ color: accent, fontSize: 12.5, fontWeight: 700 }}>{template.projectType}</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12.5 }}>{template.durationDays} days</Typography>
+                </Stack>
+                <Typography sx={{ color: muted, fontSize: 12, fontWeight: 700, mt: 1.8 }}>Workflow</Typography>
+                <Typography sx={{ color: ink, fontSize: 13, lineHeight: 1.6, mt: 0.45 }}>{template.workflowStages.join(" → ")}</Typography>
+                <Typography sx={{ color: muted, fontSize: 12, mt: 1 }}>{template.deliverables.length} deliverables · {template.checklistItems.length} checklist items</Typography>
               </Box>
-              <Button onClick={() => onUseTemplate(template)} sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${border}`, borderRadius: 0, px: 0, color: accent, justifyContent: "space-between", fontSize: 13, fontWeight: 720 }}>
+              <Button onClick={() => onUseTemplate(template)} sx={{ mt: 2, px: 0, width: "fit-content", color: accent, justifyContent: "flex-start", gap: 0.5, fontSize: 13, fontWeight: 720 }}>
                 Use template
                 <AddIcon sx={{ color: accent, fontSize: 18 }} />
               </Button>
-            </Paper>
+            </Box>
           </Grid>
         ))}
       </Grid>
@@ -2727,6 +2768,13 @@ function ReportsDesignPage({
     period,
   }), [editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
   const workTypeOptions = projectWorkTypeOptions(settings, projects);
+  const workMixData = workTypeOptions
+    .map((kind) => ({
+      id: kind,
+      label: kind,
+      value: projects.filter((project) => project.workType.trim().toLowerCase() === kind.toLowerCase()).length,
+    }))
+    .filter((item) => item.value > 0);
   const periodLabel = period === "all" ? "All time" : period === "year" ? "This year" : period === "quarter" ? "This quarter" : "This month";
 
   function exportCsv() {
@@ -2763,12 +2811,15 @@ function ReportsDesignPage({
         </Stack>
       }
     >
-      <Grid container spacing={1.5} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Completed Batches" value={String(report.completedBatchCount)} helper={periodLabel} /></Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Paid Batches" value={money(report.paidBatchEarnings, settings.currencyCode)} helper={`${report.paidBatchCount} marked paid`} /></Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Outstanding" value={money(report.unpaidBatchEarnings, settings.currencyCode)} helper={`${report.unpaidBatchCount} unpaid batches`} /></Grid>
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}><StatCard label="Period Earnings" value={money(report.totalEarnings, settings.currencyCode)} helper="Projects plus batch payouts" /></Grid>
-      </Grid>
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={[
+          { label: "Completed batches", value: String(report.completedBatchCount), helper: periodLabel, icon: <CheckCircleOutlineIcon />, tone: "success" },
+          { label: "Paid batches", value: money(report.paidBatchEarnings, settings.currencyCode), helper: `${report.paidBatchCount} marked paid`, icon: <FileDownloadOutlinedIcon />, tone: "accent" },
+          { label: "Outstanding", value: money(report.unpaidBatchEarnings, settings.currencyCode), helper: `${report.unpaidBatchCount} unpaid batches`, icon: <AccessTimeOutlinedIcon />, tone: "warning" },
+          { label: "Period earnings", value: money(report.totalEarnings, settings.currencyCode), helper: "Projects plus payouts", icon: <InsertChartOutlinedIcon /> }
+        ]}
+      />
 
       <Grid container spacing={1.5} sx={{ mb: 2 }}>
         <Grid size={{ xs: 12, lg: 8 }}>
@@ -2894,9 +2945,12 @@ function ReportsDesignPage({
         )}
       </Paper>
 
-      <Paper sx={{ ...panelSx, p: 2 }}>
-        <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Work Mix</Typography>
-        <Stack gap={1.2} sx={{ mt: 2 }}>
+      <SectionModule
+        title="Work mix"
+        description="Distribution of tracked work types in the selected reporting period."
+        aside={workMixData.length ? <WorkMixChart data={workMixData} /> : <Typography sx={{ color: muted, fontSize: 13 }}>No work mix available.</Typography>}
+      >
+        <Stack gap={1.25}>
           {workTypeOptions.map((kind) => {
             const count = projects.filter((project) => project.workType.trim().toLowerCase() === kind.toLowerCase()).length;
             const percent = projects.length ? (count / projects.length) * 100 : 0;
@@ -2911,7 +2965,7 @@ function ReportsDesignPage({
             );
           })}
         </Stack>
-      </Paper>
+      </SectionModule>
     </PageFrame>
   );
 }
@@ -3011,13 +3065,16 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
     <PageFrame
       title="Team"
       subtitle="Manage members, shared project comments, notifications, and workspace activity."
-      action={<Button component={Link} href="/team-chat" variant="outlined" startIcon={<ChatBubbleOutlineOutlinedIcon />} sx={outlineButtonSx}>Open Team Chat</Button>}
     >
-      <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Team Members" value={String(activeMembers.length)} helper={`${pendingInvites.length} pending invite${pendingInvites.length === 1 ? "" : "s"} · 5 max`} /></Grid>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Client Contacts" value={String(clients.length)} helper="Generated from project client names" /></Grid>
-        <Grid size={{ xs: 12, md: 4 }}><StatCard label="Notifications" value={String(unreadNotifications)} helper="Unread mentions and project updates" /></Grid>
-      </Grid>
+      <MetricRail
+        sx={{ mb: 3 }}
+        items={[
+          { label: "Active members", value: String(activeMembers.length), helper: `${pendingInvites.length} pending invite${pendingInvites.length === 1 ? "" : "s"}`, icon: <PeopleAltOutlinedIcon />, tone: "accent" },
+          { label: "Team projects", value: String(teamProjects.length), helper: "Shared production work", icon: <FolderOpenOutlinedIcon /> },
+          { label: "Client contacts", value: String(clients.length), helper: "From shared projects", icon: <PersonOutlineOutlinedIcon /> },
+          { label: "Unread updates", value: String(unreadNotifications), helper: "Mentions and activity", icon: <NotificationsNoneOutlinedIcon />, tone: unreadNotifications ? "warning" : "default" }
+        ]}
+      />
 
       {teamError ? <Paper sx={{ ...panelSx, p: 1.5, mb: 1.5, borderColor: dangerColor, bgcolor: "var(--app-danger-bg)" }}><Typography sx={{ color: dangerColor, fontSize: 13, fontWeight: 700 }}>{teamError}</Typography></Paper> : null}
 
@@ -3347,7 +3404,6 @@ function TeamChatPage() {
     <PageFrame
       title="Team Chat"
       subtitle="Quick handoffs and production updates for your current team workspace."
-      action={<Button component={Link} href="/team" variant="outlined" startIcon={<PeopleAltOutlinedIcon />} sx={outlineButtonSx}>Manage Team</Button>}
     >
       {!isUserLoaded ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Checking account status...</Typography></Stack></Paper>
@@ -3669,7 +3725,7 @@ function IntegrationLinkManager({
 }
 
 function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; onNewProject: () => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
-  const stageColors = ["#6c4db3", "#7eadea", "#d39a27", "#9a75d1", "#6dab55", "#d65f59"];
+  const stageColors = [cutlab.color.teal, cutlab.color.cyan, cutlab.color.warning, cutlab.color.success, cutlab.color.steel, cutlab.color.error];
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
   const rolePolicy = [
@@ -3744,16 +3800,35 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
         </Stack>
       }
     >
-      <Stack gap={settings.density === "Compact" ? 1 : 1.5}>
-        <SettingsPanel title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "200px minmax(0, 1fr)" }, gap: { xs: 2, lg: 3.5 }, alignItems: "start" }}>
+        <Box component="nav" aria-label="Settings sections" sx={{ display: { xs: "none", lg: "block" }, position: "sticky", top: 76, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: panel, p: 1.25 }}>
+          <SectionEyebrow>Settings index</SectionEyebrow>
+          <Stack sx={{ mt: 1 }}>
+            {[
+              ["#project-rules", "Project rules"],
+              ["#workflow", "Workflow"],
+              ["#notifications", "Notifications"],
+              ["#permissions", "Permissions"],
+              ["#integrations", "Integrations"],
+              ["#appearance", "Appearance"],
+              ["#regional", "Regional"]
+            ].map(([href, label]) => (
+              <Button key={href} component="a" href={href} sx={{ justifyContent: "flex-start", color: muted, px: 1, minHeight: 34, borderRadius: "5px", fontSize: 12.5, "&:hover": { color: accent, bgcolor: activeBg } }}>{label}</Button>
+            ))}
+          </Stack>
+          <Typography sx={{ color: muted, fontSize: 11, lineHeight: 1.5, mt: 2, pr: 2 }}>Changes save automatically to the active workspace.</Typography>
+        </Box>
+        <Stack gap={settings.density === "Compact" ? 1 : 1.5} sx={{ minWidth: 0 }}>
+        <SettingsPanel id="project-rules" title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
             <Stack gap={1.1}>
               {settings.projectTags.map((tag, index) => (
-                <Stack key={`project-tag-${index}`} direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} gap={1.2}>
+                <Stack key={`project-tag-${index}`} direction="row" alignItems="center" gap={1.2} sx={{ minWidth: 0 }}>
                   <TextField
                     label={`Tag ${index + 1}`}
                     value={tag}
                     size="small"
                     fullWidth
+                    sx={{ minWidth: 0 }}
                     error={Boolean(tagIssues && !tag.trim())}
                     onChange={(event) => updateProjectTag(index, event.target.value)}
                     inputProps={{ "aria-label": `Project tag ${index + 1}` }}
@@ -3764,7 +3839,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                       aria-label={`Remove project tag ${index + 1}`}
                       disabled={settings.projectTags.length <= 1}
                       onClick={() => removeProjectTag(index)}
-                      sx={{ minWidth: 34, width: { xs: "100%", sm: 34 }, height: 34, color: dangerColor, p: 0 }}
+                      sx={{ minWidth: 34, width: 34, height: 34, color: dangerColor, p: 0, flexShrink: 0 }}
                     >
                       <DeleteOutlineIcon sx={{ fontSize: 18 }} />
                     </Button>
@@ -3804,7 +3879,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               </Typography>
             </Stack>
           </SettingsPanel>
-        <SettingsPanel title="Project Stages" subtitle="Default workflow stages for new work.">
+        <SettingsPanel id="workflow" title="Project Stages" subtitle="Default workflow stages for new work.">
             {settings.projectStages.map((stage, index) => (
               <Stack key={`project-stage-${index}`} direction="row" alignItems="center" gap={1.2}>
                 <Box sx={{ width: 9, height: 9, borderRadius: "50%", flexShrink: 0, bgcolor: stageColors[index % stageColors.length] }} />
@@ -3838,7 +3913,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </Button>
             {stageIssues ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{stageIssues}</Typography> : null}
           </SettingsPanel>
-        <SettingsPanel title="Notifications" subtitle="Choose when project and team events should surface.">
+        <SettingsPanel id="notifications" title="Notifications" subtitle="Choose when project and team events should surface.">
             {Object.keys(defaultSettings.notifications).map((item) => (
               <Stack key={item} direction="row" justifyContent="space-between" alignItems="center" sx={{ py: 1.05, borderBottom: `1px solid ${border}` }}>
                 <Box>
@@ -3850,10 +3925,10 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             ))}
             <SettingsLink label="Toggle weekly summary" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
-        <SettingsPanel title="Team Roles & Permissions" subtitle="Convex enforces these fixed workspace roles on every shared action.">
+        <SettingsPanel id="permissions" title="Team Roles & Permissions" subtitle="Convex enforces these fixed workspace roles on every shared action.">
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "repeat(3, minmax(0, 1fr))" }, gap: 1.2 }}>
               {rolePolicy.map(({ role, permissions }) => (
-                <Paper key={role} sx={{ ...panelSx, p: 1.5, bgcolor: softPanel }}>
+                <Box key={role} sx={{ p: 1.5, borderTop: `2px solid ${role === "Owner" ? accent : role === "Editor" ? warningColor : successColor}`, bgcolor: softPanel }}>
                   <Stack direction="row" alignItems="center" gap={0.8}>
                     <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: role === "Owner" ? accent : role === "Editor" ? warningColor : successColor }} />
                     <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>{role}</Typography>
@@ -3866,12 +3941,12 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
                       </Stack>
                     ))}
                   </Stack>
-                </Paper>
+                </Box>
               ))}
             </Box>
             <Typography sx={{ color: muted, fontSize: 12 }}>Clients collaborate through private Client Portal links and are not workspace members.</Typography>
-            <Button variant="outlined" component={Link} href="/team" sx={{ ...outlineButtonSx, width: "fit-content" }}>Manage Team</Button>
           </SettingsPanel>
+        <Box id="integrations" sx={{ scrollMarginTop: 24 }}>
         <IntegrationLinkManager
           title="Integrations"
           subtitle="Save workspace-level links for storage, messaging, calendars, and review tools."
@@ -3883,9 +3958,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             notify("Integration links updated.", "success");
           }}
         />
-        <Paper sx={{ ...panelSx, p: 2.25 }}>
-            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Appearance</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>Customize how CutLab looks and feels for your tracker.</Typography>
+        </Box>
+        <SettingsPanel id="appearance" title="Appearance" subtitle="Customize how CutLab looks and feels for your tracker.">
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 2, alignItems: "end" }}>
               <SegmentedSetting label="Theme" options={["Light", "Dark", "System"]} active={settings.theme} onChange={(value) => setSettings({ ...settings, theme: value })} />
               <Box>
@@ -3898,10 +3972,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               </Box>
               <SegmentedSetting label="Density" options={["Comfortable", "Compact"]} active={settings.density} onChange={(value) => setSettings({ ...settings, density: value })} />
             </Box>
-          </Paper>
-        <Paper sx={{ ...panelSx, p: 2.25 }}>
-            <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Regional Preferences</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>Choose the currency used for earnings and payout totals.</Typography>
+          </SettingsPanel>
+        <SettingsPanel id="regional" title="Regional Preferences" subtitle="Choose the currency used for earnings and payout totals.">
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 2 }}>
               <DialogSelect
                 label="Currency"
@@ -3915,8 +3987,9 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
               />
               <TextField label="Preview" value={money(12500, settings.currencyCode)} size="small" InputProps={{ readOnly: true }} />
             </Box>
-          </Paper>
+          </SettingsPanel>
       </Stack>
+      </Box>
     </PageFrame>
   );
 }
@@ -3927,16 +4000,16 @@ function TimelineDesignPage({ projects }: { projects: WorkItem[] }) {
 
   return (
     <PageFrame title="Timeline" subtitle="A delivery-date view for every tracked project.">
-      <Paper sx={{ ...panelSx, p: { xs: 2, md: 3 } }}>
+      <Box component="section" sx={{ borderTop: `1px solid ${border}`, pt: { xs: 2.5, md: 3 } }}>
         <Stack sx={{ mb: 3 }}>
           <Typography sx={{ color: ink, fontSize: 24, fontWeight: 760 }}>Delivery timeline</Typography>
           <Typography sx={{ color: muted, fontSize: 13, mt: 0.5 }}>A dated production rail with status, owner context, and progress.</Typography>
         </Stack>
         <Box sx={{ position: "relative", pl: { xs: 0, md: 5 } }}>
           <Box sx={{ display: { xs: "none", md: "block" }, position: "absolute", left: 18, top: 8, bottom: 8, width: 2, bgcolor: border, borderRadius: 99 }} />
-          <Stack gap={1.4}>
+          <Stack gap={0}>
             {timeline.length ? timeline.map((project, index) => (
-              <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "150px minmax(0, 1fr) 180px" }, gap: 2, p: 1.7, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: panel, position: "relative", alignItems: "center" }}>
+              <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "150px minmax(0, 1fr) 180px" }, gap: 2, py: 2.25, borderBottom: `1px solid ${border}`, position: "relative", alignItems: "center" }}>
                 <Box sx={{ display: { xs: "none", md: "grid" }, position: "absolute", left: -34, top: "50%", transform: "translateY(-50%)", width: 28, height: 28, borderRadius: "50%", placeItems: "center", bgcolor: panel, border: `1px solid ${border}` }}>
                   <Box sx={{ width: 10, height: 10, borderRadius: "50%", bgcolor: projectTimelineColor(project.status) }} />
                 </Box>
@@ -3962,7 +4035,7 @@ function TimelineDesignPage({ projects }: { projects: WorkItem[] }) {
             )}
           </Stack>
         </Box>
-      </Paper>
+      </Box>
     </PageFrame>
   );
 }
@@ -4009,7 +4082,6 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
               <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Active organization work</Typography>
               <Typography sx={{ color: muted, fontSize: 13, mt: 0.4 }}>Current queue across the studio.</Typography>
             </Box>
-            <Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Open Projects</Button>
           </Stack>
           <Stack divider={<Divider flexItem sx={{ borderColor: border }} />}>
             {activeProjects.length ? activeProjects.map((project) => (
@@ -4086,10 +4158,10 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
   }
 
   return (
-    <Box sx={{ px: { xs: 2, md: 4 }, py: 3, bgcolor: canvas, minHeight: "100dvh" }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ pb: 2.5 }}>
+    <Box sx={{ width: "100%", maxWidth: 1480, mx: "auto", px: { xs: 2, md: 4, xl: 5 }, py: 3, bgcolor: canvas, minHeight: "100dvh" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={2} sx={{ pb: 2.5 }}>
         <CutLabLockup compact subtitle="Video editing tracker" />
-        <Stack direction="row" alignItems="center" gap={1}>
+        <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
           <Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Back to App</Button>
           <Button variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} onClick={shareProfile} sx={outlineButtonSx}>{shareCopied ? "Published + Copied" : "Share Profile"}</Button>
           <Button component={Link} href="/settings" aria-label="Open profile settings" sx={{ minWidth: 36, width: 36, height: 36, color: ink, p: 0 }}><MoreHorizIcon /></Button>
@@ -4097,10 +4169,11 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
       </Stack>
       {shareMessage ? <Typography sx={{ color: shareMessage.startsWith("Public profile") ? accent : dangerColor, fontSize: 13, textAlign: "right", mb: 1 }}>{shareMessage}</Typography> : null}
 
-      <Paper sx={{ ...panelSx, mt: 2.5 }}>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "170px minmax(0, 1fr) 560px" }, gap: 4, p: { xs: 2.5, md: 4 }, alignItems: "center" }}>
-          <ProfileAvatar settings={settings} size={148} fontSize={40} />
-          <Box>
+      <Box component="main" sx={{ mt: 2.5, borderTop: `1px solid ${border}` }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.3fr) minmax(420px, 0.8fr)" }, gap: { xs: 3, lg: 7 }, py: { xs: 3, md: 5 }, alignItems: "center" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "flex-start", sm: "center" }} gap={3}>
+            <ProfileAvatar settings={settings} size={128} fontSize={36} />
+            <Box>
             <Typography sx={{ color: ink, fontFamily: headingFont, fontSize: 34, fontWeight: 700, lineHeight: 1.1 }}>{profileDisplayName(settings)}</Typography>
             {displayUsername(settings) ? <Typography sx={{ color: accent, fontSize: 14, fontWeight: 720, mt: 0.6 }}>{displayUsername(settings)}</Typography> : null}
             <Typography sx={{ color: ink, fontSize: 15, mt: 0.8 }}>{settings.profileTitle}</Typography>
@@ -4109,28 +4182,24 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
               <ClientInfoRow icon={<PlaceOutlinedIcon />} text={settings.profileLocation} />
               <ClientInfoRow icon={<PublicOutlinedIcon />} text={settings.timeZone} />
             </Stack>
-          </Box>
-          <Grid container spacing={1.5}>
-            <Grid size={4}><ProfileMetric icon={<PlayArrowRoundedIcon />} label="Active Projects" sublabel="Public stat" value={String(publicActiveProjects)} /></Grid>
-            <Grid size={4}><ProfileMetric icon={<CheckCircleOutlineIcon />} label="Delivered Edits" sublabel="Public stat" value={String(publicDeliveredEdits)} /></Grid>
-            <Grid size={4}><ProfileMetric icon={<AccessTimeOutlinedIcon />} label="Current Turnaround" sublabel="Average" value={`${currentTurnaround} Days`} /></Grid>
-          </Grid>
-        </Box>
-        <Divider sx={{ borderColor: border }} />
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "280px minmax(0, 1fr)" }, gap: 3, p: { xs: 2, md: 3 }, alignItems: "start" }}>
-          <Box sx={{ position: { xl: "sticky" }, top: 24 }}>
-            <Typography sx={{ color: ink, fontSize: 28, fontWeight: 760, lineHeight: 1.05 }}>Profile timeline</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 230 }}>Recent delivery history and near-term work from the tracker.</Typography>
-            <Box sx={{ mt: 3, p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
-              <Typography sx={{ color: muted, fontSize: 12 }}>Timezone</Typography>
-              <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mt: 0.3 }}>{settings.timeZone}</Typography>
             </Box>
+          </Stack>
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}`, py: 2.25, "& > div + div": { borderLeft: `1px solid ${border}` } }}>
+            <ProfileMetric icon={<PlayArrowRoundedIcon />} label="Active" sublabel="projects" value={String(publicActiveProjects)} />
+            <ProfileMetric icon={<CheckCircleOutlineIcon />} label="Delivered" sublabel="edits" value={String(publicDeliveredEdits)} />
+            <ProfileMetric icon={<AccessTimeOutlinedIcon />} label="Turnaround" sublabel="average" value={`${currentTurnaround}d`} />
+          </Box>
+        </Box>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "240px minmax(0, 1fr)" }, gap: { xs: 2.5, xl: 6 }, py: { xs: 3, md: 4 }, borderTop: `1px solid ${border}`, alignItems: "start" }}>
+          <Box sx={{ position: { xl: "sticky" }, top: 24 }}>
+            <Typography sx={{ color: ink, fontSize: 24, fontWeight: 720, lineHeight: 1.1 }}>Recent work</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 230 }}>Recent delivery history and near-term work from the tracker.</Typography>
           </Box>
           <Box sx={{ position: "relative", pl: { xs: 0, md: 3 } }}>
             <Box sx={{ display: { xs: "none", md: "block" }, position: "absolute", left: 8, top: 14, bottom: 14, width: 2, bgcolor: border, borderRadius: 99 }} />
-            <Stack gap={1.4}>
+            <Stack gap={0}>
               {timeline.length ? timeline.map((project, index) => (
-                <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "120px minmax(0, 1fr) 130px" }, gap: 2, alignItems: "start", p: 1.6, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: panel, position: "relative" }}>
+                <Box key={project.id} sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "120px minmax(0, 1fr) 130px" }, gap: 2, alignItems: "start", py: 2.25, borderBottom: `1px solid ${border}`, position: "relative" }}>
                   <Box sx={{ display: { xs: "none", md: "block" }, position: "absolute", left: -24, top: 22, width: 14, height: 14, borderRadius: "50%", bgcolor: projectTimelineColor(project.status), border: `3px solid ${panel}`, boxShadow: `0 0 0 1px ${border}` }} />
                   <Box>
                     <Typography sx={{ color: projectTimelineColor(project.status), fontSize: 12, fontWeight: 760 }}>{profileStatusLabel(project.status)}</Typography>
@@ -4150,7 +4219,7 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
             </Stack>
           </Box>
         </Box>
-      </Paper>
+      </Box>
       <Typography sx={{ color: muted, fontSize: 13, textAlign: "center", mt: 2.5 }}>Shared from {settings.studioName} - Video Editing Tracker &nbsp; | &nbsp; Updated {formatDate(iso(todayDate()), settings.dateFormat)}, {todayDate().getFullYear()}</Typography>
     </Box>
   );
@@ -4171,7 +4240,7 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
   }
 
   return (
-    <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
+    <Box sx={{ width: "100%", maxWidth: 1560, mx: "auto", px: { xs: 2, md: 4, xl: 5 }, pt: { xs: 3, md: 4.5 }, pb: 6 }}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: 3 }}>
         <Box>
           <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Edit Profile</Typography>
@@ -4276,48 +4345,29 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
 function PageFrame({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
   const settings = useTrackerSettings();
   const page = useContext(PageContext);
-  const group = subNavigationGroups.find((pages) => pages.includes(page));
+  const reduceMotion = useHydratedReducedMotion();
   return (
-    <Box sx={{ px: { xs: 2, md: 5, xl: 6 }, pt: 4, pb: 5 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={2} sx={{ mb: group ? 2 : 3 }}>
-        <Box>
-          <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>{title}</Typography>
-          <Typography sx={{ fontSize: 15, color: muted, mt: 1 }}>{subtitle}</Typography>
-        </Box>
-        <Stack direction="row" alignItems="center" justifyContent={{ xs: "space-between", sm: "flex-end" }} gap={1.5} sx={{ flexShrink: 0 }}>
-          {action}
-          <NotificationBell settings={settings} />
+    <motion.div
+      key={page}
+      initial={reduceMotion ? false : { opacity: 0, y: 7 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Box sx={{ width: "100%", maxWidth: 1580, mx: "auto", px: { xs: 1.5, sm: 2.5, lg: 3 }, pt: { xs: 2, md: 2.5 }, pb: 6 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-end" }} gap={2} sx={{ mb: 2.5, pb: 2, borderBottom: `1px solid ${border}` }}>
+          <Box>
+            <SectionEyebrow>Workspace / {title}</SectionEyebrow>
+            <Typography sx={{ fontSize: { xs: 22, md: 24 }, color: ink, fontWeight: 650, lineHeight: 1.15, fontFamily: headingFont, mt: 0.7, letterSpacing: "-0.01em" }}>{title}</Typography>
+            <Typography sx={{ fontSize: 12, color: muted, mt: 0.65, maxWidth: 700, lineHeight: 1.5 }}>{subtitle}</Typography>
+          </Box>
+          <Stack direction="row" alignItems="center" justifyContent={{ xs: "space-between", sm: "flex-end" }} gap={1.5} sx={{ flexShrink: 0 }}>
+            {action}
+            <NotificationBell settings={settings} />
+          </Stack>
         </Stack>
-      </Stack>
-      {group ? <ContextNavigation page={page} items={group.map((key) => subNavigationItems[key])} /> : null}
-      {children}
-    </Box>
-  );
-}
-
-function ContextNavigation({ page, items }: { page: PageKey; items: SubNavigationItem[] }) {
-  return (
-    <Box sx={{ mb: 3, borderBottom: `1px solid ${border}`, overflowX: "auto", scrollbarWidth: "none" }}>
-      <Tabs
-        component="nav"
-        aria-label="Section navigation"
-        value={page}
-        variant="scrollable"
-        scrollButtons="auto"
-        sx={{ minHeight: 42, "& .MuiTabs-indicator": { bgcolor: accent, height: 2 } }}
-      >
-        {items.map((item) => (
-          <Tab
-            key={item.key}
-            component={Link}
-            href={item.href}
-            value={item.key}
-            label={item.label}
-            sx={{ minHeight: 42, minWidth: 0, px: 1.5, color: muted, fontSize: 13, fontWeight: 680, textTransform: "none", "&.Mui-selected": { color: ink, bgcolor: softPanel } }}
-          />
-        ))}
-      </Tabs>
-    </Box>
+        {children}
+      </Box>
+    </motion.div>
   );
 }
 
@@ -4458,13 +4508,25 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
   );
 }
 
-function SettingsPanel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function SettingsPanel({ id, title, subtitle, children }: { id?: string; title: string; subtitle: string; children: React.ReactNode }) {
+  const reduceMotion = useHydratedReducedMotion();
   return (
-    <Paper sx={{ ...panelSx, p: 2.25, minHeight: 260 }}>
-      <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>{title}</Typography>
-      <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, mb: 2 }}>{subtitle}</Typography>
-      <Stack gap={1.4}>{children}</Stack>
-    </Paper>
+    <motion.div
+      layout
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
+    >
+      <Box id={id} component="section" sx={{ minWidth: 0, p: { xs: 2, md: 2.5 }, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: panel, scrollMarginTop: 76 }}>
+        <Box sx={{ display: "grid", minWidth: 0, gridTemplateColumns: { xs: "minmax(0, 1fr)", xl: "minmax(180px, 0.3fr) minmax(0, 1fr)" }, gap: { xs: 2, xl: 4 } }}>
+          <Box>
+            <Typography sx={{ color: ink, fontSize: 15, fontWeight: 720 }}>{title}</Typography>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 0.5, lineHeight: 1.5, maxWidth: 330 }}>{subtitle}</Typography>
+          </Box>
+          <Stack gap={1.4} sx={{ minWidth: 0 }}>{children}</Stack>
+        </Box>
+      </Box>
+    </motion.div>
   );
 }
 
@@ -4504,8 +4566,8 @@ function SegmentedSetting({ label, options, active, onChange }: { label: string;
 
 function ProfileMetric({ icon, label, sublabel, value }: { icon: React.ReactNode; label: string; sublabel: string; value: string }) {
   return (
-    <Box sx={{ borderLeft: `1px solid ${border}`, pl: 2, minHeight: 92 }}>
-      <Box sx={{ width: 34, height: 34, borderRadius: "6px", border: `1px solid ${border}`, display: "grid", placeItems: "center", color: muted, mb: 1, "& svg": { fontSize: 20 } }}>
+    <Box sx={{ px: 2, minHeight: 82 }}>
+      <Box sx={{ color: muted, mb: 1, display: "grid", width: 24, placeItems: "center", "& svg": { fontSize: 19 } }}>
         {icon}
       </Box>
       <Typography sx={{ color: ink, fontSize: 24, fontWeight: 680, lineHeight: 1 }}>{value}</Typography>
@@ -4747,10 +4809,10 @@ function LabeledControl({ label, children }: { label: string; children: React.Re
 
 function StatCard({ label, value, helper, progress, tone, icon }: { label: string; value: string; helper: string; progress?: number; tone?: "accent"; icon?: React.ReactNode }) {
   return (
-    <Paper sx={{ minHeight: 108, bgcolor: tone === "accent" ? activeBg : panel, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, px: 2, py: 1.75 }}>
+    <Box sx={{ minHeight: 98, bgcolor: "transparent", borderTop: `2px solid ${tone === "accent" ? accent : border}`, px: 0, py: 1.5 }}>
       <Stack direction="row" alignItems="center" gap={1.4}>
         {icon ? (
-          <Box sx={{ width: 52, height: 52, borderRadius: `${cutlab.radius.sm}px`, display: "grid", placeItems: "center", color: tone === "accent" ? cutlab.color.charcoal : accent, bgcolor: tone === "accent" ? "var(--app-highlight)" : softPanel, border: `1px solid ${tone === "accent" ? "var(--app-highlight)" : border}`, flexShrink: 0, "& svg": { fontSize: 28 } }}>
+          <Box sx={{ width: 38, height: 38, borderRadius: `${cutlab.radius.xs}px`, display: "grid", placeItems: "center", color: tone === "accent" ? accent : muted, bgcolor: tone === "accent" ? activeBg : "transparent", flexShrink: 0, "& svg": { fontSize: 22 } }}>
             {icon}
           </Box>
         ) : null}
@@ -4763,7 +4825,7 @@ function StatCard({ label, value, helper, progress, tone, icon }: { label: strin
       {typeof progress === "number" ? (
         <LinearProgress variant="determinate" value={progress} sx={{ mt: 1.5, height: 5, borderRadius: 99, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: accent } }} />
       ) : null}
-    </Paper>
+    </Box>
   );
 }
 
@@ -4783,16 +4845,16 @@ function DashboardSection({
   compact?: boolean;
 }) {
   return (
-    <Paper component="section" sx={{ ...panelSx, overflow: "hidden", ...sx }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ px: compact ? 1.5 : 2, pt: compact ? 1.15 : 1.8, pb: compact ? 1 : 1.4, borderBottom: `1px solid ${border}` }}>
+    <Box component="section" sx={{ py: compact ? 1.5 : 2.25, borderTop: `1px solid ${border}`, ...sx }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2} sx={{ pb: compact ? 1 : 1.5 }}>
         <Box>
           <Typography sx={{ color: ink, fontSize: compact ? 15 : 18, fontWeight: 760 }}>{title}</Typography>
           <Typography sx={{ color: muted, fontSize: compact ? 11.5 : 12.5, mt: compact ? 0.15 : 0.35 }}>{subtitle}</Typography>
         </Box>
         {action}
       </Stack>
-      <Box sx={{ p: compact ? 1.25 : 2 }}>{children}</Box>
-    </Paper>
+      <Box>{children}</Box>
+    </Box>
   );
 }
 
@@ -4808,7 +4870,16 @@ function WorkflowPipeline({
   compact?: boolean;
 }) {
   return (
-    <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.4, scrollbarWidth: "thin" }}>
+    <Box
+      sx={{
+        display: "flex",
+        gap: 1,
+        overflowX: "auto",
+        pb: 0.4,
+        scrollbarWidth: "none",
+        "&::-webkit-scrollbar": { display: "none" }
+      }}
+    >
       {stages.map((stage, index) => {
         const active = activeStage === stage.key;
         return (
@@ -4822,11 +4893,12 @@ function WorkflowPipeline({
                 display: "block",
                 textAlign: "left",
                 p: compact ? 1.05 : 1.5,
-                border: `1px solid ${active ? accent : border}`,
-                bgcolor: active ? activeBg : softPanel,
+                border: 0,
+                borderTop: `2px solid ${active ? accent : border}`,
+                bgcolor: active ? activeBg : "transparent",
                 color: ink,
-                borderRadius: `${cutlab.radius.sm}px`,
-                "&:hover": { bgcolor: active ? activeBg : hoverBg, borderColor: accent }
+                borderRadius: 0,
+                "&:hover": { bgcolor: active ? activeBg : hoverBg }
               }}
             >
               <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -4839,7 +4911,7 @@ function WorkflowPipeline({
               </Stack>
               <LinearProgress variant="determinate" value={stage.percent} sx={{ height: 3, mt: compact ? 0.7 : 1.2, bgcolor: progressTrack, "& .MuiLinearProgress-bar": { bgcolor: active ? accent : muted } }} />
             </Button>
-            {index < stages.length - 1 ? <ChevronRightIcon sx={{ color: border, mx: 0.2, flexShrink: 0 }} /> : null}
+          {index < stages.length - 1 ? <ChevronRightIcon sx={{ color: border, mx: 0.15, flexShrink: 0 }} /> : null}
           </Box>
         );
       })}
@@ -4953,9 +5025,9 @@ function UnifiedOperationsMetrics({
 }) {
   const complete = progress >= size;
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr)) minmax(250px, 1.35fr)" }, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, overflow: "hidden" }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr)) minmax(250px, 1.35fr)" }, borderTop: `1px solid ${border}` }}>
       {metrics.map((metric) => (
-        <Box key={metric.label} sx={{ minWidth: 0, px: 1.35, py: 1.15, bgcolor: metric.accent ? activeBg : softPanel, borderRight: { md: `1px solid ${border}` }, borderBottom: { xs: `1px solid ${border}`, md: 0 } }}>
+        <Box key={metric.label} sx={{ minWidth: 0, px: { xs: 1, md: 1.5 }, py: 1.5, bgcolor: metric.accent ? activeBg : "transparent", borderRight: { md: `1px solid ${border}` }, borderBottom: { xs: `1px solid ${border}`, md: 0 } }}>
           <Stack direction="row" alignItems="center" gap={0.65}>
             <Box sx={{ color: metric.accent ? accent : muted, display: "grid", "& svg": { fontSize: 16 } }}>{metric.icon}</Box>
             <Typography noWrap sx={{ color: muted, fontSize: 10.5, fontWeight: 760 }}>{metric.label}</Typography>
@@ -4964,7 +5036,7 @@ function UnifiedOperationsMetrics({
           <Typography noWrap sx={{ color: muted, fontSize: 10.5, mt: 0.4 }}>{metric.helper}</Typography>
         </Box>
       ))}
-      <Box sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1", xl: "auto" }, px: 1.5, py: 1.15, bgcolor: panel }}>
+      <Box sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1", xl: "auto" }, px: 1.5, py: 1.5, bgcolor: "transparent" }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
           <Box>
             <Typography sx={{ color: muted, fontSize: 10.5, fontWeight: 800, letterSpacing: 0.45, textTransform: "uppercase" }}>Salary Edits Done</Typography>
@@ -5064,7 +5136,7 @@ function DashboardActivitySkeleton() {
 
 function MetricStrip({ metrics }: { metrics: Array<{ label: string; value: string; helper: string; icon: React.ReactNode; accent?: boolean }> }) {
   return (
-    <Paper sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: `repeat(${metrics.length}, minmax(0, 1fr))` }, bgcolor: panel, border: `1px solid ${border}`, borderRadius: `${cutlab.radius.sm}px`, overflow: "hidden" }}>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: `repeat(${metrics.length}, minmax(0, 1fr))` }, borderTop: `1px solid ${border}` }}>
       {metrics.map((metric, index) => (
         <Box
           key={metric.label}
@@ -5086,11 +5158,14 @@ function MetricStrip({ metrics }: { metrics: Array<{ label: string; value: strin
           <Typography noWrap sx={{ color: muted, fontSize: 11.5, mt: 0.6 }}>{metric.helper}</Typography>
         </Box>
       ))}
-    </Paper>
+    </Box>
   );
 }
 
 function CompactSelect({ value, options, labels, onChange, width = 104 }: { value: string; options: string[]; labels?: Record<string, string>; onChange: (value: string) => void; width?: number | string | Record<string, number | string> }) {
+  const normalizedOptions = [...new Set(options.filter((option) => option.trim()))];
+  if (value && !normalizedOptions.includes(value)) normalizedOptions.unshift(value);
+
   return (
     <FormControl size="small" sx={{ width, minWidth: width }}>
       <Select
@@ -5109,7 +5184,7 @@ function CompactSelect({ value, options, labels, onChange, width = 104 }: { valu
           "& svg": { color: muted }
         }}
       >
-        {options.map((option) => (
+        {normalizedOptions.map((option) => (
           <MenuItem key={option} value={option}>{labels?.[option] ?? option}</MenuItem>
         ))}
       </Select>
@@ -5122,11 +5197,14 @@ function ProjectTableHeader() {
     <Box
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "minmax(0, 1fr) auto", lg: "minmax(300px, 1.6fr) 1fr 150px 130px 130px 140px 120px" },
+        gridTemplateColumns: {
+          xs: "minmax(0, 1fr) auto",
+          lg: "minmax(240px, 1.6fr) minmax(90px, 0.7fr) 100px 100px minmax(100px, 0.7fr) 120px 96px"
+        },
         gap: 2,
         px: 2,
         py: 1.1,
-        bgcolor: headerPanel,
+        bgcolor: "transparent",
         borderTop: `1px solid ${border}`,
         borderBottom: `1px solid ${border}`
       }}
@@ -5159,12 +5237,15 @@ function ProjectRow({ project, canEdit, canDelete, onView, onEdit, onDelete }: {
       }}
       sx={{
         display: "grid",
-        gridTemplateColumns: { xs: "minmax(0, 1fr) auto", lg: "minmax(300px, 1.6fr) 1fr 150px 130px 130px 140px 120px" },
+        gridTemplateColumns: {
+          xs: "minmax(0, 1fr) auto",
+          lg: "minmax(240px, 1.6fr) minmax(90px, 0.7fr) 100px 100px minmax(100px, 0.7fr) 120px 96px"
+        },
         gap: 2,
         alignItems: "center",
         px: 2,
         py: 1.5,
-        bgcolor: panel,
+        bgcolor: "transparent",
         cursor: "pointer",
         outline: "none",
         transition: "background-color 140ms ease",
@@ -6976,12 +7057,9 @@ function getTypeConfig(label: string, settings: SettingsState) {
 }
 
 function appSurfaceSx(settings: SettingsState) {
-  const isClient = typeof window !== "undefined";
   const isCompact = settings.density === "Compact";
-  const { vars: colorVariables, isDark } = isClient ? themeVariables(settings) : { vars: {}, isDark: false };
 
   return {
-    ...colorVariables,
     transition: "background-color 160ms ease, color 160ms ease",
     "& .MuiPaper-root": {
       color: ink,
@@ -7008,7 +7086,7 @@ function appSurfaceSx(settings: SettingsState) {
       color: muted
     },
     "& .MuiSwitch-track": {
-      backgroundColor: isDark ? "#3d3947" : undefined
+      backgroundColor: "var(--app-strong-border)"
     },
     "& .MuiChip-root": {
       borderColor: border
@@ -7036,6 +7114,9 @@ function applyRootThemeVariables(settings: SettingsState) {
   Object.entries(vars).forEach(([key, value]) => root.style.setProperty(key, value));
   root.style.colorScheme = isDark ? "dark" : "light";
   root.dataset.theme = isDark ? "dark" : "light";
+  root.classList.toggle("dark", isDark);
+  root.classList.toggle("cutlab-density-compact", settings.density === "Compact");
+  root.classList.toggle("cutlab-density-comfortable", settings.density !== "Compact");
 }
 
 function themeVariables(settings: SettingsState) {
