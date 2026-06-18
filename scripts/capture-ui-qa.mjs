@@ -2,9 +2,10 @@ import { chromium } from "@playwright/test";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const baseUrl = process.env.CUTLAB_QA_URL || "http://localhost:3000";
+const baseUrl = process.env.CUTLAB_UI_URL || "http://localhost:3000";
 const onlyCapture = process.env.QA_ONLY || process.argv[2] || "";
 const outputDir = resolve("docs/design/qa-artifacts");
+const referencePath = process.env.CUTLAB_REFERENCE_IMAGE || process.argv[3] || "";
 mkdirSync(outputDir, { recursive: true });
 
 const projects = [
@@ -199,7 +200,6 @@ for (const entry of captures) {
   if (!onlyCapture || onlyCapture === entry.name) await capture(entry);
 }
 
-const referencePath = "C:\\Users\\Screen\\.codex\\generated_images\\019e5563-65f9-7a43-989d-d5ab5a55d79a\\ig_085416c31278d2e9016a2ec76c0a208191a5afd0a31355a99b.png";
 const implementationPath = resolve(outputDir, "dashboard-light-desktop.png");
 
 if ((!onlyCapture || onlyCapture === "dashboard-light-desktop") && existsSync(referencePath) && existsSync(implementationPath)) {

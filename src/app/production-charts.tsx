@@ -54,6 +54,17 @@ type WorkMixDatum = {
 };
 
 export function WorkMixChart({ data }: { data: readonly WorkMixDatum[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+
+  if (!total) {
+    return (
+      <Stack justifyContent="center" sx={{ height: 220, borderBlock: `1px solid ${border}` }}>
+        <Typography sx={{ color: "var(--app-ink)", fontSize: 14, fontWeight: 700 }}>No work mix data</Typography>
+        <Typography sx={{ color: muted, fontSize: 12, mt: 0.35 }}>Delivered work types appear after projects are completed.</Typography>
+      </Stack>
+    );
+  }
+
   return (
     <Box sx={{ height: 220, width: "100%", minWidth: 0 }}>
       <PieChart
