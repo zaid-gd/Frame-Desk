@@ -6,7 +6,7 @@ labels: bug
 assignees: ""
 ---
 
-> For security vulnerabilities, follow [SECURITY.md](../../SECURITY.md) instead of opening a public issue.
+> For security vulnerabilities, follow [SECURITY.md](../../docs/security/SECURITY.md) instead of opening a public issue.
 
 ## What Happened
 

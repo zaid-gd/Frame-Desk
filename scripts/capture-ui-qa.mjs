@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const baseUrl = process.env.CUTLAB_QA_URL || "http://localhost:3000";
 const onlyCapture = process.env.QA_ONLY || process.argv[2] || "";
-const outputDir = resolve("design-qa-artifacts");
+const outputDir = resolve("docs/design/qa-artifacts");
 mkdirSync(outputDir, { recursive: true });
 
 const projects = [

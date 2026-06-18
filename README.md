@@ -173,11 +173,11 @@ and message delivery remain explicitly modeled as future integration work.
 | Full invoicing | Planned | Earnings and payouts are tracked, but invoice generation, payment collection, and accounting integrations are not implemented. |
 | Custom template builder | Planned | Built-in templates are available; reusable user-defined template creation is not implemented. |
 
-Planned work is outlined in the [CutLab Studio Roadmap](ROADMAP.md).
+Planned work is outlined in the [CutLab Studio Roadmap](docs/product/ROADMAP.md).
 
 ## Demo
 
-The [60-90 second product demo flow](DEMO_FLOW.md) covers the full editor-to-client
+The [60-90 second product demo flow](docs/product/DEMO_FLOW.md) covers the full editor-to-client
 story, including project setup, versioned delivery, a timecoded revision request,
 final delivery, and the resulting dashboard update.
 
@@ -206,7 +206,7 @@ final delivery, and the resulting dashboard update.
 - Team roles gate project and file mutations.
 - Deleted projects clean up file versions, client portals, and project activity.
 
-More detail lives in [Project File Architecture](docs/project-file-architecture.md).
+More detail lives in [Project File Architecture](docs/architecture/project-file-architecture.md).
 
 ## Quality Gates
 
@@ -236,11 +236,11 @@ collaboration, payout reporting, public profiles, indexed settings, responsive
 light and dark themes, Clerk authentication, resilient Convex synchronization,
 local guest mode, Vercel analytics, and end-to-end workflow coverage.
 
-Client portal security currently includes enable/disable controls, optional expiry, token regeneration, and optional PBKDF2-hashed PIN/password protection. See [Security](SECURITY.md) for the storage and access contract.
+Client portal security currently includes enable/disable controls, optional expiry, token regeneration, and optional PBKDF2-hashed PIN/password protection. See [Security](docs/security/SECURITY.md) for the storage and access contract.
 
 ## Security
 
-CutLab Studio uses Clerk authentication, identity-based Convex authorization, explicit client-safe portal projections, and baseline response headers. See the [Security Policy](SECURITY.md) for implementation boundaries and private vulnerability reporting.
+CutLab Studio uses Clerk authentication, identity-based Convex authorization, explicit client-safe portal projections, and baseline response headers. See the [Security Policy](docs/security/SECURITY.md) for implementation boundaries and private vulnerability reporting.
 
 ## Contributing
 

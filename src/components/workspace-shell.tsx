@@ -367,35 +367,30 @@ function DesktopSidebar({
             )}
           </AnimatePresence>
         </Link>
-        {!collapsed ? (
-          <motion.div className="ml-auto" whileTap={reduceMotion ? undefined : { scale: 0.9 }}>
-            <Button variant="ghost" size="icon-sm" className="text-[var(--app-muted)]" onClick={onToggle} aria-label="Collapse sidebar">
-              <PanelLeftClose className="size-4" />
-            </Button>
-          </motion.div>
-        ) : null}
       </div>
 
       <div className={cn("border-b border-[var(--app-border)]", collapsed ? "px-2 py-3" : "px-3 py-3")}>
-        {collapsed ? (
+        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
+          {!collapsed ? <WorkspaceMenu settings={settings} reduceMotion={reduceMotion} /> : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <motion.button
                 type="button"
                 whileHover={reduceMotion ? undefined : { scale: 1.04 }}
                 whileTap={reduceMotion ? undefined : { scale: 0.9 }}
-                className="mx-auto flex size-9 items-center justify-center rounded-md text-[var(--app-muted)] outline-none transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
+                className={cn(
+                  "flex size-9 shrink-0 items-center justify-center rounded-md text-[var(--app-muted)] outline-none transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
+                  collapsed ? "mx-auto" : "ml-auto",
+                )}
                 onClick={onToggle}
-                aria-label="Expand sidebar"
+                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               >
-                <PanelLeftOpen className="size-[18px]" />
+                {collapsed ? <PanelLeftOpen className="size-[18px]" /> : <PanelLeftClose className="size-[18px]" />}
               </motion.button>
             </TooltipTrigger>
-            <TooltipContent side="right">Expand sidebar</TooltipContent>
+            <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
           </Tooltip>
-        ) : (
-          <WorkspaceMenu settings={settings} reduceMotion={reduceMotion} />
-        )}
+        </div>
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">

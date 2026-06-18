@@ -14,6 +14,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 next-dev*.log
+next-dev-e2e*.log
+.codex-dev*.log
+.plan-preview.*.log
+.ui-preview.*.log
+.ui-interactions.*.log
 
 *.tsbuildinfo
 

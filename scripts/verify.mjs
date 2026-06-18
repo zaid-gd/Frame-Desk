@@ -76,9 +76,9 @@ const forbiddenText = [
   "Free Work"
 ];
 const requiredStaticAssets = [
-  "assets/readme-hero.png",
-  "assets/readme-workflow.png",
-  "assets/readme-features.png",
+  "assets/readme/command-center.png",
+  "assets/readme/editing-templates.png",
+  "assets/readme/file-versions.png",
   "public/og-image.png"
 ];
 const requiredBrandAssets = [
@@ -307,7 +307,7 @@ const sourceChecks = [
   ["src/app/tracker-app.tsx", "PIN Or Password", "client portal password settings UI"],
   ["src/app/client-portal/client-portal-view.tsx", "Portal link expired", "expired client portal state"],
   ["src/app/client-portal/client-portal-view.tsx", "This portal is protected", "locked client portal state"],
-  ["SECURITY.md", "PBKDF2-SHA-256", "documented client portal password hashing"],
+  ["docs/security/SECURITY.md", "PBKDF2-SHA-256", "documented client portal password hashing"],
   ["src/app/tracker-app.tsx", "Only notes entered here are visible. Internal project notes are never copied.", "client-note security boundary copy"],
   ["package.json", "\"check:full\"", "single full verification npm script"],
   ["package.json", "npm run verify:team && npm run verify:browser && npm run verify:prod", "full verification includes Team, browser, and production gates"],

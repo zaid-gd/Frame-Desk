@@ -72,7 +72,7 @@ Describe the checks you ran in the pull request. Include clear reproduction and 
 - Never commit `.env.local`, API keys, tokens, credentials, production project IDs, client files, or personal data.
 - Keep `.env.example` limited to empty or clearly fake placeholders.
 - Use development Clerk and Convex projects for local testing.
-- Report suspected vulnerabilities privately according to [SECURITY.md](SECURITY.md).
+- Report suspected vulnerabilities privately according to [SECURITY.md](docs/security/SECURITY.md).
 
 ## End-to-end tests
 
