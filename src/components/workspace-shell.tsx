@@ -371,7 +371,11 @@ function DesktopSidebar({
 
       <div className={cn("border-b border-[var(--app-border)]", collapsed ? "px-2 py-3" : "px-3 py-3")}>
         <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
-          {!collapsed ? <WorkspaceMenu settings={settings} reduceMotion={reduceMotion} /> : null}
+          {!collapsed ? (
+            <div className="min-w-0 flex-1">
+              <WorkspaceMenu settings={settings} reduceMotion={reduceMotion} />
+            </div>
+          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <motion.button
@@ -379,7 +383,7 @@ function DesktopSidebar({
                 whileHover={reduceMotion ? undefined : { scale: 1.04 }}
                 whileTap={reduceMotion ? undefined : { scale: 0.9 }}
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-md text-[var(--app-muted)] outline-none transition-colors hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
+                  "flex size-9 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-muted)] outline-none transition-colors hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
                   collapsed ? "mx-auto" : "ml-auto",
                 )}
                 onClick={onToggle}
