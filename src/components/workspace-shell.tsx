@@ -442,53 +442,20 @@ function WorkspaceMenu({
   settings: SettingsState;
   reduceMotion: boolean | null;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <motion.button
-          type="button"
-          whileHover={reduceMotion ? undefined : { y: -1 }}
-          whileTap={reduceMotion ? undefined : { scale: 0.985, y: 0 }}
-          transition={{ duration: 0.12 }}
-          className="flex w-full items-center gap-2.5 rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2.5 py-2 text-left outline-none transition-[background-color,border-color,box-shadow] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
-          aria-label="Open workspace menu"
-        >
-          <div className="grid size-8 shrink-0 place-items-center rounded-md bg-[var(--app-active)] text-xs font-semibold text-[var(--app-highlight)]">
-            {initials(settings.studioName || "CutLab Studio")}
-          </div>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[13px] font-semibold">{settings.studioName || "Personal workspace"}</span>
-            <span className="block truncate text-[11px] text-[var(--app-muted)]">Editing operations</span>
-          </span>
-          <motion.span
-            animate={{ rotate: open ? 180 : 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.16 }}
-            className="flex"
-          >
-            <ChevronDown className="size-3.5 text-[var(--app-muted)]" />
-          </motion.span>
-        </motion.button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="start" className="w-[226px]">
-        <DropdownMenuLabel>
-          <p className="text-sm font-semibold">{settings.studioName || "Personal workspace"}</p>
-          <p className="text-xs font-normal text-muted-foreground">Current workspace</p>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href="/team">
-            <UsersRound /> Manage team
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href="/settings">
-            <Settings /> Workspace settings
-          </Link>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <motion.div
+      whileHover={reduceMotion ? undefined : { y: -1 }}
+      transition={{ duration: 0.12 }}
+      className="flex w-full items-center gap-2.5 rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)]"
+    >
+      <div className="grid size-8 shrink-0 place-items-center rounded-md bg-[var(--app-active)] text-xs font-semibold text-[var(--app-highlight)]">
+        {initials(settings.studioName || "CutLab Studio")}
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold">{settings.studioName || "Personal workspace"}</span>
+        <span className="block truncate text-[11px] text-[var(--app-muted)]">Editing operations</span>
+      </span>
+    </motion.div>
   );
 }
 
