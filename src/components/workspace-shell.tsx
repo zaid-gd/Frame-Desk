@@ -369,32 +369,22 @@ function DesktopSidebar({
         </Link>
       </div>
 
-      <div className={cn("border-b border-[var(--app-border)]", collapsed ? "px-2 py-3" : "px-3 py-3")}>
-        <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-2")}>
-          {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <WorkspaceMenu settings={settings} reduceMotion={reduceMotion} />
-            </div>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <motion.button
-                type="button"
-                whileHover={reduceMotion ? undefined : { scale: 1.04 }}
-                whileTap={reduceMotion ? undefined : { scale: 0.9 }}
-                className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-muted)] outline-none transition-colors hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
-                  collapsed ? "mx-auto" : "ml-auto",
-                )}
-                onClick={onToggle}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                {collapsed ? <PanelLeftOpen className="size-[18px]" /> : <PanelLeftClose className="size-[18px]" />}
-              </motion.button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
-          </Tooltip>
-        </div>
+      <div className={cn("flex h-[68px] items-center border-b border-[var(--app-border)]", collapsed ? "justify-center px-2" : "justify-end px-4")}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.button
+              type="button"
+              whileHover={reduceMotion ? undefined : { scale: 1.04 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.9 }}
+              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-muted)] outline-none transition-colors hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
+              onClick={onToggle}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? <PanelLeftOpen className="size-[18px]" /> : <PanelLeftClose className="size-[18px]" />}
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
+        </Tooltip>
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
@@ -435,29 +425,6 @@ function DesktopSidebar({
   );
 }
 
-function WorkspaceMenu({
-  settings,
-  reduceMotion,
-}: {
-  settings: SettingsState;
-  reduceMotion: boolean | null;
-}) {
-  return (
-    <motion.div
-      whileHover={reduceMotion ? undefined : { y: -1 }}
-      transition={{ duration: 0.12 }}
-      className="flex w-full items-center gap-2.5 rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2.5 py-2 text-left transition-[background-color,border-color,box-shadow] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)]"
-    >
-      <div className="grid size-8 shrink-0 place-items-center rounded-md bg-[var(--app-active)] text-xs font-semibold text-[var(--app-highlight)]">
-        {initials(settings.studioName || "CutLab Studio")}
-      </div>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold">{settings.studioName || "Personal workspace"}</span>
-        <span className="block truncate text-[11px] text-[var(--app-muted)]">Editing operations</span>
-      </span>
-    </motion.div>
-  );
-}
 
 function SidebarRoute({
   item,
