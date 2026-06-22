@@ -374,52 +374,6 @@ button:not(:disabled):active,
   background: var(--app-accent) !important;
 }
 
-.fc {
-  --fc-border-color: var(--app-border);
-  --fc-page-bg-color: var(--app-panel);
-  --fc-neutral-bg-color: var(--app-soft-panel);
-  --fc-list-event-hover-bg-color: var(--app-hover);
-  --fc-today-bg-color: var(--app-active);
-  color: var(--app-ink);
-  font-size: 13px;
-}
-
-.fc .fc-button-primary {
-  border-color: var(--app-border);
-  background: var(--app-panel);
-  color: var(--app-ink);
-  box-shadow: none;
-  transition:
-    background-color var(--motion-fast) var(--motion-ease-standard),
-    border-color var(--motion-fast) var(--motion-ease-standard),
-    color var(--motion-fast) var(--motion-ease-standard),
-    transform var(--motion-fast) var(--motion-ease-out);
-}
-
-.fc .fc-button-primary:hover,
-.fc .fc-button-primary:not(:disabled).fc-button-active {
-  border-color: var(--app-accent);
-  background: var(--app-active);
-  color: var(--app-highlight);
-}
-
-.fc .fc-toolbar-title {
-  font-size: 16px;
-  font-weight: 650;
-}
-
-.fc .fc-event {
-  transition:
-    filter var(--motion-fast) var(--motion-ease-standard),
-    opacity var(--motion-fast) var(--motion-ease-standard),
-    transform var(--motion-fast) var(--motion-ease-out);
-}
-
-.fc .fc-event:hover {
-  filter: saturate(1.08);
-  transform: translateY(-1px);
-}
-
 * {
   scrollbar-color: var(--app-strong-border) transparent;
   scrollbar-width: thin;
@@ -467,8 +421,7 @@ button:not(:disabled):active,
 
   button:not(:disabled):active,
   [role="button"]:not([aria-disabled="true"]):active,
-  .MuiButton-root:active,
-  .fc .fc-event:hover {
+  .MuiButton-root:active {
     transform: none;
   }
 }

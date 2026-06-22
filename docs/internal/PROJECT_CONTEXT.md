@@ -35,7 +35,7 @@ The app is not meant to feel like a marketing site. It should feel like a premiu
 - Lucide React icons
 - Motion for restrained UI animation
 - TanStack Table for richer tables
-- FullCalendar for calendar views
+- Custom local month-grid calendar for delivery scheduling
 - Recharts for analytics/report charts
 - Sonner-style toast/action feedback patterns
 

@@ -33,9 +33,9 @@ Fix: apply a monochrome dark treatment in light mode and retain the original art
 
 ### P1 - Calendar appeared blank in the first capture
 
-The verifier used `127.0.0.1`, while the Next.js development server was bound to `localhost`. Next rejected the cross-origin HMR connection, leaving the capture at server-rendered markup before FullCalendar mounted.
+The verifier used `127.0.0.1`, while the Next.js development server was bound to `localhost`. Next rejected the cross-origin HMR connection, leaving the capture at server-rendered markup before the schedule UI hydrated.
 
-Fix: use `http://localhost:3000` as the canonical QA URL and wait for the `.fc` widget before capture. FullCalendar now renders month, week, and day controls with project events.
+Fix: use `http://localhost:3000` as the canonical QA URL and wait for the custom Calendar heading and month controls before capture. The calendar now renders a local month grid with project delivery counts and selected-day details.
 
 ### P1 - Local settings caused a hydration mismatch
 
@@ -47,7 +47,7 @@ Fix: initialize both providers from stable defaults, then load local or cloud se
 
 The first verifier host issue also prevented local project fixtures from hydrating, making the dashboard and projects screens look structurally sparse.
 
-Fix: the canonical-host capture now seeds six representative projects and verifies persisted storage, table rows, rendered calendar nodes, browser errors, desktop/mobile layouts, and both themes.
+Fix: the canonical-host capture now seeds six representative projects and verifies persisted storage, table rows, rendered calendar day cells, browser errors, desktop/mobile layouts, and both themes.
 
 ### P1 - Mobile project table clipped important columns
 

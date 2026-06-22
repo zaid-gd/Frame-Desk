@@ -166,14 +166,15 @@ async function capture({ name, path, viewport, theme = "Light", fullPage = true 
   }
   await page.waitForTimeout(2_000);
   if (path === "/calendar") {
-    await page.locator(".fc").waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
+    await page.getByRole("heading", { name: "Calendar" }).waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
+    await page.getByRole("button", { name: /previous month/i }).waitFor({ state: "visible", timeout: 10_000 }).catch(() => undefined);
   }
   await page.screenshot({ path: resolve(outputDir, `${name}.png`), fullPage });
   const state = await page.evaluate(() => ({
     projectStorageCount: JSON.parse(localStorage.getItem("video-editing-work-tracker:v1") ?? "[]").length,
     renderedProjectRows: document.querySelectorAll("tbody tr").length,
-    fullCalendarNodes: document.querySelectorAll(".fc").length,
-    fullCalendarText: document.querySelector(".fc")?.textContent?.trim().slice(0, 160) ?? "",
+    calendarDayCells: location.pathname === "/calendar" ? document.querySelectorAll("main section button[aria-label^='Select']").length : 0,
+    calendarText: location.pathname === "/calendar" ? document.querySelector("main section")?.textContent?.trim().slice(0, 160) ?? "" : "",
     calendarSectionHtml: location.pathname === "/calendar"
       ? document.querySelector("main section")?.innerHTML.slice(0, 500) ?? ""
       : "",

@@ -4641,20 +4641,6 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
           <MenuItem key={notification._id} sx={{ display: "block", color: ink, py: 1, bgcolor: notification.read ? panel : activeBg }}>
             <Typography sx={{ fontSize: 13, fontWeight: 720 }}>{notification.message}</Typography>
             <Typography sx={{ color: muted, fontSize: 12, mt: 0.25 }}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(notification.createdAt))}</Typography>
-            <Button
-              component={Link}
-              href="/team"
-              size="small"
-              onClick={() => {
-                setNotificationAnchor(null);
-                if (!notification.read) {
-                  void markNotificationRead({ notificationId: notification._id });
-                }
-              }}
-              sx={{ color: accent, fontSize: 11, fontWeight: 760, mt: 0.4, mr: 1, p: 0, minWidth: 0 }}
-            >
-              Open Team
-            </Button>
             {!notification.read ? (
               <Button
                 size="small"
@@ -4678,10 +4664,6 @@ function NotificationBell({ settings }: { settings: SettingsState }) {
             <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Turn on deadline, feedback, or weekly summary notifications from Settings.</Typography>
           </Box>
         )}
-        <Divider sx={{ borderColor: border }} />
-        <MenuItem component={Link} href="/settings" onClick={() => setNotificationAnchor(null)} sx={{ color: accent, fontSize: 13, fontWeight: 760 }}>
-          Manage Notifications
-        </MenuItem>
       </Menu>
     </>
   );
