@@ -2,20 +2,20 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 export const cutlab = {
   color: {
-    charcoal: "#0C0F12",
-    graphite: "#1A1F24",
-    softWhite: "#E6E5E3",
-    teal: "#2D8C97",
-    cyan: "#69C4CE",
-    deepTeal: "#1E6B73",
-    aqua: "#9BE0E8",
-    slate: "#2A3440",
-    steel: "#3A4552",
-    coolGray: "#5A646E",
-    mist: "#7B848E",
-    success: "#23B58E",
-    warning: "#F5A623",
-    error: "#FF5B5B"
+    charcoal: "#090C0D",
+    graphite: "#181B21",
+    softWhite: "#F4F6F8",
+    teal: "#3478F6",
+    cyan: "#81AAFF",
+    deepTeal: "#1F66E5",
+    aqua: "#B9CFFF",
+    slate: "#282D36",
+    steel: "#3B424D",
+    coolGray: "#667085",
+    mist: "#858E9D",
+    success: "#2D9B63",
+    warning: "#CC7A16",
+    error: "#D14343"
   },
   radius: {
     xs: 4,
@@ -37,13 +37,13 @@ export const cutlab = {
   },
   shadow: {
     0: "none",
-    1: "0 8px 24px rgba(0, 8, 12, 0.18)",
-    2: "0 16px 44px rgba(0, 8, 12, 0.28)",
-    3: "0 24px 72px rgba(0, 8, 12, 0.38)"
+    1: "0 10px 30px rgba(0, 7, 10, 0.12)",
+    2: "0 18px 48px rgba(0, 7, 10, 0.2)",
+    3: "0 28px 80px rgba(0, 7, 10, 0.3)"
   },
   font: {
-    heading: "var(--font-space-grotesk), 'Space Grotesk', sans-serif",
-    body: "var(--font-inter), Inter, sans-serif"
+    heading: "var(--font-space-grotesk), var(--font-geist-sans), Geist, sans-serif",
+    body: "var(--font-geist-sans), Geist, sans-serif"
   }
 } as const;
 
@@ -84,28 +84,30 @@ export const cutlabOutlineButtonSx: SxProps<Theme> = {
 export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.color.teal) {
   return {
     "--app-accent": accent,
-    "--app-highlight": isDark ? cutlab.color.cyan : cutlab.color.deepTeal,
-    "--app-canvas": isDark ? cutlab.color.charcoal : "#F3F5F5",
-    "--app-panel": isDark ? cutlab.color.graphite : "#FFFFFF",
-    "--app-soft-panel": isDark ? "#151B20" : "#E9EDEE",
-    "--app-header-panel": isDark ? "#20272D" : "#E2E7E8",
-    "--app-active": isDark ? "rgba(45, 140, 151, 0.18)" : "rgba(45, 140, 151, 0.12)",
-    "--app-hover": isDark ? "rgba(105, 196, 206, 0.09)" : "rgba(45, 140, 151, 0.08)",
-    "--app-ink": isDark ? cutlab.color.softWhite : "#182126",
-    "--app-muted": isDark ? "#A5ADB4" : "#5A646E",
-    "--app-subtle": isDark ? cutlab.color.mist : "#68717C",
-    "--app-border": isDark ? "#2A3138" : "#C9D0D3",
-    "--app-strong-border": isDark ? cutlab.color.steel : "#A9B3B8",
-    "--app-control": isDark ? "#11161A" : "#FFFFFF",
-    "--app-success": cutlab.color.success,
-    "--app-warning": cutlab.color.warning,
-    "--app-danger": cutlab.color.error,
-    "--app-success-bg": isDark ? "rgba(35, 181, 142, 0.14)" : "rgba(35, 181, 142, 0.13)",
-    "--app-warning-bg": isDark ? "rgba(245, 166, 35, 0.14)" : "rgba(245, 166, 35, 0.14)",
-    "--app-danger-bg": isDark ? "rgba(255, 91, 91, 0.14)" : "rgba(255, 91, 91, 0.12)",
-    "--app-progress-track": isDark ? "#293139" : "#D9E0E2",
-    "--app-avatar-surface": isDark ? cutlab.color.slate : "#D8E0E3",
-    "--app-thumb-icon": isDark ? "rgba(230,229,227,0.42)" : "rgba(24,33,38,0.34)",
+    "--app-highlight": isDark ? "#81AAFF" : "#1F66E5",
+    "--app-canvas": isDark ? cutlab.color.charcoal : "#F7F8FA",
+    "--app-panel": isDark ? "#181B21" : "#FFFFFF",
+    "--app-sidebar": isDark ? "#14161B" : "#F5F6F8",
+    "--app-soft-panel": isDark ? "#1D2027" : "#F3F5F7",
+    "--app-header-panel": isDark ? "#22262E" : "#EEF1F5",
+    "--app-active": isDark ? "rgba(90, 145, 255, 0.14)" : "rgba(52, 120, 246, 0.1)",
+    "--app-hover": isDark ? "rgba(255, 255, 255, 0.055)" : "rgba(31, 41, 55, 0.05)",
+    "--app-ink": isDark ? "#F4F6F8" : "#171A21",
+    "--app-muted": isDark ? "#A0A7B4" : "#667085",
+    "--app-subtle": isDark ? "#858E9D" : "#7F8898",
+    "--app-border": isDark ? "#2D323B" : "#E1E5EB",
+    "--app-strong-border": isDark ? "#3B424D" : "#CBD1DA",
+    "--app-control": isDark ? "#15181E" : "#FFFFFF",
+    "--app-success": isDark ? "#56BD83" : cutlab.color.success,
+    "--app-warning": isDark ? "#E1A24B" : cutlab.color.warning,
+    "--app-danger": isDark ? "#EF6A6A" : cutlab.color.error,
+    "--app-success-bg": isDark ? "rgba(86, 189, 131, 0.12)" : "rgba(45, 155, 99, 0.1)",
+    "--app-warning-bg": isDark ? "rgba(225, 162, 75, 0.12)" : "rgba(204, 122, 22, 0.11)",
+    "--app-danger-bg": isDark ? "rgba(239, 106, 106, 0.12)" : "rgba(209, 67, 67, 0.1)",
+    "--app-progress-track": isDark ? "#2B3039" : "#E7EAF0",
+    "--app-chart-grid": isDark ? "#303640" : "#E5E8EE",
+    "--app-avatar-surface": isDark ? "#282D36" : "#E8EDF5",
+    "--app-thumb-icon": isDark ? "rgba(244,246,248,0.38)" : "rgba(23,26,33,0.36)",
     "--app-shadow-1": cutlab.shadow[1],
     "--app-shadow-2": cutlab.shadow[2]
   } as Record<string, string>;

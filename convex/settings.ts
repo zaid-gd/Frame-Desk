@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
+import { fileCategoryValidator, fileStatusValidator, settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
 
 const teamMemberSchema = v.object({
   id: v.string(),
@@ -9,6 +9,57 @@ const teamMemberSchema = v.object({
   email: v.string(),
 });
 
+const customProjectTemplateValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  description: v.string(),
+  projectType: v.string(),
+  workType: v.union(v.literal("channel"), v.literal("freelance")),
+  durationDays: v.number(),
+  workflowStages: v.array(v.string()),
+  deliverables: v.array(v.object({
+    title: v.string(),
+    category: fileCategoryValidator,
+    initialStatus: fileStatusValidator,
+  })),
+  checklistItems: v.array(v.string()),
+  custom: v.optional(v.boolean()),
+  updatedAt: v.optional(v.string()),
+});
+
+function normalizeCustomProjectTemplate(template: {
+  id: string;
+  name: string;
+  description: string;
+  projectType: string;
+  workType: "channel" | "freelance";
+  durationDays: number;
+  workflowStages: string[];
+  deliverables: Array<{ title: string; category: string; initialStatus: string }>;
+  checklistItems: string[];
+  custom?: boolean;
+  updatedAt?: string;
+}) {
+  return {
+    id: template.id.trim().slice(0, 80),
+    name: template.name.trim().slice(0, 120),
+    description: template.description.trim().slice(0, 500),
+    projectType: template.projectType.trim().slice(0, 80),
+    workType: template.workType,
+    durationDays: Math.max(1, Math.min(365, template.durationDays)),
+    workflowStages: template.workflowStages.map((stage) => stage.trim()).filter(Boolean).slice(0, 12),
+    deliverables: template.deliverables
+      .map((deliverable) => ({
+        ...deliverable,
+        title: deliverable.title.trim().slice(0, 120),
+      }))
+      .filter((deliverable) => deliverable.title)
+      .slice(0, 12),
+    checklistItems: template.checklistItems.map((item) => item.trim()).filter(Boolean).slice(0, 20),
+    custom: template.custom,
+    updatedAt: template.updatedAt,
+  };
+}
 const integrationLinkValidator = v.record(
   v.string(),
   v.object({
@@ -49,6 +100,7 @@ export const upsert = mutation({
     weekStart: v.string(),
     currencyCode: v.string(),
     customClients: v.optional(v.array(v.string())),
+    customProjectTemplates: v.optional(v.array(customProjectTemplateValidator)),
     projectTags: v.array(v.string()),
     salaryWorkType: v.string(),
     salaryBatchSize: v.number(),
@@ -83,16 +135,20 @@ export const upsert = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.tokenIdentifier;
+    const normalizedArgs = {
+      ...args,
+      customProjectTemplates: args.customProjectTemplates?.map(normalizeCustomProjectTemplate),
+    };
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(10);
     const [primary, ...duplicates] = existing;
     if (primary) {
-      await ctx.db.patch(primary._id, args);
+      await ctx.db.patch(primary._id, normalizedArgs);
       await Promise.all(duplicates.map((row) => ctx.db.delete(row._id)));
     } else {
-      await ctx.db.insert("settings", { ...args, userId });
+      await ctx.db.insert("settings", { ...normalizedArgs, userId });
     }
   },
 });

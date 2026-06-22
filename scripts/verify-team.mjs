@@ -288,7 +288,7 @@ for (const [file, text, label] of checks) {
     console.error(`Missing file for ${label}: ${file}`);
     continue;
   }
-  const source = readFileSync(file, "utf8");
+  const source = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
   if (!source.includes(text)) {
     failures += 1;
     console.error(`${file} missing ${label}: ${text}`);
@@ -297,7 +297,7 @@ for (const [file, text, label] of checks) {
 
 for (const [file, text, label] of forbidden) {
   if (!existsSync(file)) continue;
-  const source = readFileSync(file, "utf8");
+  const source = readFileSync(file, "utf8").replace(/\r\n/g, "\n");
   if (source.includes(text)) {
     failures += 1;
     console.error(`${file} still contains forbidden ${label}: ${text}`);

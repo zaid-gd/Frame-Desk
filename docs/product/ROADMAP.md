@@ -17,7 +17,7 @@ This roadmap describes planned directions, not shipped features or delivery comm
 ## Phase 3: Editing-Specific Workflow Features
 
 - Add timecode-based feedback for precise review notes.
-- Expand built-in project starters into reusable project templates.
+- Materialize template deliverables and checklists into actionable project setup items.
 - Improve review-round and delivery-state workflows around video-specific handoffs.
 
 ## Phase 4: Integrations
@@ -29,5 +29,5 @@ This roadmap describes planned directions, not shipped features or delivery comm
 ## Phase 5: Billing, Reporting, And Studio Operations
 
 - Add editor payout reports based on delivered work and salary batches.
-- Add invoice and payment tracking for client work.
+- Add payment collection and accounting sync for client invoices after provider account setup and security review.
 - Expand operational reporting without exposing private financial data in client-facing views.

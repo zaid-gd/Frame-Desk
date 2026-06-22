@@ -1,5 +1,5 @@
 import type { FileCategory, FileStatus } from "./domain-values";
-import type { WorkItem } from "./types";
+import type { SavedProjectTemplate, WorkItem } from "./types";
 
 export const PROJECT_TEMPLATE_IDS = [
   "youtube-video",
@@ -21,17 +21,8 @@ export type ProjectTemplateDeliverable = {
   initialStatus: FileStatus;
 };
 
-export type ProjectTemplate = {
-  id: ProjectTemplateId;
-  name: string;
-  description: string;
-  projectType: string;
-  workType: ProjectTemplateWorkType;
-  durationDays: number;
-  workflowStages: string[];
-  deliverables: ProjectTemplateDeliverable[];
-  checklistItems: string[];
-};
+export type ProjectTemplate = SavedProjectTemplate;
+
 
 const deliverable = (
   title: string,

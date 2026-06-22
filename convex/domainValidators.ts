@@ -40,6 +40,7 @@ export const fileProviderValidator = v.union(
   v.literal("convex"),
   v.literal("external"),
   v.literal("google_drive"),
+  v.literal("dropbox"),
   v.literal("frame_io")
 );
 

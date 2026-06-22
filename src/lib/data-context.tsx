@@ -4,9 +4,8 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink } from "./types";
+import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink, SavedProjectTemplate } from "./types";
 import { normalizeIntegrationLinks } from "./integrations";
-import { PROJECT_TEMPLATE_IDS } from "./project-templates";
 import {
   FILE_CATEGORY_VALUES,
   FILE_STATUS_VALUES,
@@ -91,6 +90,7 @@ const defaultSettings: SettingsState = {
   weekStart: "Mon",
   currencyCode: "USD",
   customClients: [],
+  customProjectTemplates: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
   salaryBatchSize: defaultSalaryBatchSize,
@@ -127,8 +127,8 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false,
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Dark",
-  accentColor: "#2D8C97",
+  theme: "Light",
+  accentColor: "#3478F6",
   density: "Comfortable",
 };
 
@@ -180,6 +180,7 @@ function freshDefaultSettings(): SettingsState {
     ...defaultSettings,
     projectTags: [...defaultSettings.projectTags],
     customClients: [...defaultSettings.customClients],
+    customProjectTemplates: defaultSettings.customProjectTemplates.map((template) => ({ ...template, workflowStages: [...template.workflowStages], deliverables: template.deliverables.map((item) => ({ ...item })), checklistItems: [...template.checklistItems] })),
     projectStages: [...defaultSettings.projectStages],
     notifications: { ...defaultSettings.notifications },
     integrations: { ...defaultSettings.integrations },
@@ -276,10 +277,11 @@ function normalizeStoredItem(value: unknown): WorkItem | null {
     startDate: stringSetting(value.startDate, iso(todayDate())),
     dueDate: stringSetting(value.dueDate, iso(todayDate())),
     earnings: typeof value.earnings === "number" && Number.isFinite(value.earnings) ? Math.max(0, value.earnings) : 0,
+    paid: typeof value.paid === "boolean" ? value.paid : false,
+    paidDate: typeof value.paidDate === "string" ? value.paidDate : "",
     notes: typeof value.notes === "string" ? value.notes : "",
-    templateId: typeof value.templateId === "string" &&
-      PROJECT_TEMPLATE_IDS.includes(value.templateId.trim() as (typeof PROJECT_TEMPLATE_IDS)[number])
-      ? value.templateId.trim() as WorkItem["templateId"]
+    templateId: typeof value.templateId === "string" && value.templateId.trim()
+      ? value.templateId.trim().slice(0, 80)
       : undefined,
     templateProjectType: typeof value.templateProjectType === "string" && value.templateProjectType.trim()
       ? value.templateProjectType.trim().slice(0, 80)
@@ -302,6 +304,7 @@ function normalizeStoredItem(value: unknown): WorkItem | null {
     checklistItems: Array.isArray(value.checklistItems)
       ? value.checklistItems.flatMap((entry): string[] => typeof entry === "string" && entry.trim() ? [entry.trim()] : []).slice(0, 20)
       : undefined,
+    checklistCompleted: booleanRecordSetting(value.checklistCompleted, {}),
     integrationLinks: normalizeIntegrationLinks(value.integrationLinks),
   };
 }
@@ -340,6 +343,50 @@ function normalizeIntegrationConfig(value: unknown): IntegrationConfig {
   };
 }
 
+function normalizeCustomProjectTemplates(value: unknown): SavedProjectTemplate[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.flatMap((template): SavedProjectTemplate[] => {
+    if (!isPlainRecord(template)) return [];
+    const name = typeof template.name === "string" ? template.name.trim().slice(0, 80) : "";
+    if (!name) return [];
+    const rawId = typeof template.id === "string" && template.id.trim()
+      ? template.id.trim()
+      : `custom-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+    const id = rawId.startsWith("custom-") ? rawId.slice(0, 80) : `custom-${rawId}`.slice(0, 80);
+    if (seen.has(id)) return [];
+    seen.add(id);
+    const deliverables = Array.isArray(template.deliverables)
+      ? template.deliverables.flatMap((deliverable): SavedProjectTemplate["deliverables"] => {
+          if (!isPlainRecord(deliverable) || typeof deliverable.title !== "string" || !deliverable.title.trim()) return [];
+          const category = FILE_CATEGORY_VALUES.includes(deliverable.category as FileCategory)
+            ? deliverable.category as FileCategory
+            : "Deliverable";
+          const initialStatus = FILE_STATUS_VALUES.includes(deliverable.initialStatus as FileStatus)
+            ? deliverable.initialStatus as FileStatus
+            : "draft";
+          return [{ title: deliverable.title.trim().slice(0, 120), category, initialStatus }];
+        }).slice(0, 12)
+      : [];
+    return [{
+      id,
+      name,
+      description: typeof template.description === "string" ? template.description.trim().slice(0, 220) : "Custom workflow template.",
+      projectType: typeof template.projectType === "string" && template.projectType.trim() ? template.projectType.trim().slice(0, 80) : "Custom project",
+      workType: template.workType === "channel" ? "channel" : "freelance",
+      durationDays: Math.max(1, Math.min(120, Math.floor(Number(template.durationDays) || 7))),
+      workflowStages: Array.isArray(template.workflowStages)
+        ? template.workflowStages.flatMap((stage): string[] => typeof stage === "string" && stage.trim() ? [stage.trim().slice(0, 40)] : []).slice(0, 12)
+        : [],
+      deliverables,
+      checklistItems: Array.isArray(template.checklistItems)
+        ? template.checklistItems.flatMap((entry): string[] => typeof entry === "string" && entry.trim() ? [entry.trim().slice(0, 120)] : []).slice(0, 20)
+        : [],
+      custom: true,
+      updatedAt: typeof template.updatedAt === "string" ? template.updatedAt : new Date().toISOString(),
+    }];
+  }).slice(0, 24);
+}
 function normalizeIntegrationConfigs(value: unknown, legacyIntegrations?: unknown, legacyAccounts?: unknown): Record<string, IntegrationConfig> {
   const configs: Record<string, IntegrationConfig> = {};
   for (const name of integrationNames) {
@@ -420,6 +467,7 @@ function mergeSettings(stored: Partial<SettingsState>): SettingsState {
     weekStart: optionSetting(r.weekStart, ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], defaultSettings.weekStart),
     currencyCode: optionSetting(r.currencyCode, ["USD", "EUR", "GBP", "INR", "AED", "SAR"], defaultSettings.currencyCode),
     customClients: stringListSetting(r.customClients, defaultSettings.customClients),
+    customProjectTemplates: normalizeCustomProjectTemplates(r.customProjectTemplates),
     projectTags,
     salaryWorkType,
     salaryBatchSize: positiveIntegerSetting(r.salaryBatchSize, defaultSettings.salaryBatchSize),
@@ -678,7 +726,7 @@ export function DataProvider({ children, mode = "local" }: { children: React.Rea
 
 function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const [items, setItemsState] = useState<WorkItem[]>([]);
-  const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [settings, setSettingsState] = useState<SettingsState>(() => freshDefaultSettings());
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -780,7 +828,7 @@ function CloudDataProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
   const { isLoading: convexAuthLoading, isAuthenticated: convexAuthenticated } = useConvexAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
-  const [settings, setSettingsState] = useState<SettingsState>(() => readInitialSettings());
+  const [settings, setSettingsState] = useState<SettingsState>(() => freshDefaultSettings());
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
   const [salaryBatches, setSalaryBatches] = useState<SalaryBatch[]>([]);
   const [ready, setReady] = useState(false);

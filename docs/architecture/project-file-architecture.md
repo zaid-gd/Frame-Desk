@@ -30,9 +30,10 @@ Every version uses the same provider contract:
 - `convex`: Blob stored in Convex file storage through a signed upload URL.
 - `external`: Generic HTTP or HTTPS file link.
 - `google_drive`: Google Drive URL plus optional provider file ID.
+- `dropbox`: Dropbox URL plus optional provider file ID.
 - `frame_io`: Frame.io URL plus optional provider asset ID.
 
-Google Drive or Frame.io OAuth integrations can later resolve provider IDs, refresh metadata, and create new versions without changing the UI-facing file model.
+Google Drive, Dropbox, or Frame.io OAuth integrations can later resolve provider IDs, refresh metadata, and create new versions without changing the UI-facing file model.
 
 ## Access
 
@@ -58,6 +59,6 @@ Google Drive or Frame.io OAuth integrations can later resolve provider IDs, refr
 
 ## Compatibility
 
-Legacy `portalDeliverables` records remain readable and manageable for existing portals. `convex/clientPortals.ts` still exposes the `addDeliverable` mutation, which can insert new `portalDeliverables` rows, although the current editor UI directs new deliverables through `projectFiles`.
+Legacy `portalDeliverables` records remain readable and manageable for existing portals. `convex/clientPortals.ts` still exposes legacy remove and status-update mutations for those rows, but new deliverables created through `addDeliverable` are written as client-visible `projectFiles` with an external first version.
 
-`projectFiles` is the intended future source of truth, but it is not yet the exclusive write path. TODO: revise this note when `addDeliverable` is removed or rewritten to create `projectFiles` records.
+`projectFiles` is the source of truth for new deliverables. The legacy `portalDeliverables` table remains only as a compatibility read and management path for existing portal links.

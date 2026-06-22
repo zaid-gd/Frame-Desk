@@ -11,13 +11,13 @@ const routes = [
   {
     path: "/team",
     label: "team",
-    expectedText: ["Team", "Team Members", "Loading workspace"],
+    expectedText: ["Team", "Active members", "Checking account status"],
   },
   { path: "/team-chat", label: "team-chat", expectedText: ["Team Chat", "Manage Team"] },
   {
     path: "/reports",
     label: "reports",
-    expectedText: ["Reports", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
+    expectedText: ["Reports", "Invoice drafts", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
   },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
   { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },
