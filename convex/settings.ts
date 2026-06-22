@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { fileCategoryValidator, fileStatusValidator, settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
 
@@ -27,19 +27,9 @@ const customProjectTemplateValidator = v.object({
   updatedAt: v.optional(v.string()),
 });
 
-function normalizeCustomProjectTemplate(template: {
-  id: string;
-  name: string;
-  description: string;
-  projectType: string;
-  workType: "channel" | "freelance";
-  durationDays: number;
-  workflowStages: string[];
-  deliverables: Array<{ title: string; category: string; initialStatus: string }>;
-  checklistItems: string[];
-  custom?: boolean;
-  updatedAt?: string;
-}) {
+type CustomProjectTemplate = Infer<typeof customProjectTemplateValidator>;
+
+function normalizeCustomProjectTemplate(template: CustomProjectTemplate): CustomProjectTemplate {
   return {
     id: template.id.trim().slice(0, 80),
     name: template.name.trim().slice(0, 120),
