@@ -91,8 +91,7 @@ async function withPage(viewport, run) {
   page.on("console", (message) => {
     const text = message.text();
     const ignoredLocalAssetError = text.includes("/_vercel/insights/script.js") || text.includes("/_vercel/speed-insights/script.js");
-    const ignoredResource404 = text.includes("Failed to load resource: the server responded with a status of 404");
-    if (message.type() === "error" && !text.includes("webpack-hmr") && !ignoredLocalAssetError && !ignoredResource404) errors.push(text);
+    if (message.type() === "error" && !text.includes("webpack-hmr") && !ignoredLocalAssetError) errors.push(text);
   });
 
   try {

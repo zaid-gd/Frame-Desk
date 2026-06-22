@@ -829,6 +829,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               action={
                 <div className="flex rounded-md bg-[var(--app-soft-panel)] p-0.5">
                   <button
+                    type="button"
                     className={cn("relative rounded px-2 py-1 text-[10px] font-medium transition-colors", activityMode === "recent" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]")}
                     aria-pressed={activityMode === "recent"}
                     onClick={() => setActivityMode("recent")}
@@ -837,6 +838,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                     <span className="relative">Recent Activity</span>
                   </button>
                   <button
+                    type="button"
                     className={cn("relative rounded px-2 py-1 text-[10px] font-medium transition-colors", activityMode === "team" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]")}
                     aria-pressed={activityMode === "team"}
                     onClick={() => setActivityMode("team")}

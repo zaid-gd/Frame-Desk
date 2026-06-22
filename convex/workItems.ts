@@ -172,6 +172,9 @@ export const replaceAll = mutation({
       if (targetTeamId && activeMembership?.teamId !== targetTeamId) {
         throw new Error("Team access required for this project");
       }
+      const normalizedPaid = item.paid ?? false;
+      const normalizedPaidDate = item.paidDate ?? "";
+      const normalizedChecklistCompleted = item.checklistCompleted ?? {};
       const isStatusOnlyUpdate = Boolean(
         existing &&
         existing.teamId &&
@@ -181,15 +184,15 @@ export const replaceAll = mutation({
         existing.startDate === item.startDate &&
         existing.dueDate === item.dueDate &&
         existing.earnings === item.earnings &&
-        (existing.paid ?? false) === (item.paid ?? false) &&
-        (existing.paidDate ?? "") === (item.paidDate ?? "") &&
+        (existing.paid ?? false) === normalizedPaid &&
+        (existing.paidDate ?? "") === normalizedPaidDate &&
         existing.notes === item.notes &&
         existing.templateId === item.templateId &&
         existing.templateProjectType === item.templateProjectType &&
         JSON.stringify(existing.workflowStages ?? []) === JSON.stringify(item.workflowStages ?? []) &&
         JSON.stringify(existing.templateDeliverables ?? []) === JSON.stringify(item.templateDeliverables ?? []) &&
         JSON.stringify(existing.checklistItems ?? []) === JSON.stringify(item.checklistItems ?? []) &&
-        JSON.stringify(existing.checklistCompleted ?? {}) === JSON.stringify(item.checklistCompleted ?? {}) &&
+        JSON.stringify(existing.checklistCompleted ?? {}) === JSON.stringify(normalizedChecklistCompleted) &&
         JSON.stringify(existing.integrationLinks ?? {}) === JSON.stringify(item.integrationLinks ?? {}) &&
         JSON.stringify(existing.assigneeUserIds ?? []) === JSON.stringify(item.assigneeUserIds ?? [])
       );
@@ -242,8 +245,8 @@ export const replaceAll = mutation({
         startDate: item.startDate,
         dueDate: item.dueDate,
         earnings: item.earnings,
-        paid: item.paid ?? false,
-        paidDate: item.paid ? (item.paidDate ?? now) : "",
+        paid: normalizedPaid,
+        paidDate: normalizedPaid ? (normalizedPaidDate || now) : "",
         notes: item.notes,
         templateId: item.templateId,
         templateProjectType: item.templateProjectType?.trim().slice(0, 80),

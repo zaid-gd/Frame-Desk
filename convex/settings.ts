@@ -26,6 +26,40 @@ const customProjectTemplateValidator = v.object({
   custom: v.optional(v.boolean()),
   updatedAt: v.optional(v.string()),
 });
+
+function normalizeCustomProjectTemplate(template: {
+  id: string;
+  name: string;
+  description: string;
+  projectType: string;
+  workType: "channel" | "freelance";
+  durationDays: number;
+  workflowStages: string[];
+  deliverables: Array<{ title: string; category: string; initialStatus: string }>;
+  checklistItems: string[];
+  custom?: boolean;
+  updatedAt?: string;
+}) {
+  return {
+    id: template.id.trim().slice(0, 80),
+    name: template.name.trim().slice(0, 120),
+    description: template.description.trim().slice(0, 500),
+    projectType: template.projectType.trim().slice(0, 80),
+    workType: template.workType,
+    durationDays: Math.max(1, Math.min(365, template.durationDays)),
+    workflowStages: template.workflowStages.map((stage) => stage.trim()).filter(Boolean).slice(0, 12),
+    deliverables: template.deliverables
+      .map((deliverable) => ({
+        ...deliverable,
+        title: deliverable.title.trim().slice(0, 120),
+      }))
+      .filter((deliverable) => deliverable.title)
+      .slice(0, 12),
+    checklistItems: template.checklistItems.map((item) => item.trim()).filter(Boolean).slice(0, 20),
+    custom: template.custom,
+    updatedAt: template.updatedAt,
+  };
+}
 const integrationLinkValidator = v.record(
   v.string(),
   v.object({
@@ -101,16 +135,20 @@ export const upsert = mutation({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
     const userId = identity.tokenIdentifier;
+    const normalizedArgs = {
+      ...args,
+      customProjectTemplates: args.customProjectTemplates?.map(normalizeCustomProjectTemplate),
+    };
     const existing = await ctx.db
       .query("settings")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
       .take(10);
     const [primary, ...duplicates] = existing;
     if (primary) {
-      await ctx.db.patch(primary._id, args);
+      await ctx.db.patch(primary._id, normalizedArgs);
       await Promise.all(duplicates.map((row) => ctx.db.delete(row._id)));
     } else {
-      await ctx.db.insert("settings", { ...args, userId });
+      await ctx.db.insert("settings", { ...normalizedArgs, userId });
     }
   },
 });

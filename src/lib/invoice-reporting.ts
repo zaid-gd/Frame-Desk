@@ -63,7 +63,13 @@ function invoiceSlug(value: string) {
 
 function csvCell(value: string | number) {
   const text = String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  const needsQuoting = /[",\r\n]/.test(text);
+  const startsWithFormula = /^[=+\-@]/.test(text);
+  const escaped = text.replaceAll('"', '""');
+  if (startsWithFormula) {
+    return `"'${escaped}"`;
+  }
+  return needsQuoting ? `"${escaped}"` : text;
 }
 
 export function buildInvoiceDrafts({

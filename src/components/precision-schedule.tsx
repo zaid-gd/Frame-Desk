@@ -99,10 +99,10 @@ function formatLongDate(value: string) {
 }
 
 function statusPalette(status: WorkItem["status"]) {
-  if (status === "Delivered") return { fg: "var(--app-success)", bg: "color-mix(in_srgb,var(--app-success)_14%,transparent)" };
-  if (status === "In Progress") return { fg: "var(--app-warning)", bg: "color-mix(in_srgb,var(--app-warning)_14%,transparent)" };
-  if (status === "Cancelled") return { fg: "var(--app-danger)", bg: "color-mix(in_srgb,var(--app-danger)_14%,transparent)" };
-  if (status === "Review" || status === "Revision" || status === "Client Review") return { fg: "var(--app-warning)", bg: "color-mix(in_srgb,var(--app-warning)_14%,transparent)" };
+  if (status === "Delivered") return { fg: "var(--app-success)", bg: "color-mix(in srgb,var(--app-success)_14%,transparent)" };
+  if (status === "In Progress") return { fg: "var(--app-warning)", bg: "color-mix(in srgb,var(--app-warning)_14%,transparent)" };
+  if (status === "Cancelled") return { fg: "var(--app-danger)", bg: "color-mix(in srgb,var(--app-danger)_14%,transparent)" };
+  if (status === "Review" || status === "Revision" || status === "Client Review") return { fg: "var(--app-warning)", bg: "color-mix(in srgb,var(--app-warning)_14%,transparent)" };
   return { fg: "var(--app-highlight)", bg: "var(--app-active)" };
 }
 
