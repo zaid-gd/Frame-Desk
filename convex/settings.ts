@@ -46,8 +46,8 @@ function normalizeCustomProjectTemplate(template: CustomProjectTemplate): Custom
       .filter((deliverable) => deliverable.title)
       .slice(0, 12),
     checklistItems: template.checklistItems.map((item) => item.trim()).filter(Boolean).slice(0, 20),
-    custom: template.custom,
-    updatedAt: template.updatedAt,
+    custom: template.custom ?? true,
+    updatedAt: typeof template.updatedAt === "string" ? template.updatedAt : new Date().toISOString(),
   };
 }
 const integrationLinkValidator = v.record(
