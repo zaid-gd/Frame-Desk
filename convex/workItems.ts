@@ -74,12 +74,15 @@ export const list = query({
       startDate: item.startDate,
       dueDate: item.dueDate,
       earnings: item.earnings,
+      paid: item.paid,
+      paidDate: item.paidDate,
       notes: item.notes,
       templateId: item.templateId,
       templateProjectType: item.templateProjectType,
       workflowStages: item.workflowStages,
       templateDeliverables: item.templateDeliverables,
       checklistItems: item.checklistItems,
+      checklistCompleted: item.checklistCompleted,
       integrationLinks: item.integrationLinks,
       createdAt: item.createdAt,
     }));
@@ -103,12 +106,15 @@ export const replaceAll = mutation({
         startDate: v.string(),
         dueDate: v.string(),
         earnings: v.number(),
+        paid: v.optional(v.boolean()),
+        paidDate: v.optional(v.string()),
         notes: v.string(),
         templateId: v.optional(v.string()),
         templateProjectType: v.optional(v.string()),
         workflowStages: v.optional(v.array(v.string())),
         templateDeliverables: v.optional(v.array(templateDeliverableValidator)),
         checklistItems: v.optional(v.array(v.string())),
+        checklistCompleted: v.optional(v.record(v.string(), v.boolean())),
         integrationLinks: v.optional(integrationLinkValidator),
         createdAt: v.optional(v.string()),
       })
@@ -175,12 +181,15 @@ export const replaceAll = mutation({
         existing.startDate === item.startDate &&
         existing.dueDate === item.dueDate &&
         existing.earnings === item.earnings &&
+        (existing.paid ?? false) === (item.paid ?? false) &&
+        (existing.paidDate ?? "") === (item.paidDate ?? "") &&
         existing.notes === item.notes &&
         existing.templateId === item.templateId &&
         existing.templateProjectType === item.templateProjectType &&
         JSON.stringify(existing.workflowStages ?? []) === JSON.stringify(item.workflowStages ?? []) &&
         JSON.stringify(existing.templateDeliverables ?? []) === JSON.stringify(item.templateDeliverables ?? []) &&
         JSON.stringify(existing.checklistItems ?? []) === JSON.stringify(item.checklistItems ?? []) &&
+        JSON.stringify(existing.checklistCompleted ?? {}) === JSON.stringify(item.checklistCompleted ?? {}) &&
         JSON.stringify(existing.integrationLinks ?? {}) === JSON.stringify(item.integrationLinks ?? {}) &&
         JSON.stringify(existing.assigneeUserIds ?? []) === JSON.stringify(item.assigneeUserIds ?? [])
       );
@@ -233,6 +242,8 @@ export const replaceAll = mutation({
         startDate: item.startDate,
         dueDate: item.dueDate,
         earnings: item.earnings,
+        paid: item.paid ?? false,
+        paidDate: item.paid ? (item.paidDate ?? now) : "",
         notes: item.notes,
         templateId: item.templateId,
         templateProjectType: item.templateProjectType?.trim().slice(0, 80),
@@ -242,6 +253,12 @@ export const replaceAll = mutation({
           title: deliverable.title.trim().slice(0, 120),
         })).filter((deliverable) => deliverable.title).slice(0, 12),
         checklistItems: item.checklistItems?.map((entry) => entry.trim()).filter(Boolean).slice(0, 20),
+        checklistCompleted: Object.fromEntries(
+          Object.entries(item.checklistCompleted ?? {})
+            .filter(([key, value]) => key.trim() && typeof value === "boolean")
+            .slice(0, 20)
+            .map(([key, value]) => [key.trim().slice(0, 160), value])
+        ),
         integrationLinks: item.integrationLinks,
         createdAt: item.createdAt ?? existing?.createdAt ?? now,
         teamId: targetTeamId,
@@ -260,10 +277,12 @@ export const replaceAll = mutation({
           existing.startDate !== item.startDate ? "start date" : "",
           existing.dueDate !== item.dueDate ? "due date" : "",
           existing.earnings !== item.earnings ? "amount" : "",
+          (existing.paid ?? false) !== nextItem.paid || (existing.paidDate ?? "") !== nextItem.paidDate ? "payment status" : "",
           existing.templateProjectType !== nextItem.templateProjectType ? "project type" : "",
           JSON.stringify(existing.workflowStages ?? []) !== JSON.stringify(nextItem.workflowStages ?? []) ? "workflow" : "",
           JSON.stringify(existing.templateDeliverables ?? []) !== JSON.stringify(nextItem.templateDeliverables ?? []) ? "deliverables" : "",
           JSON.stringify(existing.checklistItems ?? []) !== JSON.stringify(nextItem.checklistItems ?? []) ? "checklist" : "",
+          JSON.stringify(existing.checklistCompleted ?? {}) !== JSON.stringify(nextItem.checklistCompleted ?? {}) ? "checklist progress" : "",
           integrationLinksChanged ? "resource links" : "",
         ].filter(Boolean);
         const assignmentsChanged =

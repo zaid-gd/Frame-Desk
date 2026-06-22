@@ -159,7 +159,7 @@ describe("project file management", () => {
     })).rejects.toThrow();
     await expect(owner.mutation(api.projectFiles.saveExternalVersion, {
       ...validVersion,
-      provider: "dropbox" as FileProvider,
+      provider: "unknown_provider" as FileProvider,
     })).rejects.toThrow();
   });
 
@@ -467,6 +467,75 @@ describe("project file management", () => {
     )).toBe(true);
   });
 
+  test("legacy portal addDeliverable creates client-visible project files", async () => {
+    const { t, owner } = await setupProject();
+    const { token } = await owner.mutation(api.clientPortals.publish, {
+      projectId: "project-files",
+      clientSummary: "Client-safe summary",
+      clientNotes: "Client-safe notes",
+      estimatedCompletion: "2026-07-01",
+      revisionLimit: 2,
+      clientStage: "Review",
+    });
+    const editorPortal = await owner.query(api.clientPortals.getForProject, { projectId: "project-files" });
+    if (!editorPortal) throw new Error("Expected editor portal");
+
+    const result = await owner.mutation(api.clientPortals.addDeliverable, {
+      portalId: editorPortal.portal._id,
+      title: "Review handoff",
+      detail: "Client review link",
+      url: "https://example.com/review-handoff",
+      status: "sent_to_client",
+      downloadable: true,
+    });
+
+    expect(result.fileId).toBeTruthy();
+    const files = await owner.query(api.projectFiles.listForProject, { projectId: "project-files" });
+    expect(files.files).toHaveLength(1);
+    expect(files.files[0]).toMatchObject({
+      title: "Review handoff",
+      category: "Deliverable",
+      description: "Client review link",
+      status: "sent_to_client",
+      clientVisible: true,
+      downloadable: true,
+    });
+    expect(files.files[0].versions[0]).toMatchObject({
+      provider: "external",
+      url: "https://example.com/review-handoff",
+      fileName: "Review handoff",
+      mimeType: "text/uri-list",
+      status: "sent_to_client",
+    });
+
+    const legacyRows = await t.run((ctx) =>
+      ctx.db
+        .query("portalDeliverables")
+        .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", editorPortal.portal._id))
+        .take(10)
+    );
+    expect(legacyRows).toHaveLength(0);
+
+    const portal = await t.query(api.clientPortals.getByToken, { token });
+    expect(portal.access).toBe("active");
+    if (portal.access !== "active") throw new Error("Expected an active portal");
+    expect(portal.deliverables).toContainEqual(expect.objectContaining({
+      title: "Review handoff",
+      detail: "Client review link",
+      url: "https://example.com/review-handoff",
+      status: "sent_to_client",
+      downloadable: true,
+    }));
+
+    const activity = await t.run((ctx) =>
+      ctx.db
+        .query("projectActivity")
+        .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", "project-files"))
+        .order("desc")
+        .take(10)
+    );
+    expect(activity.some((event) => event.kind === "project_file_added" && event.message === "Review handoff was added to deliverable files.")).toBe(true);
+  });
   test("client portals hide drafts and expose approved and final deliverables safely", async () => {
     const { t, owner } = await setupProject();
     await owner.mutation(api.projectFiles.saveExternalVersion, {

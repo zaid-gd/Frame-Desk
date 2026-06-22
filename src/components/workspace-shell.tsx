@@ -6,6 +6,7 @@ import {
   ChartNoAxesCombined,
   CheckSquare2,
   ChevronDown,
+  ChevronLeft,
   CircleUserRound,
   FolderKanban,
   Images,
@@ -13,8 +14,6 @@ import {
   Library,
   MessageSquareText,
   MoreHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -23,7 +22,7 @@ import {
   UsersRound,
   Workflow,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -135,11 +134,9 @@ const mobileRoutes: RouteItem[] = [
   allRoutes.find((route) => route.page === "clients")!,
 ];
 
-const shellSpring = {
-  type: "spring" as const,
-  stiffness: 430,
-  damping: 38,
-  mass: 0.72,
+const shellTransition = {
+  duration: 0.28,
+  ease: [0.22, 1, 0.36, 1] as const,
 };
 
 const quickRouteShortcuts: Record<string, string> = {
@@ -246,17 +243,17 @@ export function WorkspaceShell({
 
       <div
         className={cn(
-          "min-h-dvh transition-[padding] duration-200 ease-out",
-          collapsed ? "lg:pl-[76px]" : "lg:pl-[252px]",
+          "min-h-dvh transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          collapsed ? "lg:pl-[76px]" : "lg:pl-[224px]",
         )}
       >
         <header
           className={cn(
-            "fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-3 backdrop-blur-xl transition-[left] duration-200",
-            collapsed ? "lg:left-[76px]" : "lg:left-[252px]",
+            "fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-3 backdrop-blur-xl transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between",
+            collapsed ? "lg:left-[76px]" : "lg:left-[224px]",
           )}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
             <div className="flex items-center gap-2 lg:hidden">
               <img
                 src="/brand/logo/cutlab-studio.png"
@@ -264,21 +261,25 @@ export function WorkspaceShell({
                 className="h-7 w-auto object-contain brightness-0 dark:brightness-100"
               />
             </div>
-            <Button
-              variant="outline"
-              className="hidden h-9 w-full max-w-[540px] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-3 text-[var(--app-muted)] shadow-none transition-[background-color,border-color,box-shadow] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:flex"
-              onClick={() => setCommandOpen(true)}
-            >
-              <Search className="size-4" />
-              <span className="truncate">Search pages and workspace actions</span>
-              <kbd className="ml-auto rounded border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--app-muted)]">
-                Ctrl K
-              </kbd>
-            </Button>
             <p className="truncate text-sm font-semibold lg:hidden">{title}</p>
           </div>
 
-          <div className="ml-3 flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            className={cn(
+              "hidden h-9 w-[540px] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-3 text-[var(--app-muted)] shadow-none transition-[left,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:absolute lg:flex lg:-translate-x-1/2",
+              collapsed ? "lg:left-[calc(50vw-76px)]" : "lg:left-[calc(50vw-224px)]",
+            )}
+            onClick={() => setCommandOpen(true)}
+          >
+            <Search className="size-4" />
+            <span className="truncate">Search pages and workspace actions</span>
+            <kbd className="ml-auto rounded border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--app-muted)]">
+              Ctrl K
+            </kbd>
+          </Button>
+
+          <div className="ml-3 flex items-center gap-1.5 lg:ml-0">
             <motion.div
               whileHover={canCreateProject && !reduceMotion ? { y: -1 } : undefined}
               whileTap={canCreateProject && !reduceMotion ? { scale: 0.98, y: 0 } : undefined}
@@ -304,7 +305,7 @@ export function WorkspaceShell({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="min-h-dvh pt-14 pb-[calc(84px+env(safe-area-inset-bottom))] outline-none lg:pb-0">
+        <main id="main-content" tabIndex={-1} className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto pt-14 outline-none lg:h-auto lg:min-h-[calc(100dvh-56px)] lg:overflow-visible">
           {children}
         </main>
       </div>
@@ -331,56 +332,58 @@ function DesktopSidebar({
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 76 : 252 }}
-      transition={reduceMotion ? { duration: 0 } : shellSpring}
+      animate={{ width: collapsed ? 76 : 224 }}
+      transition={reduceMotion ? { duration: 0 } : shellTransition}
       className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-sidebar)] lg:flex lg:flex-col"
     >
-      <div className={cn("flex h-14 items-center border-b border-[var(--app-border)]", collapsed ? "justify-center px-2" : "px-4")}>
+      <div className={cn(
+        "border-b border-[var(--app-border)]",
+        collapsed ? "grid h-[104px] grid-rows-[42px_28px] justify-items-center gap-1 px-2 py-6" : "flex h-[104px] items-start justify-between gap-3 px-5 pt-6",
+      )}>
         <Link
           href="/"
           aria-label="Go to dashboard"
-          className="min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-sidebar)]"
+          className={cn(
+            "min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-sidebar)]",
+            collapsed ? "flex w-[60px] items-center justify-center overflow-hidden" : "flex-1",
+          )}
         >
-          <AnimatePresence initial={false} mode="popLayout">
-            {collapsed ? (
-              <motion.div
-                key="mark"
-                initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 0.92 }}
-                transition={{ duration: reduceMotion ? 0 : 0.14 }}
-                className="grid size-9 place-items-center rounded-md border border-[var(--app-strong-border)] bg-[var(--app-panel)] text-sm font-bold text-[var(--app-accent)]"
-              >
-                CL
-              </motion.div>
-            ) : (
-              <motion.img
-                key="wordmark"
-                initial={reduceMotion ? false : { opacity: 0, x: -5 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, x: -5 }}
-                transition={{ duration: reduceMotion ? 0 : 0.16 }}
-                src="/brand/logo/cutlab-studio.png"
-                alt="CutLab Studio"
-                className="h-8 max-w-[164px] object-contain object-left brightness-0 dark:brightness-100"
-              />
+          <motion.img
+            initial={false}
+            animate={{
+              opacity: collapsed ? 0.75 : 1,
+              height: collapsed ? 16 : 48,
+              maxWidth: collapsed ? 58 : 178,
+            }}
+            transition={reduceMotion ? { duration: 0 } : shellTransition}
+            src="/brand/logo/cutlab-studio.png"
+            alt="CutLab Studio"
+            className={cn(
+              "w-auto object-contain brightness-0 dark:brightness-100",
+              collapsed ? "object-center" : "object-left",
             )}
-          </AnimatePresence>
+          />
         </Link>
-      </div>
 
-      <div className={cn("flex h-[68px] items-center border-b border-[var(--app-border)]", collapsed ? "justify-center px-2" : "justify-end px-4")}>
         <Tooltip>
           <TooltipTrigger asChild>
             <motion.button
               type="button"
-              whileHover={reduceMotion ? undefined : { scale: 1.04 }}
-              whileTap={reduceMotion ? undefined : { scale: 0.9 }}
-              className="flex size-9 shrink-0 items-center justify-center rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-muted)] outline-none transition-colors hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
+              whileHover={reduceMotion ? undefined : { x: collapsed ? 1 : -1 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+              animate={{ rotate: collapsed ? 180 : 0 }}
+              transition={reduceMotion ? { duration: 0 } : shellTransition}
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-md outline-none transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
+                collapsed
+                  ? "size-7 text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-highlight)] focus-visible:bg-[var(--app-active)] focus-visible:text-[var(--app-highlight)]"
+                  : "mt-1 size-7 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)]",
+              )}
               onClick={onToggle}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-pressed={collapsed}
             >
-              {collapsed ? <PanelLeftOpen className="size-[18px]" /> : <PanelLeftClose className="size-[18px]" />}
+              <ChevronLeft className="size-4" strokeWidth={2.1} />
             </motion.button>
           </TooltipTrigger>
           <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
@@ -388,21 +391,22 @@ function DesktopSidebar({
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {routeGroups.map((group) => (
+        {routeGroups.map((group, groupIndex) => (
           <div key={group.label} className="mb-4">
-            <AnimatePresence initial={false}>
-              {!collapsed ? (
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.14 }}
-                  className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-subtle)]"
-                >
-                  {group.label}
-                </motion.p>
-              ) : null}
-            </AnimatePresence>
+            {!collapsed ? (
+              <motion.p
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={reduceMotion ? { duration: 0 } : shellTransition}
+                className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-subtle)]"
+              >
+                {group.label}
+              </motion.p>
+            ) : (
+              <div className="mb-1.5 flex h-3.5 items-center justify-center" aria-hidden="true">
+                {groupIndex > 0 ? <span className="h-px w-10 bg-[var(--app-border)]" /> : null}
+              </div>
+            )}
             <div className="space-y-0.5">
               {group.items.map((item) => (
                 <SidebarRoute
@@ -454,30 +458,27 @@ function SidebarRoute({
       {active ? (
         <motion.span
           layoutId="sidebar-active-route"
-          transition={reduceMotion ? { duration: 0 } : shellSpring}
+          transition={reduceMotion ? { duration: 0 } : shellTransition}
           className="absolute inset-0 rounded-md bg-[var(--app-active)]"
         />
       ) : null}
       <motion.span
         animate={{ scale: active && !reduceMotion ? 1.04 : 1 }}
-        transition={{ duration: reduceMotion ? 0 : 0.14 }}
+        transition={reduceMotion ? { duration: 0 } : shellTransition}
         className="relative z-10 flex shrink-0"
       >
         <Icon className="size-[17px]" strokeWidth={active ? 2.1 : 1.8} />
       </motion.span>
-      <AnimatePresence initial={false}>
-        {!collapsed ? (
-          <motion.span
-            initial={reduceMotion ? false : { opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={reduceMotion ? undefined : { opacity: 0, x: -4 }}
-            transition={{ duration: reduceMotion ? 0 : 0.14 }}
-            className="relative z-10 truncate"
-          >
-            {item.label}
-          </motion.span>
-        ) : null}
-      </AnimatePresence>
+      {!collapsed ? (
+        <motion.span
+          initial={reduceMotion ? false : { opacity: 0, x: -4 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={reduceMotion ? { duration: 0 } : shellTransition}
+          className="relative z-10 truncate"
+        >
+          {item.label}
+        </motion.span>
+      ) : null}
     </Link>
   );
 
@@ -686,7 +687,7 @@ function MobileNavigation({
             {active ? (
               <motion.span
                 layoutId="mobile-active-route"
-                transition={reduceMotion ? { duration: 0 } : shellSpring}
+                transition={reduceMotion ? { duration: 0 } : shellTransition}
                 className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-[var(--app-accent)]"
               />
             ) : null}

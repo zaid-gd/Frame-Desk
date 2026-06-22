@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useId, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
@@ -77,7 +77,7 @@ import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
 import { useHydratedReducedMotion } from "@/lib/motion";
-import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink, SalaryBatch } from "@/lib/types";
+import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink, SalaryBatch, SavedProjectTemplate } from "@/lib/types";
 import {
   buildPayoutReport,
   payoutReportToCsv,
@@ -215,6 +215,7 @@ type SettingsState = {
   weekStart: string;
   currencyCode: string;
   customClients: string[];
+  customProjectTemplates: SavedProjectTemplate[];
   projectTags: string[];
   salaryWorkType: string;
   salaryBatchSize: number;
@@ -321,10 +322,10 @@ const defaultIntegrationConfigs: Record<string, IntegrationConfig> = Object.from
 );
 
 const integrationDescriptions: Record<string, string> = {
-  "Google Drive": "Sync project files and assets to a Google Drive folder.",
-  Dropbox: "Store deliverables and raw footage in Dropbox.",
-  Slack: "Send project notifications and updates to a Slack channel.",
-  "Frame.io": "Connect video review and approval workflows."
+  "Google Drive": "Save Google Drive folder and file links for project assets.",
+  Dropbox: "Save Dropbox folder and delivery package links.",
+  Slack: "Save Slack channel or message links for project discussion.",
+  "Frame.io": "Save Frame.io review links and approval pages."
 };
 
 const integrationIcons: Record<string, string> = {
@@ -367,6 +368,7 @@ const defaultSettings: SettingsState = {
   weekStart: "Mon",
   currencyCode: "USD",
   customClients: [],
+  customProjectTemplates: [],
   projectTags: [...defaultProjectTags],
   salaryWorkType: defaultSalaryWorkType,
   salaryBatchSize: defaultSalaryBatchSize,
@@ -539,6 +541,13 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const filterProjectTagOptions = useMemo(() => ["ALL", ...projectTagOptions], [projectTagOptions]);
   const clientOptions = useMemo(() => buildClientOptions(projects, settings.customClients), [projects, settings.customClients]);
   const clientFilterOptions = useMemo(() => ["ALL", ...clientOptions], [clientOptions]);
+  const isClientBillableProject = useCallback((item: WorkItem) => (
+    !isSalaryWorkType(item.workType, settings) &&
+    isDoneStatus(item.status) &&
+    safeMoneyValue(item.earnings) > 0
+  ), [settings]);
+  const isProjectPaid = useCallback((item: WorkItem) => isClientBillableProject(item) && Boolean(item.paid), [isClientBillableProject]);
+  const isProjectUnpaid = useCallback((item: WorkItem) => isClientBillableProject(item) && !item.paid, [isClientBillableProject]);
   const filteredProjects = useMemo(() => {
     const searched = projects.filter((item) => {
       const haystack = `${item.title} ${item.client || ""} ${item.notes} ${item.workType}`.toLowerCase();
@@ -547,8 +556,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
       const matchesKind = kindFilter === "ALL" || item.workType.trim().toLowerCase() === kindFilter.toLowerCase();
       const matchesClient = clientFilter === "ALL" || item.client?.trim().toLowerCase() === clientFilter.toLowerCase();
       const matchesDue = dueFilter === "ALL" || dueBucket(item) === dueFilter;
-      const isPaid = isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0;
-      const isUnpaid = !isPaid;
+      const isPaid = isProjectPaid(item);
+      const isUnpaid = isProjectUnpaid(item);
       const matchesBilling =
         billingFilter === "ALL" ||
         (billingFilter === "Paid" && isPaid) ||
@@ -563,11 +572,11 @@ export function TrackerApp({ page }: { page: PageKey }) {
       if (sortKey === "earnings_asc") return safeMoneyValue(a.earnings) - safeMoneyValue(b.earnings);
       return createdTime(b) - createdTime(a);
     });
-  }, [billingFilter, clientFilter, dueFilter, kindFilter, projects, query, sortKey, statusFilter]);
+  }, [billingFilter, clientFilter, dueFilter, isProjectPaid, isProjectUnpaid, kindFilter, projects, query, sortKey, statusFilter]);
 
   const stats = useMemo(() => {
-    const earned = personalProjects.filter((item) => isDoneStatus(item.status)).reduce((total, item) => total + safeMoneyValue(item.earnings), 0);
-    const unpaid = personalProjects.filter((item) => !isDoneStatus(item.status) && safeMoneyValue(item.earnings) > 0).length;
+    const earned = personalProjects.filter((item) => isProjectPaid(item)).reduce((total, item) => total + safeMoneyValue(item.earnings), 0);
+    const unpaid = personalProjects.filter((item) => isProjectUnpaid(item)).length;
     const active = personalProjects.filter((item) => !isDoneStatus(item.status)).length;
     const salaryBatchSize = normalizedSalaryBatchSize(settings.salaryBatchSize);
     const salaryEdits = personalProjects.filter((item) => isSalaryWorkType(item.workType, settings) && isDoneStatus(item.status)).length;
@@ -586,7 +595,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       delivered: delivered.length,
       avgTurnaroundDays
     };
-  }, [personalProjects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
+  }, [isProjectPaid, isProjectUnpaid, personalProjects, settings.salaryBatchAmount, settings.salaryBatchSize, settings.salaryWorkType]);
 
   function openNewProject(scope: "personal" | "team" = "personal") {
     if (scope === "team" && !canCreateTeamProjects) {
@@ -731,6 +740,42 @@ export function TrackerApp({ page }: { page: PageKey }) {
     notify(`${project.title} status updated.`);
   }
 
+  function updateProjectChecklist(project: WorkItem, itemKey: string, completed: boolean) {
+    if (project.teamId && !canEditProjects) {
+      notify("Your team role cannot edit team project checklists.", "warning");
+      return;
+    }
+    const currentCompleted = normalizeChecklistCompleted(project.checklistItems, project.checklistCompleted);
+    const nextCompleted = { ...currentCompleted };
+    if (completed) nextCompleted[itemKey] = true;
+    else delete nextCompleted[itemKey];
+    setItems((current) => current.map((item) => item.id === project.id ? { ...item, checklistCompleted: nextCompleted } : item));
+    logLocalProjectActivity({
+      projectId: project.id,
+      kind: "project_updated",
+      message: `${project.title} checklist progress was updated.`,
+    });
+  }
+
+  function updateProjectPayment(project: WorkItem, paid: boolean) {
+    if (project.teamId && !canEditProjects) {
+      notify("Your team role cannot edit team project payment status.", "warning");
+      return;
+    }
+    if (!isClientBillableProject(project)) {
+      notify("Only delivered billable client projects can be marked paid.", "warning");
+      return;
+    }
+    const paidDate = paid ? new Date().toISOString() : "";
+    setItems((current) => current.map((item) => item.id === project.id ? { ...item, paid, paidDate } : item));
+    logLocalProjectActivity({
+      projectId: project.id,
+      kind: "project_updated",
+      message: `${project.title} was marked ${paid ? "paid" : "unpaid"}.`,
+    });
+    notify(`${project.title} marked ${paid ? "paid" : "unpaid"}.`);
+  }
+
   function confirmDeleteProject() {
     if (!deleteTarget) return;
     setItems((current) => current.filter((item) => item.id !== deleteTarget.id));
@@ -762,6 +807,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
       client: normalizedForm.client?.trim() || "",
       notes: normalizedForm.notes.trim(),
       earnings: typeConfig.earningsMode === "batch" ? 0 : safeMoneyValue(normalizedForm.earnings),
+      paid: typeConfig.earningsMode === "batch" ? false : Boolean(normalizedForm.paid),
+      paidDate: typeConfig.earningsMode === "batch" || !normalizedForm.paid ? "" : normalizedForm.paidDate || new Date().toISOString(),
+      checklistCompleted: normalizeChecklistCompleted(normalizedForm.checklistItems, normalizedForm.checklistCompleted),
       integrationLinks: normalizedForm.integrationLinks
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
@@ -941,7 +989,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
         requestDeleteProject(project.id);
       }}
       onStatusChange={updateProjectStatus}
-    />
+      onChecklistChange={updateProjectChecklist}
+      onPaymentChange={updateProjectPayment}
+      />
   );
   const loadingStatus = !isAuthLoaded ? <AppLoadingStatus /> : null;
 
@@ -1656,7 +1706,6 @@ function DashboardPage(props: {
                   <Typography sx={{ color: ink, fontSize: 14, fontWeight: 740 }}>Deadline queue</Typography>
                   <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.2 }}>Next deliveries</Typography>
                 </Box>
-                <Button component={Link} href="/calendar" size="small" sx={{ color: accent, minWidth: 0, px: 0.5 }}>Calendar</Button>
               </Stack>
               <UpcomingDeliveries projects={upcomingDeliveries} settings={settings} onViewProject={props.onViewProject} onNewProject={props.onNewProject} compact />
             </Box>
@@ -1686,7 +1735,6 @@ function DashboardPage(props: {
         subtitle={activityTab === "recent" ? "Latest project changes" : props.teamName ? `Latest actions in ${props.teamName}` : "Shared workspace activity"}
         compact
         sx={{ mb: 1.75 }}
-        action={activityTab === "team" && props.teamName ? <Button component={Link} href="/team" size="small" sx={{ color: accent, fontWeight: 720 }}>Open Team</Button> : undefined}
       >
         <Tabs
           value={activityTab}
@@ -1719,7 +1767,6 @@ function DashboardPage(props: {
             title="No team activity"
             body="Create or join a workspace to see shared updates."
             assetKey="team"
-            action={<Button component={Link} href="/team" size="small" sx={{ color: accent, fontWeight: 720 }}>Set Up Team</Button>}
           />
         )}
       </DashboardSection>
@@ -2274,7 +2321,6 @@ function ClientTabPanel({
         <Paper sx={{ p: 1.5, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: panel }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.8 }}>
             <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>Relationship Notes</Typography>
-            <Button size="small" component={Link} href="/projects" sx={{ color: accent, minWidth: 0, px: 1 }}>View Projects</Button>
           </Stack>
           <Typography sx={{ color: muted, fontSize: 13, lineHeight: 1.55 }}>
             {projects.find((project) => project.notes)?.notes || "Project notes attached to this client will appear here."}
@@ -2350,7 +2396,7 @@ function CalendarDesignPage({ projects, settings }: { projects: WorkItem[]; sett
                     border: 0,
                     font: "inherit",
                     textAlign: "left",
-                    minHeight: { xs: 92, md: 118 },
+                    minHeight: { xs: 84, md: "clamp(72px, calc((100dvh - 470px) / 6), 96px)" },
                     p: 1,
                     cursor: "pointer",
                     borderRight: `1px solid ${border}`,
@@ -2367,12 +2413,12 @@ function CalendarDesignPage({ projects, settings }: { projects: WorkItem[]; sett
                     {dayProjects.length ? <Chip label={dayProjects.length} size="small" sx={{ height: 20, minWidth: 22, bgcolor: activeBg, color: accent, borderRadius: "5px", fontSize: 11 }} /> : null}
                   </Stack>
                   <Stack gap={0.5} sx={{ mt: 1 }}>
-                    {dayProjects.slice(0, 2).map((project) => (
+                    {dayProjects.slice(0, 1).map((project) => (
                       <Typography key={project.id} noWrap sx={{ px: 0.7, py: 0.35, borderRadius: "4px", bgcolor: statusBg(project.status), color: statusFg(project.status), fontSize: 11, fontWeight: 700 }}>
                         {project.title}
                       </Typography>
                     ))}
-                    {dayProjects.length > 2 ? <Typography sx={{ color: muted, fontSize: 11 }}>+{dayProjects.length - 2} more</Typography> : null}
+                    {dayProjects.length > 1 ? <Typography sx={{ color: muted, fontSize: 11 }}>+{dayProjects.length - 1} more</Typography> : null}
                   </Stack>
                 </Box>
               );
@@ -2696,6 +2742,72 @@ function FeedbackDesignPage({ projects }: { projects: WorkItem[] }) {
   );
 }
 
+type TemplateFormState = {
+  id: string;
+  name: string;
+  description: string;
+  projectType: string;
+  workType: "channel" | "freelance";
+  durationDays: number;
+  workflowStagesText: string;
+  deliverablesText: string;
+  checklistText: string;
+};
+
+const emptyTemplateForm: TemplateFormState = {
+  id: "",
+  name: "",
+  description: "",
+  projectType: "",
+  workType: "freelance",
+  durationDays: 7,
+  workflowStagesText: "Brief\nEdit\nReview\nDelivery",
+  deliverablesText: "Final master",
+  checklistText: "Confirm brief\nCheck export settings",
+};
+
+function templateToForm(template: ProjectTemplate): TemplateFormState {
+  return {
+    id: template.id,
+    name: template.name,
+    description: template.description,
+    projectType: template.projectType,
+    workType: template.workType,
+    durationDays: template.durationDays,
+    workflowStagesText: template.workflowStages.join("\n"),
+    deliverablesText: template.deliverables.map((item) => item.title).join("\n"),
+    checklistText: template.checklistItems.join("\n"),
+  };
+}
+
+function linesFromText(value: string, limit: number) {
+  return value.split(/\r?\n|,/).map((line) => line.trim()).filter(Boolean).slice(0, limit);
+}
+
+function customTemplateFromForm(form: TemplateFormState): SavedProjectTemplate {
+  const name = form.name.trim().slice(0, 80) || "Custom template";
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "template";
+  const id = form.id || `custom-${slug}-${Date.now().toString(36)}`;
+  const deliverableTitles = linesFromText(form.deliverablesText, 12);
+  return {
+    id,
+    name,
+    description: form.description.trim().slice(0, 220) || "Reusable workflow for recurring client work.",
+    projectType: form.projectType.trim().slice(0, 80) || "Custom project",
+    workType: form.workType,
+    durationDays: Math.max(1, Math.min(120, Math.floor(Number(form.durationDays) || 7))),
+    workflowStages: linesFromText(form.workflowStagesText, 12),
+    deliverables: (deliverableTitles.length ? deliverableTitles : ["Final master"]).map((title) => ({
+      title: title.slice(0, 120),
+      category: "Deliverable" as FileCategory,
+      initialStatus: "draft" as FileStatus,
+    })),
+    checklistItems: linesFromText(form.checklistText, 20),
+    custom: true,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function TemplatesDesignPage({
   onUseBlank,
   onUseTemplate,
@@ -2703,48 +2815,122 @@ function TemplatesDesignPage({
   onUseBlank: () => void;
   onUseTemplate: (template: ProjectTemplate) => void;
 }) {
-  const settings = useTrackerSettings();
+  const { settings, setSettings } = useData();
+  const [templateForm, setTemplateForm] = useState<TemplateFormState>(emptyTemplateForm);
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const customTemplates = settings.customProjectTemplates ?? [];
+  const templates = useMemo(() => [...PROJECT_TEMPLATES, ...customTemplates], [customTemplates]);
+
+  function openBuilder(template?: ProjectTemplate) {
+    setTemplateForm(template ? templateToForm(template) : { ...emptyTemplateForm, id: "" });
+    setBuilderOpen(true);
+  }
+
+  function saveTemplate() {
+    const nextTemplate = customTemplateFromForm(templateForm);
+    setSettings((current) => {
+      const currentTemplates = current.customProjectTemplates ?? [];
+      const exists = currentTemplates.some((template) => template.id === nextTemplate.id);
+      return {
+        ...current,
+        customProjectTemplates: exists
+          ? currentTemplates.map((template) => template.id === nextTemplate.id ? nextTemplate : template)
+          : [nextTemplate, ...currentTemplates].slice(0, 24),
+      };
+    });
+    setBuilderOpen(false);
+  }
+
+  function deleteTemplate(templateId: string) {
+    setSettings((current) => ({
+      ...current,
+      customProjectTemplates: (current.customProjectTemplates ?? []).filter((template) => template.id !== templateId),
+    }));
+  }
 
   return (
     <PageFrame
       title="Templates"
-      subtitle="Start with a practical editing workflow, then change any field to fit the project."
-      action={<Button variant="outlined" startIcon={<AddIcon />} onClick={onUseBlank} sx={outlineButtonSx}>Blank Project</Button>}
+      subtitle="Start with a practical editing workflow, or save your own recurring setup for the next project."
+      action={
+        <Stack direction="row" gap={1} flexWrap="wrap" justifyContent="flex-end">
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => openBuilder()} sx={outlineButtonSx}>Custom Template</Button>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={onUseBlank} sx={outlineButtonSx}>Blank Project</Button>
+        </Stack>
+      }
     >
-      <Grid container spacing={settings.density === "Compact" ? 1 : 1.5}>
-        {PROJECT_TEMPLATES.map((template) => (
-          <Grid key={template.id} size={{ xs: 12, md: 6 }}>
-            <Box component="article" sx={{ borderTop: `1px solid ${border}`, py: { xs: 2.25, md: 2.75 }, pr: { md: 3 }, minHeight: 250, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      <Grid container spacing={settings.density === "Compact" ? 0.8 : 1.1}>
+        {templates.map((template) => (
+          <Grid key={template.id} size={{ xs: 12, md: 6, xl: 4 }}>
+            <Box component="article" sx={{ borderTop: `1px solid ${border}`, py: { xs: 1.45, md: 1.7 }, pr: { md: 2 }, minHeight: 210, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               <Box>
-                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={1.5}>
                   <Box>
-                    <Typography sx={{ color: ink, fontSize: 19, fontWeight: 740 }}>{template.name}</Typography>
-                    <Typography sx={{ color: muted, fontSize: 13, mt: 0.7, lineHeight: 1.55, maxWidth: 520 }}>{template.description}</Typography>
+                    <Stack direction="row" alignItems="center" gap={0.8} flexWrap="wrap">
+                      <Typography sx={{ color: ink, fontSize: 17, fontWeight: 740 }}>{template.name}</Typography>
+                      {template.custom ? <Chip label="Custom" size="small" sx={{ height: 20, borderRadius: "5px", bgcolor: activeBg, color: accent, fontSize: 10.5, fontWeight: 760 }} /> : null}
+                    </Stack>
+                    <Typography sx={{ color: muted, fontSize: 12.5, mt: 0.55, lineHeight: 1.45, maxWidth: 500 }}>{template.description}</Typography>
                   </Box>
                   <Box sx={{ color: accent, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <InsertDriveFileOutlinedIcon sx={{ fontSize: 24 }} />
+                    <InsertDriveFileOutlinedIcon sx={{ fontSize: 22 }} />
                   </Box>
                 </Stack>
-                <Stack direction="row" gap={1.25} flexWrap="wrap" sx={{ mt: 1.5 }}>
-                  <Typography sx={{ color: accent, fontSize: 12.5, fontWeight: 700 }}>{template.projectType}</Typography>
-                  <Typography sx={{ color: muted, fontSize: 12.5 }}>{template.durationDays} days</Typography>
+                <Stack direction="row" gap={1.1} flexWrap="wrap" sx={{ mt: 1.15 }}>
+                  <Typography sx={{ color: accent, fontSize: 12, fontWeight: 700 }}>{template.projectType}</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12 }}>{template.durationDays} days</Typography>
                 </Stack>
-                <Typography sx={{ color: muted, fontSize: 12, fontWeight: 700, mt: 1.8 }}>Workflow</Typography>
-                <Typography sx={{ color: ink, fontSize: 13, lineHeight: 1.6, mt: 0.45 }}>{template.workflowStages.join(" → ")}</Typography>
-                <Typography sx={{ color: muted, fontSize: 12, mt: 1 }}>{template.deliverables.length} deliverables · {template.checklistItems.length} checklist items</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5, fontWeight: 700, mt: 1.25 }}>Workflow</Typography>
+                <Typography sx={{ color: ink, fontSize: 12.5, lineHeight: 1.45, mt: 0.35 }}>{template.workflowStages.join(" -> ") || "Add stages after creating the project"}</Typography>
+                <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.75 }}>{template.deliverables.length} deliverables · {template.checklistItems.length} checklist items</Typography>
               </Box>
-              <Button onClick={() => onUseTemplate(template)} sx={{ mt: 2, px: 0, width: "fit-content", color: accent, justifyContent: "flex-start", gap: 0.5, fontSize: 13, fontWeight: 720 }}>
-                Use template
-                <AddIcon sx={{ color: accent, fontSize: 18 }} />
-              </Button>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} sx={{ mt: 1.4 }}>
+                <Button onClick={() => onUseTemplate(template)} sx={{ px: 0, width: "fit-content", color: accent, justifyContent: "flex-start", gap: 0.5, fontSize: 12.5, fontWeight: 720 }}>
+                  Use template
+                  <AddIcon sx={{ color: accent, fontSize: 17 }} />
+                </Button>
+                {template.custom ? (
+                  <Stack direction="row" gap={0.5}>
+                    <Button size="small" onClick={() => openBuilder(template)} sx={{ minWidth: 0, color: muted, px: 0.8 }}>Edit</Button>
+                    <Button size="small" onClick={() => deleteTemplate(template.id)} sx={{ minWidth: 0, color: dangerColor, px: 0.8 }}>Delete</Button>
+                  </Stack>
+                ) : null}
+              </Stack>
             </Box>
           </Grid>
         ))}
       </Grid>
+
+      <Dialog open={builderOpen} onClose={() => setBuilderOpen(false)} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
+        <DialogTitle sx={{ fontSize: 22, fontWeight: 760 }}>{templateForm.id ? "Edit Custom Template" : "New Custom Template"}</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={1.4} sx={{ pt: 0.5 }}>
+            <Grid size={{ xs: 12, md: 6 }}><TextField label="Template name" value={templateForm.name} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} fullWidth /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField label="Project type" value={templateForm.projectType} onChange={(event) => setTemplateForm({ ...templateForm, projectType: event.target.value })} fullWidth /></Grid>
+            <Grid size={{ xs: 12 }}><TextField label="Description" value={templateForm.description} onChange={(event) => setTemplateForm({ ...templateForm, description: event.target.value })} fullWidth /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <FormControl fullWidth>
+                <InputLabel>Work type</InputLabel>
+                <Select label="Work type" value={templateForm.workType} onChange={(event) => setTemplateForm({ ...templateForm, workType: event.target.value as "channel" | "freelance" })}>
+                  <MenuItem value="freelance">Freelance</MenuItem>
+                  <MenuItem value="channel">Channel</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField label="Duration days" type="number" value={templateForm.durationDays} onChange={(event) => setTemplateForm({ ...templateForm, durationDays: Number(event.target.value) })} fullWidth /></Grid>
+            <Grid size={{ xs: 12, md: 4 }}><TextField label="Workflow stages" value={templateForm.workflowStagesText} onChange={(event) => setTemplateForm({ ...templateForm, workflowStagesText: event.target.value })} multiline minRows={5} fullWidth helperText="One per line" /></Grid>
+            <Grid size={{ xs: 12, md: 4 }}><TextField label="Deliverables" value={templateForm.deliverablesText} onChange={(event) => setTemplateForm({ ...templateForm, deliverablesText: event.target.value })} multiline minRows={5} fullWidth helperText="One per line" /></Grid>
+            <Grid size={{ xs: 12, md: 4 }}><TextField label="Checklist" value={templateForm.checklistText} onChange={(event) => setTemplateForm({ ...templateForm, checklistText: event.target.value })} multiline minRows={5} fullWidth helperText="One per line" /></Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBuilderOpen(false)} sx={{ color: muted }}>Cancel</Button>
+          <Button variant="contained" onClick={saveTemplate} disabled={!templateForm.name.trim()} sx={{ bgcolor: accent, "&:hover": { bgcolor: accent } }}>Save Template</Button>
+        </DialogActions>
+      </Dialog>
     </PageFrame>
   );
 }
-
 function ReportsDesignPage({
   projects,
   salaryBatches,
@@ -3403,7 +3589,7 @@ function TeamChatPage() {
   return (
     <PageFrame
       title="Team Chat"
-      subtitle="Quick handoffs and production updates for your current team workspace."
+      subtitle="Quick handoffs, production updates, and Manage Team access for your current workspace."
     >
       {!isUserLoaded ? (
         <Paper sx={{ ...panelSx, p: 3 }}><Stack direction="row" gap={1.2} alignItems="center"><CircularProgress size={18} /><Typography sx={{ color: muted, fontSize: 14 }}>Checking account status...</Typography></Stack></Paper>
@@ -3428,7 +3614,6 @@ function TeamChatPage() {
             title="No team workspace yet"
             body="Create or join a workspace before using Team Chat."
             assetKey="team"
-            action={<Button component={Link} href="/team" variant="outlined" sx={outlineButtonSx}>Open Team Setup</Button>}
           />
         </Paper>
       ) : !canUseChat ? (
@@ -3777,7 +3962,7 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   function resetSettings() {
-    setSettings({ ...defaultSettings, customClients: [...defaultSettings.customClients], projectTags: [...defaultSettings.projectTags], projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), integrationLinks: {}, teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
+    setSettings({ ...defaultSettings, customClients: [...defaultSettings.customClients], customProjectTemplates: defaultSettings.customProjectTemplates.map((template) => ({ ...template, workflowStages: [...template.workflowStages], deliverables: template.deliverables.map((item) => ({ ...item })), checklistItems: [...template.checklistItems] })), projectTags: [...defaultSettings.projectTags], projectStages: [...defaultSettings.projectStages], notifications: { ...defaultSettings.notifications }, integrations: { ...defaultSettings.integrations }, integrationAccounts: { ...defaultSettings.integrationAccounts }, integrationConfigs: JSON.parse(JSON.stringify(defaultIntegrationConfigs)), integrationLinks: {}, teamMembers: defaultSettings.teamMembers.map((m) => ({ ...m })), editorPermissions: { ...defaultSettings.editorPermissions }, rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)) });
     notify("Settings reset to defaults.", "warning");
   }
 
@@ -4051,7 +4236,6 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
     <PageFrame
       title="Organization Profile"
       subtitle="Studio-level view for team ownership, delivery context, and active work."
-      action={<Button component={Link} href="/profile" variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} sx={outlineButtonSx}>Public Profile</Button>}
     >
       <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
         <Grid size={{ xs: 12, md: 3 }}><StatCard label="Studio" value={settings.studioName} helper="Local tracker" /></Grid>
@@ -4162,9 +4346,7 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
       <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between" gap={2} sx={{ pb: 2.5 }}>
         <CutLabLockup compact subtitle="Video editing tracker" />
         <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-          <Button component={Link} href="/projects" variant="outlined" sx={outlineButtonSx}>Back to App</Button>
           <Button variant="outlined" startIcon={<PersonOutlineOutlinedIcon />} onClick={shareProfile} sx={outlineButtonSx}>{shareCopied ? "Published + Copied" : "Share Profile"}</Button>
-          <Button component={Link} href="/settings" aria-label="Open profile settings" sx={{ minWidth: 36, width: 36, height: 36, color: ink, p: 0 }}><MoreHorizIcon /></Button>
         </Stack>
       </Stack>
       {shareMessage ? <Typography sx={{ color: shareMessage.startsWith("Public profile") ? accent : dangerColor, fontSize: 13, textAlign: "right", mb: 1 }}>{shareMessage}</Typography> : null}
@@ -4246,9 +4428,6 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
           <Typography sx={{ fontSize: 36, color: ink, fontWeight: 760, lineHeight: 1.05, fontFamily: headingFont }}>Edit Profile</Typography>
           <Typography sx={{ fontSize: 15, color: muted, mt: 1 }}>Update the identity shown on your public profile.</Typography>
         </Box>
-        <Stack direction="row" alignItems="center" gap={1.5} sx={{ flexShrink: 0 }}>
-          <Button component={Link} href="/profile" variant="outlined" sx={outlineButtonSx}>View Public Profile</Button>
-        </Stack>
       </Stack>
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "300px 1fr" }, gap: 3 }}>
         <Box>
@@ -4646,6 +4825,8 @@ function ProjectStartDialog({
   onBlank: () => void;
   onTemplate: (template: ProjectTemplate) => void;
 }) {
+  const settings = useTrackerSettings();
+  const templates = useMemo(() => [...PROJECT_TEMPLATES, ...(settings.customProjectTemplates ?? [])], [settings.customProjectTemplates]);
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "8px" } }}>
       <DialogTitle sx={{ fontSize: 24, fontWeight: 760 }}>Create {scope === "team" ? "Team " : ""}Project</DialogTitle>
@@ -4660,7 +4841,7 @@ function ProjectStartDialog({
           Blank project
         </Button>
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1 }}>
-          {PROJECT_TEMPLATES.map((template) => (
+          {templates.map((template) => (
             <Button
               key={template.id}
               variant="outlined"
@@ -4679,7 +4860,10 @@ function ProjectStartDialog({
               }}
             >
               <Box>
-                <Typography sx={{ fontSize: 14, fontWeight: 760 }}>{template.name}</Typography>
+                <Stack direction="row" alignItems="center" gap={0.75} flexWrap="wrap">
+                  <Typography sx={{ fontSize: 14, fontWeight: 760 }}>{template.name}</Typography>
+                  {template.custom ? <Chip label="Custom" size="small" sx={{ height: 18, borderRadius: "5px", bgcolor: activeBg, color: accent, fontSize: 10, fontWeight: 760 }} /> : null}
+                </Stack>
                 <Typography sx={{ color: muted, fontSize: 11.5, lineHeight: 1.45, mt: 0.4 }}>{template.description}</Typography>
               </Box>
             </Button>
@@ -5445,17 +5629,31 @@ function StatusChip({ status }: { status: string }) {
   );
 }
 
-function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, localActivity, onClose, onEdit, onDelete, onStatusChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; localActivity: ProjectActivityEvent[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: ProjectStatus) => void }) {
+function checklistItemKey(item: string, index: number) {
+  return `${index}:${item.trim()}`.slice(0, 160);
+}
+
+function normalizeChecklistCompleted(items: string[] = [], completed: Record<string, boolean> = {}) {
+  const allowedKeys = new Set(items.map((item, index) => checklistItemKey(item, index)));
+  return Object.fromEntries(Object.entries(completed).filter(([key, value]) => allowedKeys.has(key) && value === true));
+}
+
+function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateStatus, canComment, teamMembers, localActivity, onClose, onEdit, onDelete, onStatusChange, onChecklistChange, onPaymentChange }: { project: WorkItem | null; settings: SettingsState; canEdit: boolean; canDelete: boolean; canUpdateStatus: boolean; canComment: boolean; teamMembers: WorkspaceMemberOption[]; localActivity: ProjectActivityEvent[]; onClose: () => void; onEdit: (project: WorkItem) => void; onDelete: (project: WorkItem) => void; onStatusChange: (project: WorkItem, status: ProjectStatus) => void; onChecklistChange: (project: WorkItem, itemKey: string, completed: boolean) => void; onPaymentChange: (project: WorkItem, paid: boolean) => void }) {
   if (!project) {
     return null;
   }
 
   const progress = projectProgress(project.status);
+  const isClientBillable = !isSalaryWorkType(project.workType, settings) && isDoneStatus(project.status) && safeMoneyValue(project.earnings) > 0;
   const amount = isSalaryWorkType(project.workType, settings) ? "Batch tracked" : money(project.earnings, settings.currencyCode);
   const configuredLinks = integrationServices
     .map((service) => ({ service, link: project.integrationLinks?.[service.id] }))
     .filter(({ link }) => hasIntegrationLink(link));
   const assignedMembers = teamMembers.filter((member) => (project.assigneeUserIds ?? []).includes(member.userId));
+  const checklistItems = project.checklistItems ?? [];
+  const checklistCompleted = normalizeChecklistCompleted(checklistItems, project.checklistCompleted);
+  const checklistDone = checklistItems.filter((item, index) => checklistCompleted[checklistItemKey(item, index)]).length;
+  const deliverableTargets = project.templateDeliverables ?? [];
 
   function openLink(url: string) {
     if (typeof window === "undefined" || !isValidIntegrationUrl(url)) return;
@@ -5505,7 +5703,7 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
               <ProjectDetailMetric label="Start" value={formatDate(project.startDate, settings.dateFormat)} />
               <ProjectDetailMetric label="Due" value={formatDate(project.dueDate, settings.dateFormat)} />
               <ProjectDetailMetric label="Amount" value={amount} />
-              <ProjectDetailMetric label="Project ID" value={project.id} />
+              <ProjectDetailMetric label="Payment" value={isClientBillable ? (project.paid ? "Paid" : "Unpaid") : "Not billable"} />
             </Box>
             <Paper sx={{ ...panelSx, p: 2, mb: 2 }}>
               <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={1.2} sx={{ mb: 1.4 }}>
@@ -5517,6 +5715,48 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
               </Stack>
               <ProjectStageTracker status={project.status} />
             </Paper>
+            {(checklistItems.length || deliverableTargets.length) ? (
+              <Paper sx={{ ...panelSx, p: 2, mb: 2 }}>
+                <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1.2} sx={{ mb: 1.4 }}>
+                  <Box>
+                    <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Template setup</Typography>
+                    <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>
+                      {checklistItems.length ? `${checklistDone}/${checklistItems.length} checklist items complete` : "Suggested deliverables for this workflow"}
+                    </Typography>
+                  </Box>
+                  {checklistItems.length ? <Chip label={`${Math.round((checklistDone / checklistItems.length) * 100)}%`} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px", fontWeight: 760 }} /> : null}
+                </Stack>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: checklistItems.length && deliverableTargets.length ? "minmax(0, 1fr) minmax(240px, 0.8fr)" : "1fr" }, gap: 1.2 }}>
+                  {checklistItems.length ? (
+                    <Stack gap={0.7}>
+                      {checklistItems.map((item, index) => {
+                        const itemKey = checklistItemKey(item, index);
+                        const checked = Boolean(checklistCompleted[itemKey]);
+                        return (
+                          <Stack key={itemKey} direction="row" alignItems="center" gap={1} sx={{ p: 0.9, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: checked ? activeBg : softPanel }}>
+                            <Switch size="small" checked={checked} disabled={!canEdit} inputProps={{ "aria-label": `${checked ? "Mark incomplete" : "Mark complete"}: ${item}` }} onChange={(event) => onChecklistChange(project, itemKey, event.target.checked)} />
+                            <Typography sx={{ color: checked ? muted : ink, fontSize: 13, lineHeight: 1.45, textDecoration: checked ? "line-through" : "none" }}>{item}</Typography>
+                          </Stack>
+                        );
+                      })}
+                    </Stack>
+                  ) : null}
+                  {deliverableTargets.length ? (
+                    <Stack gap={0.7}>
+                      {deliverableTargets.map((deliverable, index) => (
+                        <Stack key={`${deliverable.title}-${index}`} direction="row" justifyContent="space-between" alignItems="center" gap={1} sx={{ p: 0.9, border: `1px solid ${border}`, borderRadius: "6px", bgcolor: softPanel }}>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{deliverable.title}</Typography>
+                            <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.25 }}>{deliverable.category}</Typography>
+                          </Box>
+                          <Chip label={APPROVAL_STATUS_LABELS[deliverable.initialStatus] ?? deliverable.initialStatus} size="small" sx={{ bgcolor: panel, color: muted, borderRadius: "5px" }} />
+                        </Stack>
+                      ))}
+                    </Stack>
+                  ) : null}
+                </Box>
+              </Paper>
+            ) : null}
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "minmax(0, 1.25fr) minmax(260px, 0.75fr)" }, gap: 2 }}>
               <Paper sx={{ ...panelSx, p: 2 }}>
                 <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -5539,10 +5779,23 @@ function ProjectDetailDialog({ project, settings, canEdit, canDelete, canUpdateS
               </Paper>
             </Box>
             <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1.2}>
+                <Box>
+                  <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Client Payment</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>Tracks whether delivered billable work has been collected. Payment collection integrations are not connected here.</Typography>
+                </Box>
+                <Stack direction="row" alignItems="center" gap={1}>
+                  <Chip label={isClientBillable ? (project.paid ? "Paid" : "Unpaid") : "Not billable"} size="small" sx={{ bgcolor: project.paid ? activeBg : isClientBillable ? softPanel : softPanel, color: project.paid ? successColor : isClientBillable ? warningColor : muted, borderRadius: "5px", fontWeight: 760 }} />
+                  <Switch size="small" checked={Boolean(project.paid)} disabled={!canEdit || !isClientBillable} inputProps={{ "aria-label": `${project.paid ? "Mark unpaid" : "Mark paid"}: ${project.title}` }} onChange={(event) => onPaymentChange(project, event.target.checked)} />
+                </Stack>
+              </Stack>
+              {project.paidDate ? <Typography sx={{ color: muted, fontSize: 11.5, mt: 1 }}>Marked paid {formatShortDateTime(project.paidDate)}.</Typography> : null}
+            </Paper>
+            <Paper sx={{ ...panelSx, p: 2, mt: 2 }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.2 }}>
                 <Box>
                   <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Resources & Assets</Typography>
-                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>Working files, review links, exports, and connected folders.</Typography>
+                  <Typography sx={{ color: muted, fontSize: 12, mt: 0.3 }}>Working files, review links, exports, and linked folders.</Typography>
                 </Box>
                 <Chip label={configuredIntegrationCount(project.integrationLinks)} size="small" sx={{ bgcolor: activeBg, color: accent, borderRadius: "5px" }} />
               </Stack>
@@ -5992,7 +6245,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
               </Button>
             ) : (
               <>
-                <DialogSelect label="Provider" value={provider} options={externalFileProviderOptions} labels={{ external: "External URL", google_drive: "Google Drive", frame_io: "Frame.io" }} onChange={(value) => setProvider(value as Exclude<FileProvider, "convex">)} />
+                <DialogSelect label="Provider" value={provider} options={externalFileProviderOptions} labels={{ external: "External URL", google_drive: "Google Drive", dropbox: "Dropbox", frame_io: "Frame.io" }} onChange={(value) => setProvider(value as Exclude<FileProvider, "convex">)} />
                 <TextField label="File URL" value={externalUrl} onChange={(event) => setExternalUrl(event.target.value)} placeholder="https://..." />
                 <Stack direction={{ xs: "column", sm: "row" }} gap={1.2}>
                   <TextField label="Provider file ID" value={externalId} onChange={(event) => setExternalId(event.target.value)} fullWidth helperText="Optional. Reserved for future API synchronization." />
@@ -6037,6 +6290,7 @@ function formatFileSize(bytes: number) {
 
 function providerLabel(provider: string) {
   if (provider === "google_drive") return "Google Drive";
+  if (provider === "dropbox") return "Dropbox";
   if (provider === "frame_io") return "Frame.io";
   if (provider === "convex") return "CutLab Upload";
   return "External Link";
@@ -6263,7 +6517,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" }, gap: 1.2, mt: 1.2 }}>
               <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px", minWidth: 0 }}>
                 <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mb: 0.8 }}>Deliverables</Typography>
-                <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ maxHeight: 230, overflowY: "auto" }}>
+                <Stack divider={<Divider flexItem sx={{ borderColor: border }} />} sx={{ maxHeight: { xs: 260, md: 320 }, overflowY: "auto" }}>
                   {portalData.deliverables.length ? portalData.deliverables.map((item) => (
                     <Stack key={item._id} direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "center" }} gap={0.8} sx={{ py: 0.9 }}>
                       <Box sx={{ minWidth: 0 }}>
@@ -6277,7 +6531,7 @@ function ClientPortalManager({ project, canEdit }: { project: WorkItem; canEdit:
               </Box>
               <Box sx={{ p: 1.3, bgcolor: softPanel, border: `1px solid ${border}`, borderRadius: "6px", minWidth: 0 }}>
                 <Typography sx={{ color: ink, fontSize: 13, fontWeight: 760, mb: 0.8 }}>Revision History</Typography>
-                <Stack gap={0.8} sx={{ maxHeight: 230, overflowY: "auto" }}>
+                <Stack gap={0.8} sx={{ maxHeight: { xs: 260, md: 320 }, overflowY: "auto" }}>
                   {portalData.revisions.length ? portalData.revisions.map((revision) => (
                     <Box key={revision._id} sx={{ py: 0.8, borderBottom: `1px solid ${border}` }}>
                       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" gap={0.7}>
@@ -6818,10 +7072,14 @@ function TemplateSetupEditor({
         <TextField
           label="Checklist"
           value={(form.checklistItems ?? []).join("\n")}
-          onChange={(event) => setForm({
-            ...form,
-            checklistItems: event.target.value.split("\n").slice(0, 20),
-          })}
+          onChange={(event) => {
+            const checklistItems = event.target.value.split("\n").slice(0, 20);
+            setForm({
+              ...form,
+              checklistItems,
+              checklistCompleted: normalizeChecklistCompleted(checklistItems, form.checklistCompleted),
+            });
+          }}
           multiline
           minRows={3}
           helperText="One checklist item per line."

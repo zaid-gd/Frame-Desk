@@ -98,7 +98,7 @@ export function PrecisionMedia({
         </div>
 
         <LayoutGroup id="media-workspace">
-          <div className="mt-4 grid min-h-[650px] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:grid-cols-[230px_minmax(0,1fr)_300px]">
+          <div className="mt-4 grid min-h-[520px] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:grid-cols-[230px_minmax(0,1fr)_300px]">
             <aside className="border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 lg:border-b-0 lg:border-r">
               <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-subtle)]">Collections</p>
               <nav className="mt-2 space-y-0.5" aria-label="Media collections">
@@ -209,7 +209,7 @@ export function PrecisionMedia({
                 </motion.span>
               </div>
 
-              <div className="relative min-h-[520px]">
+              <div className="relative min-h-[420px]">
                 <AnimatePresence mode="wait" initial={false}>
                   {filtered.length ? (
                     <motion.div

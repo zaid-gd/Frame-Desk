@@ -38,6 +38,10 @@ import {
   payoutReportToCsv,
   type PayoutPeriod,
 } from "@/lib/payout-reporting";
+import {
+  buildInvoiceDrafts,
+  invoiceDraftsToCsv,
+} from "@/lib/invoice-reporting";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -177,7 +181,7 @@ export function PrecisionClients({
           <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Clients</h1>
           <p className="mt-1 text-xs text-[var(--app-muted)]">Projects, delivery history, and account context in one focused directory.</p>
         </div>
-        <Button className="h-9 self-start sm:self-auto" onClick={() => setAddOpen(true)}><Plus /> Add client</Button>
+        <Button className="h-9 self-start sm:self-auto" onClick={() => setAddOpen(true)}><Plus /> New Client</Button>
       </div>
 
       <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
@@ -186,7 +190,7 @@ export function PrecisionClients({
         <Summary label="Delivered" value={projects.filter(delivered).length} icon={CheckCircle2} />
       </div>
 
-      <div className="mt-4 grid min-h-[560px] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:h-[calc(100dvh-340px)] lg:min-h-[520px] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="mt-4 grid overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:max-h-[calc(100dvh-300px)] lg:grid-cols-[320px_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--app-border)] p-3">
             <div className="relative">
@@ -307,7 +311,7 @@ export function PrecisionClients({
               exit={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
               className="grid min-h-[420px] place-items-center p-6 text-center"
             >
-              <div><UsersRound className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Add your first client</p><p className="mt-1 text-xs text-[var(--app-muted)]">Client records organize project history and delivery context.</p><Button className="mt-3 h-8" size="sm" onClick={() => setAddOpen(true)}><Plus /> Add client</Button></div>
+              <div><UsersRound className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Add your first client</p><p className="mt-1 text-xs text-[var(--app-muted)]">Client records organize project history and delivery context.</p><Button className="mt-3 h-8" size="sm" onClick={() => setAddOpen(true)}><Plus /> New Client</Button></div>
             </motion.main>
           )}
         </AnimatePresence>
@@ -316,13 +320,13 @@ export function PrecisionClients({
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add client</DialogTitle>
+            <DialogTitle>New Client</DialogTitle>
             <DialogDescription>Create a client record now and assign it to projects later.</DialogDescription>
           </DialogHeader>
           <Input value={newClient} onChange={(event) => setNewClient(event.target.value)} placeholder="Client or company name" autoFocus onKeyDown={(event) => { if (event.key === "Enter") addClient(); }} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={addClient} disabled={!newClient.trim()}>Add client</Button>
+            <Button onClick={addClient} disabled={!newClient.trim()}>New Client</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -364,7 +368,7 @@ export function PrecisionFeedback({
       </div>
       <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
         <header className="flex min-h-12 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-sm font-semibold">Review queue</h2><p className="text-[10px] text-[var(--app-muted)]">Active work requiring client or editor attention.</p></div>
+          <div><h2 className="text-sm font-semibold">Review Queue</h2><p className="text-[10px] text-[var(--app-muted)]">Active work requiring client or editor attention.</p></div>
           <div className="flex items-center gap-1" role="group" aria-label="Filter review queue">
             {(["All", "Review", "Revision"] as const).map((option) => {
               const count = option === "All"
@@ -463,6 +467,13 @@ export function PrecisionReports({
   }), [editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
   const collected = report.manualEarnings + report.paidBatchEarnings;
   const salaryEdits = report.deliveredProjects.filter((project) => project.isSalaryEdit).length;
+  const invoiceDrafts = useMemo(() => buildInvoiceDrafts({
+    projects,
+    salaryWorkType: settings.salaryWorkType,
+    currencyCode: settings.currencyCode,
+    period,
+  }), [period, projects, settings.currencyCode, settings.salaryWorkType]);
+  const invoiceTotal = invoiceDrafts.reduce((total, draft) => total + draft.total, 0);
 
   const trendSeries = useMemo(() => {
     const map = new Map<string, { label: string; earned: number; delivered: number }>();
@@ -500,14 +511,21 @@ export function PrecisionReports({
     }))
     : [{ userId: "workspace", name: settings.profileName || "Workspace owner", delivered: 0, value: 0 }];
 
-  function exportReport() {
-    const csv = payoutReportToCsv(report, settings.currencyCode);
+  function downloadCsv(csv: string, fileName: string) {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `cutlab-payout-report-${period}.csv`;
+    anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportReport() {
+    downloadCsv(payoutReportToCsv(report, settings.currencyCode), `cutlab-payout-report-${period}.csv`);
+  }
+
+  function exportInvoiceDrafts() {
+    downloadCsv(invoiceDraftsToCsv(invoiceDrafts), `cutlab-invoice-drafts-${period}.csv`);
   }
 
   return (
@@ -538,8 +556,8 @@ export function PrecisionReports({
       <div className="mt-4 grid grid-cols-2 divide-x divide-y divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:grid-cols-4 lg:divide-y-0">
         <ReportMetric label="Collected" value={money(collected, settings.currencyCode)} helper="Freelance plus paid batches" icon={CircleDollarSign} index={0} reduceMotion={Boolean(reduceMotion)} />
         <ReportMetric label="Outstanding" value={money(report.unpaidBatchEarnings, settings.currencyCode)} helper={`${report.unpaidBatchCount} unpaid batches`} icon={Clock3} index={1} reduceMotion={Boolean(reduceMotion)} />
-        <ReportMetric label="Delivered edits" value={String(report.deliveredProjects.length)} helper={`${projects.length} total tracked`} icon={CheckCircle2} index={2} reduceMotion={Boolean(reduceMotion)} />
-        <ReportMetric label="Salary edits" value={String(salaryEdits)} helper={`${report.completedBatchCount} completed batches`} icon={TrendingUp} index={3} reduceMotion={Boolean(reduceMotion)} />
+        <ReportMetric label="Delivered edits" value={String(report.deliveredProjects.length)} helper={`${salaryEdits} salary edits`} icon={CheckCircle2} index={2} reduceMotion={Boolean(reduceMotion)} />
+        <ReportMetric label="Invoice drafts" value={String(invoiceDrafts.length)} helper={money(invoiceTotal, settings.currencyCode)} icon={BriefcaseBusiness} index={3} reduceMotion={Boolean(reduceMotion)} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.8fr)]">
@@ -630,6 +648,29 @@ export function PrecisionReports({
         </motion.section>
       </div>
 
+      <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
+        <header className="flex min-h-12 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div><h2 className="text-sm font-semibold">Invoice drafts</h2><p className="text-[10px] text-[var(--app-muted)]">Local CSV drafts for delivered client projects. Payment collection still requires a trusted payment provider.</p></div>
+          <Button variant="outline" size="sm" className="h-8" onClick={exportInvoiceDrafts} disabled={!invoiceDrafts.length}><Download /> Export invoices</Button>
+        </header>
+        <div className="overflow-x-auto border-t border-[var(--app-border)]">
+          <table className="w-full min-w-[760px] border-collapse">
+            <thead><tr className="bg-[var(--app-soft-panel)] text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]"><th className="h-8 px-4">Draft</th><th className="px-4">Client</th><th className="px-4">Projects</th><th className="px-4">Due</th><th className="px-4 text-right">Total</th></tr></thead>
+            <tbody className="divide-y divide-[var(--app-border)]">
+              {invoiceDrafts.map((draft) => (
+                <tr key={draft.id} className="h-12 text-xs transition-colors hover:bg-[var(--app-hover)]">
+                  <td className="px-4 font-semibold">{draft.invoiceNumber}</td>
+                  <td className="px-4 text-[var(--app-muted)]">{draft.client}</td>
+                  <td className="px-4">{draft.lineItems.length}</td>
+                  <td className="px-4 text-[var(--app-muted)]">{formatDate(draft.dueDate)}</td>
+                  <td className="px-4 text-right font-semibold">{money(draft.total, settings.currencyCode)}</td>
+                </tr>
+              ))}
+              {!invoiceDrafts.length ? <tr><td colSpan={5} className="h-28 text-center text-xs text-[var(--app-muted)]">Delivered freelance projects with client names and positive earnings will appear here.</td></tr> : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
       <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
         <header className="flex h-12 items-center justify-between px-4"><div><h2 className="text-sm font-semibold">Salary Batch Ledger</h2><p className="text-[10px] text-[var(--app-muted)]">Completed edit batches and payout status.</p></div><span className="text-[11px] text-[var(--app-muted)]">{report.batches.length} batches</span></header>
         <div className="overflow-x-auto border-t border-[var(--app-border)]">

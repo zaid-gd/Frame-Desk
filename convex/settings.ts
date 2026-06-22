@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
+import { fileCategoryValidator, fileStatusValidator, settingsTeamRoleValidator, storedTeamRoleValidator } from "./domainValidators";
 
 const teamMemberSchema = v.object({
   id: v.string(),
@@ -9,6 +9,23 @@ const teamMemberSchema = v.object({
   email: v.string(),
 });
 
+const customProjectTemplateValidator = v.object({
+  id: v.string(),
+  name: v.string(),
+  description: v.string(),
+  projectType: v.string(),
+  workType: v.union(v.literal("channel"), v.literal("freelance")),
+  durationDays: v.number(),
+  workflowStages: v.array(v.string()),
+  deliverables: v.array(v.object({
+    title: v.string(),
+    category: fileCategoryValidator,
+    initialStatus: fileStatusValidator,
+  })),
+  checklistItems: v.array(v.string()),
+  custom: v.optional(v.boolean()),
+  updatedAt: v.optional(v.string()),
+});
 const integrationLinkValidator = v.record(
   v.string(),
   v.object({
@@ -49,6 +66,7 @@ export const upsert = mutation({
     weekStart: v.string(),
     currencyCode: v.string(),
     customClients: v.optional(v.array(v.string())),
+    customProjectTemplates: v.optional(v.array(customProjectTemplateValidator)),
     projectTags: v.array(v.string()),
     salaryWorkType: v.string(),
     salaryBatchSize: v.number(),

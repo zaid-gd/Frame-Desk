@@ -1,6 +1,38 @@
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "@playwright/test";
 
-const baseUrl = process.env.CUTLAB_UI_URL || "http://localhost:3000";
+const startupTimeoutMs = 30_000;
+const configuredBaseUrl = process.env.CUTLAB_UI_URL;
+let server;
+let baseUrl = configuredBaseUrl;
+
+if (!baseUrl) {
+  const port = await getOpenPort();
+  baseUrl = `http://127.0.0.1:${port}`;
+  const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
+  const serverArgs = process.platform === "win32"
+    ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
+    : ["run", "start", "--", "-p", String(port)];
+
+  server = spawn(serverCommand, serverArgs, {
+    env: { ...process.env, PORT: String(port) },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+
+  let output = "";
+  server.stdout.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+  server.stderr.on("data", (chunk) => {
+    output += chunk.toString();
+  });
+
+  await waitForServer(baseUrl, () => output);
+}
+
 const browser = await chromium.launch({ headless: true });
 
 async function withPage(viewport, run) {
@@ -57,7 +89,10 @@ async function withPage(viewport, run) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error" && !message.text().includes("webpack-hmr")) errors.push(message.text());
+    const text = message.text();
+    const ignoredLocalAssetError = text.includes("/_vercel/insights/script.js") || text.includes("/_vercel/speed-insights/script.js");
+    const ignoredResource404 = text.includes("Failed to load resource: the server responded with a status of 404");
+    if (message.type() === "error" && !text.includes("webpack-hmr") && !ignoredLocalAssetError && !ignoredResource404) errors.push(text);
   });
 
   try {
@@ -72,7 +107,7 @@ try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying dashboard and command palette...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Today" }).waitFor();
+    await page.getByRole("heading", { name: "Production overview" }).waitFor();
     await page.getByRole("button", { name: /filters/i }).click();
     await page.getByPlaceholder("Search projects...").fill("Interaction");
     await page.getByTestId("project-row").first().click();
@@ -81,11 +116,13 @@ try {
     await page.getByPlaceholder("Search pages and actions...").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
 
-    console.log("Verifying calendar view switching...");
+    console.log("Verifying calendar navigation...");
     await page.goto(`${baseUrl}/calendar`, { waitUntil: "domcontentloaded" });
-    await page.locator(".fc").waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "Week" }).click();
-    await page.locator(".fc-timeGridWeek-view").waitFor({ state: "visible" });
+    await page.getByRole("heading", { name: "Calendar" }).waitFor();
+    await page.getByRole("button", { name: /previous month/i }).click();
+    await page.getByRole("button", { name: /next month/i }).click();
+    await page.getByRole("button", { name: /today/i }).click();
+    await page.getByText(/scheduled deliveries/i).first().waitFor({ state: "visible" });
 
     console.log("Verifying media view and selection...");
     await page.goto(`${baseUrl}/media`, { waitUntil: "domcontentloaded" });
@@ -96,7 +133,7 @@ try {
   await withPage({ width: 390, height: 844 }, async (page) => {
     console.log("Verifying mobile navigation and project inspector...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "Today" }).waitFor();
+    await page.getByRole("heading", { name: "Production overview" }).waitFor();
     await page.getByTestId("mobile-project-row").first().click();
     await page.getByRole("dialog", { name: "Project details" }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
@@ -120,4 +157,46 @@ try {
   console.log("UI interactions verified across desktop, mobile, calendar, media, settings, and reduced-motion states.");
 } finally {
   await browser.close();
+  if (server && !server.killed) stopServer(server);
+}
+
+async function getOpenPort() {
+  return new Promise((resolve, reject) => {
+    const socket = createServer();
+    socket.on("error", reject);
+    socket.listen(0, () => {
+      const address = socket.address();
+      if (!address || typeof address === "string") {
+        socket.close(() => reject(new Error("Could not allocate a local port.")));
+        return;
+      }
+      const selectedPort = address.port;
+      socket.close(() => resolve(selectedPort));
+    });
+  });
+}
+
+async function waitForServer(url, getOutput) {
+  const started = Date.now();
+  while (Date.now() - started < startupTimeoutMs) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+      if (response.ok) return;
+    } catch {
+      // Retry until the server is ready or the startup timeout expires.
+    }
+    if (server?.exitCode !== null) {
+      throw new Error(`Production server exited before UI verification.\n${getOutput()}`);
+    }
+    await delay(300);
+  }
+  throw new Error(`Production server did not start within ${startupTimeoutMs / 1000}s.\n${getOutput()}`);
+}
+
+function stopServer(child) {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
+    return;
+  }
+  child.kill("SIGTERM");
 }

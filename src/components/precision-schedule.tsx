@@ -1,10 +1,5 @@
 "use client";
 
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import timeGridPlugin from "@fullcalendar/timegrid";
-import interactionPlugin from "@fullcalendar/interaction";
-import type { DatesSetArg, EventClickArg, EventContentArg, EventMountArg } from "@fullcalendar/core";
 import {
   ArrowRight,
   CalendarDays,
@@ -12,11 +7,10 @@ import {
   ChevronRight,
   CheckCircle2,
   Clock3,
-  FolderOpen,
   Milestone,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -61,18 +55,64 @@ function daysUntil(value: string) {
   return Math.round((date.getTime() - today.getTime()) / 86_400_000);
 }
 
-function weekStartIndex(value: string) {
-  const index = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(value);
+const revealTransition = { duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const;
+
+function weekdayIndex(day: string) {
+  const index = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(day);
   return index >= 0 ? index : 1;
 }
 
-function calendarTimeZone(value: string) {
-  if (value === "Pacific Time") return "America/Los_Angeles";
-  if (value === "Eastern Time") return "America/New_York";
-  return value || "local";
+function calendarMonthDays(month: Date, weekStart: string) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(first);
+  const offset = (first.getDay() - weekdayIndex(weekStart) + 7) % 7;
+  start.setDate(first.getDate() - offset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return { date };
+  });
 }
 
-const revealTransition = { duration: 0.22, ease: [0.22, 1, 0.36, 1] } as const;
+function orderedWeekdays(weekStart: string) {
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const start = weekdayIndex(weekStart);
+  return [...days.slice(start), ...days.slice(0, start)];
+}
+
+function iso(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function todayDate() {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function formatLongDate(value: string) {
+  const date = parseDate(value);
+  return date ? new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric" }).format(date) : "Select a date";
+}
+
+function statusPalette(status: WorkItem["status"]) {
+  if (status === "Delivered") return { fg: "var(--app-success)", bg: "color-mix(in_srgb,var(--app-success)_14%,transparent)" };
+  if (status === "In Progress") return { fg: "var(--app-warning)", bg: "color-mix(in_srgb,var(--app-warning)_14%,transparent)" };
+  if (status === "Cancelled") return { fg: "var(--app-danger)", bg: "color-mix(in_srgb,var(--app-danger)_14%,transparent)" };
+  if (status === "Review" || status === "Revision" || status === "Client Review") return { fg: "var(--app-warning)", bg: "color-mix(in_srgb,var(--app-warning)_14%,transparent)" };
+  return { fg: "var(--app-highlight)", bg: "var(--app-active)" };
+}
+
+function projectProgress(status: WorkItem["status"]) {
+  if (status === "Delivered") return 100;
+  if (status === "Review" || status === "Revision" || status === "Client Review") return 72;
+  if (status === "In Progress") return 48;
+  if (status === "Cancelled") return 0;
+  return 18;
+}
 
 export function PrecisionCalendar({
   projects,
@@ -83,276 +123,153 @@ export function PrecisionCalendar({
   settings: SettingsState;
   onViewProject: (project: WorkItem) => void;
 }) {
-  const [selectedId, setSelectedId] = useState(projects[0]?.id ?? "");
-  const [calendarTitle, setCalendarTitle] = useState("");
-  const [activeView, setActiveView] = useState("dayGridMonth");
-  const calendarRef = useRef<FullCalendar>(null);
+  const firstProjectDate = projects.find((project) => parseDate(project.dueDate))?.dueDate;
+  const initialDate = firstProjectDate ? parseDate(firstProjectDate)! : todayDate();
+  const [visibleMonth, setVisibleMonth] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(iso(todayDate()));
   const reduceMotion = useHydratedReducedMotion();
-  const events = useMemo(() => projects.filter((project) => parseDate(project.dueDate)).map((project) => ({
-    id: project.id,
-    title: project.title,
-    start: project.dueDate,
-    allDay: true,
-    backgroundColor: statusColor(project.status),
-    borderColor: statusColor(project.status),
-    textColor: "#ffffff",
-    extendedProps: { projectId: project.id },
-  })), [projects]);
-  const upcoming = useMemo(() => projects
-    .filter((project) => !isDelivered(project) && project.status !== "Cancelled" && daysUntil(project.dueDate) >= 0)
-    .sort((a, b) => daysUntil(a.dueDate) - daysUntil(b.dueDate))
-    .slice(0, 8), [projects]);
-  const selected = projects.find((project) => project.id === selectedId) ?? upcoming[0] ?? projects[0] ?? null;
 
-  useEffect(() => {
-    if (selectedId && !projects.some((project) => project.id === selectedId)) {
-      setSelectedId(upcoming[0]?.id ?? projects[0]?.id ?? "");
-    }
-  }, [projects, selectedId, upcoming]);
+  const monthDays = useMemo(() => calendarMonthDays(visibleMonth, settings.weekStart), [visibleMonth, settings.weekStart]);
+  const weekdays = useMemo(() => orderedWeekdays(settings.weekStart), [settings.weekStart]);
+  const monthLabel = new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(visibleMonth);
+  const selectedProjects = useMemo(() => projects
+    .filter((project) => project.dueDate === selectedDate)
+    .sort((a, b) => a.title.localeCompare(b.title)), [projects, selectedDate]);
+  const monthProjectCount = useMemo(() => projects.filter((project) => {
+    const due = parseDate(project.dueDate);
+    return due?.getFullYear() === visibleMonth.getFullYear() && due.getMonth() === visibleMonth.getMonth();
+  }).length, [projects, visibleMonth]);
 
-  function selectProject(project: WorkItem, openProject = false, revealDate = false) {
-    setSelectedId(project.id);
-    if (revealDate) calendarRef.current?.getApi().gotoDate(project.dueDate);
-    if (openProject) onViewProject(project);
+  function shiftMonth(offset: number) {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
   }
 
-  function handleEventClick(info: EventClickArg) {
-    const project = projects.find((item) => item.id === info.event.extendedProps.projectId);
-    if (!project) return;
-    selectProject(project);
+  function jumpToToday() {
+    const today = todayDate();
+    setVisibleMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDate(iso(today));
   }
-
-  function handleEventMount(info: EventMountArg) {
-    const project = projects.find((item) => item.id === info.event.extendedProps.projectId);
-    if (!project) return;
-    info.el.tabIndex = 0;
-    info.el.setAttribute("role", "button");
-    info.el.setAttribute("aria-label", `${project.title}, ${project.status}, due ${formatDate(project.dueDate)}`);
-    info.el.onkeydown = (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      selectProject(project);
-    };
-  }
-
-  function handleDatesSet(info: DatesSetArg) {
-    setCalendarTitle(info.view.title);
-    setActiveView(info.view.type);
-  }
-
-  function renderEventContent(info: EventContentArg) {
-    const project = projects.find((item) => item.id === info.event.extendedProps.projectId);
-    if (!project) return <span className="truncate">{info.event.title}</span>;
-    const isTimeGrid = info.view.type.startsWith("timeGrid");
-
-    return (
-      <div className="min-w-0 px-0.5 py-px leading-tight">
-        <p className="truncate text-[11px] font-semibold">{project.title}</p>
-        {isTimeGrid ? (
-          <p className="mt-0.5 truncate text-[9px] opacity-80">{project.client || project.workType} · {project.status}</p>
-        ) : null}
-      </div>
-    );
-  }
-
-  function changeView(view: string) {
-    calendarRef.current?.getApi().changeView(view);
-  }
-
-  const calendarViews = [
-    { id: "dayGridMonth", label: "Month" },
-    { id: "timeGridWeek", label: "Week" },
-    { id: "timeGridDay", label: "Day" },
-  ];
 
   return (
     <div className="mx-auto w-full max-w-[1580px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="mb-4 border-b border-[var(--app-border)] pb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Production schedule</p>
-        <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Calendar</h1>
-        <p className="mt-1 text-xs text-[var(--app-muted)]">Plan delivery dates and review checkpoints in {settings.timeZone || "your workspace time zone"}.</p>
+      <div className="mb-5 flex flex-col gap-3 border-b border-[var(--app-border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-[28px] font-semibold tracking-[-0.02em] sm:text-[32px]">Calendar</h1>
+          <p className="mt-1.5 text-sm text-[var(--app-muted)]">A delivery-date calendar for planned, active, and delivered work.</p>
+        </div>
+        <Button variant="outline" className="h-10 border-[var(--app-highlight)] px-4 text-[var(--app-highlight)] hover:bg-[var(--app-active)]" onClick={jumpToToday}>
+          <CalendarDays className="size-4" />
+          Today
+        </Button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">
-        <section className="min-w-0 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] p-3 sm:p-4">
-          <div className="mb-3 flex flex-col gap-3 border-b border-[var(--app-border)] pb-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex min-w-0 items-center gap-1">
-              <Button variant="outline" size="icon" aria-label="Previous calendar period" title="Previous" onClick={() => calendarRef.current?.getApi().prev()}>
-                <ChevronLeft />
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
+          <div className="flex items-center justify-between gap-3 px-4 py-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <Button variant="outline" size="icon" aria-label="Previous month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(-1)}>
+                <ChevronLeft className="size-4" />
               </Button>
-              <Button variant="outline" size="icon" aria-label="Next calendar period" title="Next" onClick={() => calendarRef.current?.getApi().next()}>
-                <ChevronRight />
+              <h2 className="truncate text-xl font-semibold">{monthLabel}</h2>
+              <Button variant="outline" size="icon" aria-label="Next month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(1)}>
+                <ChevronRight className="size-4" />
               </Button>
-              <Button variant="outline" className="ml-1 h-9 px-3 text-xs" onClick={() => calendarRef.current?.getApi().today()}>Today</Button>
-              <h2 className="ml-2 min-w-0 truncate text-sm font-semibold sm:text-base" aria-live="polite">{calendarTitle}</h2>
             </div>
-            <div className="grid grid-cols-3 rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-0.5" role="group" aria-label="Calendar view">
-              {calendarViews.map((view) => (
-                <button
-                  key={view.id}
+            <span className="rounded-md bg-[var(--app-active)] px-2 py-1 text-xs font-semibold text-[var(--app-highlight)]">{monthProjectCount} in month</span>
+          </div>
+
+          <div className="grid grid-cols-7 border-l border-t border-[var(--app-border)]">
+            {weekdays.map((day) => (
+              <div key={day} className="border-b border-r border-[var(--app-border)] px-2 py-2 text-[11px] font-semibold uppercase text-[var(--app-muted)]">
+                {day}
+              </div>
+            ))}
+            {monthDays.map((day) => {
+              const key = iso(day.date);
+              const dayProjects = projects.filter((project) => project.dueDate === key);
+              const isCurrentMonth = day.date.getMonth() === visibleMonth.getMonth();
+              const isSelected = selectedDate === key;
+              const isToday = key === iso(todayDate());
+
+              return (
+                <motion.button
+                  key={key}
                   type="button"
-                  aria-pressed={activeView === view.id}
+                  whileTap={reduceMotion ? undefined : { scale: 0.995 }}
+                  aria-label={`Select ${formatDate(key, { month: "long", day: "numeric", year: "numeric" })} with ${dayProjects.length} scheduled ${dayProjects.length === 1 ? "delivery" : "deliveries"}`}
+                  onClick={() => setSelectedDate(key)}
                   className={cn(
-                    "h-8 rounded px-3 text-xs font-medium text-[var(--app-muted)] transition-colors hover:text-[var(--app-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-highlight)]",
-                    activeView === view.id && "bg-[var(--app-panel)] text-[var(--app-highlight)] shadow-sm",
+                    "min-h-[84px] border-b border-r border-[var(--app-border)] p-2 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] md:min-h-[clamp(72px,calc((100dvh-470px)/6),96px)]",
+                    isSelected ? "bg-[var(--app-active)]" : isCurrentMonth ? "bg-[var(--app-panel)]" : "bg-[var(--app-soft-panel)] opacity-55",
+                    isToday && !isSelected && "shadow-[inset_0_0_0_2px_var(--app-highlight)]",
                   )}
-                  onClick={() => changeView(view.id)}
                 >
-                  {view.label}
-                </button>
-              ))}
-            </div>
+                  <span className="flex items-center justify-between gap-2">
+                    <span className={cn("text-[13px] font-semibold", (isSelected || isToday) ? "text-[var(--app-highlight)]" : "text-[var(--app-ink)]")}>{day.date.getDate()}</span>
+                    {dayProjects.length ? <span className="grid h-5 min-w-5 place-items-center rounded bg-[var(--app-active)] px-1 text-[11px] font-semibold text-[var(--app-highlight)]">{dayProjects.length}</span> : null}
+                  </span>
+                  <span className="mt-2 block space-y-1">
+                    {dayProjects.slice(0, 1).map((project) => {
+                      const palette = statusPalette(project.status);
+                      return (
+                        <span key={project.id} className="block truncate rounded px-1.5 py-1 text-[11px] font-semibold" style={{ background: palette.bg, color: palette.fg }}>
+                          {project.title}
+                        </span>
+                      );
+                    })}
+                    {dayProjects.length > 1 ? <span className="block text-[11px] text-[var(--app-muted)]">+{dayProjects.length - 1} more</span> : null}
+                  </span>
+                </motion.button>
+              );
+            })}
           </div>
-          <div className="precision-calendar">
-            <FullCalendar
-              ref={calendarRef}
-              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-              initialView="dayGridMonth"
-              initialDate={upcoming[0]?.dueDate ?? projects.find((project) => parseDate(project.dueDate))?.dueDate}
-              headerToolbar={false}
-              events={events}
-              datesSet={handleDatesSet}
-              eventContent={renderEventContent}
-              eventClassNames={(info) => info.event.extendedProps.projectId === selected?.id ? ["is-selected"] : []}
-              eventClick={handleEventClick}
-              eventDidMount={handleEventMount}
-              eventWillUnmount={(info) => {
-                info.el.onkeydown = null;
-              }}
-              height="auto"
-              dayMaxEvents={3}
-              nowIndicator
-              firstDay={weekStartIndex(settings.weekStart)}
-              timeZone={calendarTimeZone(settings.timeZone)}
-              eventDisplay="block"
-              displayEventTime={false}
-              allDayText="Deadlines"
-              slotMinTime="08:00:00"
-              slotMaxTime="20:00:00"
-              stickyHeaderDates
-            />
-          </div>
-          <p className="mt-3 border-t border-[var(--app-border)] pt-3 text-[10px] text-[var(--app-muted)]">
-            Week starts {settings.weekStart || "Mon"} · {settings.timeZone || "Local time"} · Select a deadline to inspect it
-          </p>
         </section>
 
-        <aside className="space-y-4">
-          <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-            <header className="flex h-11 items-center gap-2 px-3">
-              <CalendarDays className="size-4 text-[var(--app-muted)]" />
-              <h2 className="text-[13px] font-semibold">Upcoming deadlines</h2>
-              <span className="ml-auto text-[10px] text-[var(--app-muted)]">{upcoming.length}</span>
-            </header>
-            {upcoming.length ? (
-              <div className="divide-y divide-[var(--app-border)]">
-                {upcoming.map((project) => (
-                  <button
-                    key={project.id}
-                    type="button"
-                    aria-pressed={selected?.id === project.id}
-                    className={cn(
-                      "relative w-full px-3 py-3 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)]",
-                      selected?.id === project.id && "bg-[var(--app-active)]",
-                    )}
-                    onClick={() => selectProject(project, false, true)}
-                  >
-                    {selected?.id === project.id ? (
-                      <motion.span
-                        layoutId="calendar-deadline-selection"
-                        className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-[var(--app-highlight)]"
-                        transition={reduceMotion ? { duration: 0 } : revealTransition}
-                      />
-                    ) : null}
-                    <div className="flex items-start gap-2">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full" style={{ background: statusColor(project.status) }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold">{project.title}</p>
-                        <p className="mt-1 text-[10px] text-[var(--app-muted)]">{formatDate(project.dueDate)} · {project.status}</p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="grid min-h-28 place-items-center px-4 text-center text-xs text-[var(--app-muted)]">No active deadlines scheduled.</div>
-            )}
-          </section>
+        <aside className="rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] p-4">
+          <h2 className="text-xl font-semibold">{formatLongDate(selectedDate)}</h2>
+          <p className="mt-1 text-sm text-[var(--app-muted)]">{selectedProjects.length} scheduled deliveries</p>
 
-          <div aria-live="polite">
-            <AnimatePresence mode="wait" initial={false}>
-              {selected ? (
-                <motion.section
-                  key={selected.id}
-                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          <div className="mt-8 space-y-3">
+            {selectedProjects.length ? selectedProjects.map((project) => {
+              const palette = statusPalette(project.status);
+              return (
+                <motion.div
+                  key={project.id}
+                  initial={reduceMotion ? false : { opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -4 }}
                   transition={reduceMotion ? { duration: 0 } : revealTransition}
-                  className="rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] p-4"
+                  className="rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="grid size-9 place-items-center rounded-md bg-[var(--app-soft-panel)]"><FolderOpen className="size-4 text-[var(--app-muted)]" /></div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{selected.title}</p>
-                      <p className="mt-0.5 text-[11px] text-[var(--app-muted)]">{selected.client || selected.workType}</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{project.title}</p>
+                      <p className="mt-1 truncate text-xs text-[var(--app-muted)]">{project.client || project.workType}</p>
                     </div>
+                    <Badge variant="outline" className={cn("h-5 shrink-0 rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
                   </div>
-                  <Badge variant="outline" className={cn("mt-3 h-5 rounded px-1.5 text-[10px]", statusTone(selected.status))}>{selected.status}</Badge>
-                  <div className="mt-4 grid grid-cols-2 gap-3 border-t border-[var(--app-border)] pt-4">
-                    <div><p className="text-[9px] uppercase text-[var(--app-subtle)]">Delivery</p><p className="mt-1 text-xs font-medium">{formatDate(selected.dueDate)}</p></div>
-                    <div><p className="text-[9px] uppercase text-[var(--app-subtle)]">Work type</p><p className="mt-1 text-xs font-medium">{selected.workType}</p></div>
+                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
+                    <div className="h-full rounded-full bg-[var(--app-highlight)]" style={{ width: `${projectProgress(project.status)}%` }} />
                   </div>
-                  <Button className="mt-4 w-full" onClick={() => onViewProject(selected)}>Open project <ArrowRight /></Button>
-                </motion.section>
-              ) : null}
-            </AnimatePresence>
+                  <Button variant="ghost" className="mt-3 h-8 px-0 text-xs text-[var(--app-highlight)] hover:bg-transparent" onClick={() => onViewProject(project)}>
+                    Open project <ArrowRight className="size-3.5" />
+                  </Button>
+                </motion.div>
+              );
+            }) : (
+              <div className="grid min-h-[520px] place-items-center px-6 text-center">
+                <div>
+                  <div className="mx-auto grid size-20 place-items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]">
+                    <CalendarDays className="size-8" />
+                  </div>
+                  <p className="mt-5 text-base font-semibold">Nothing scheduled</p>
+                  <p className="mx-auto mt-2 max-w-[260px] text-sm leading-6 text-[var(--app-muted)]">Select a date with project deliveries or add a project due date.</p>
+                </div>
+              </div>
+            )}
           </div>
         </aside>
       </div>
-      <style jsx global>{`
-        .precision-calendar {
-          overflow-x: auto;
-          padding-bottom: 2px;
-        }
-        .precision-calendar .fc {
-          min-width: 620px;
-        }
-        .precision-calendar .fc-col-header-cell-cushion,
-        .precision-calendar .fc-daygrid-day-number {
-          padding: 7px 8px;
-          font-weight: 600;
-        }
-        .precision-calendar .fc-daygrid-day-frame {
-          min-height: 96px;
-        }
-        .precision-calendar .fc-timegrid-axis-cushion,
-        .precision-calendar .fc-timegrid-slot-label-cushion {
-          color: var(--app-muted);
-          font-size: 10px;
-        }
-        .precision-calendar .fc-event {
-          border-radius: 4px;
-          cursor: pointer;
-          min-height: 0 !important;
-          padding: 1px 2px;
-        }
-        .precision-calendar .fc-event.is-selected {
-          box-shadow: 0 0 0 2px var(--app-panel), 0 0 0 4px var(--app-highlight);
-          z-index: 4;
-        }
-        .precision-calendar .fc-event:focus-visible {
-          outline: 2px solid var(--app-highlight);
-          outline-offset: 2px;
-        }
-        @media (min-width: 640px) {
-          .precision-calendar .fc {
-            min-width: 0;
-          }
-          .precision-calendar .fc-daygrid-day-frame {
-            min-height: 112px;
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -408,7 +325,7 @@ export function PrecisionTimeline({
       <div className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Delivery planning</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Timeline</h1>
+          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Delivery timeline</h1>
           <p className="mt-1 text-xs text-[var(--app-muted)]">A chronological view of project milestones, reviews, and completed deliveries.</p>
         </div>
         <div className="flex gap-4 text-xs" aria-label="Timeline summary">

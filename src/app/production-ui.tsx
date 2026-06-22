@@ -161,7 +161,7 @@ export function SplitWorkspace({ rail, detail, railWidth = 340 }: SplitWorkspace
         borderRadius: "8px",
         overflow: "hidden",
         bgcolor: panel,
-        minHeight: 420,
+        minHeight: { xs: "auto", xl: 360 },
       }}
     >
       <Box sx={{ minWidth: 0, borderRight: { xl: `1px solid ${border}` }, bgcolor: softPanel }}>{rail}</Box>

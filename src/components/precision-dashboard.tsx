@@ -504,7 +504,7 @@ export function PrecisionDashboard(props: DashboardProps) {
       >
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-[22px] font-semibold tracking-[-0.01em]">Today</h1>
+            <h1 className="text-[22px] font-semibold tracking-[-0.01em]">Production overview</h1>
             <Badge variant="outline" className="h-5 rounded border-[var(--app-border)] bg-[var(--app-panel)] text-[10px] text-[var(--app-muted)]">
               My work
             </Badge>
@@ -583,7 +583,7 @@ export function PrecisionDashboard(props: DashboardProps) {
           <Select value={props.billingFilter} onValueChange={(value) => props.setBillingFilter(value as "ALL" | "Paid" | "Unpaid")}>
             <SelectTrigger aria-label="Filter by payment status" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All payments</SelectItem>
+              <SelectItem value="ALL">All Payments</SelectItem>
               <SelectItem value="Paid">Collected</SelectItem>
               <SelectItem value="Unpaid">Needs action</SelectItem>
             </SelectContent>
@@ -600,11 +600,11 @@ export function PrecisionDashboard(props: DashboardProps) {
         transition={{ delay: reduceMotion ? 0 : 0.05, duration: reduceMotion ? 0 : 0.35, ease: easing }}
       >
         <div className="grid grid-cols-2 divide-x divide-y divide-[var(--app-border)] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-6">
-          <PulseMetric label="All projects" value={props.stats.total} helper="Workspace total" />
+          <PulseMetric label="All Projects" value={props.stats.total} helper="Workspace total" />
           <PulseMetric label="Active" value={props.stats.active} helper="Currently underway" accent />
           <PulseMetric label="Overdue" value={overdue.length} helper="Needs attention" tone={overdue.length ? "danger" : "muted"} />
           <PulseMetric label="Due today" value={dueToday.length} helper="Scheduled items" />
-          <PulseMetric label="Needs payment" value={props.stats.unpaid} helper="Unpaid projects" tone={props.stats.unpaid ? "warning" : "muted"} />
+          <PulseMetric label="Payment" value={props.stats.unpaid} helper="Needs payment" tone={props.stats.unpaid ? "warning" : "muted"} />
           <PulseMetric label="Collected" value={formatMoney(props.stats.earned, props.settings.currencyCode)} helper="Delivered earnings" tone="success" />
         </div>
       </motion.section>
@@ -617,7 +617,7 @@ export function PrecisionDashboard(props: DashboardProps) {
       >
         <div className="min-w-0 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            <WorkspaceSection title="Due next" count={dueSoon.length} icon={CalendarClock}>
+            <WorkspaceSection title="Deadline queue" count={dueSoon.length} icon={CalendarClock}>
               {dueSoon.length ? (
                 <div className="divide-y divide-[var(--app-border)]">
                   {dueSoon.map((project, index) => (
@@ -679,7 +679,7 @@ export function PrecisionDashboard(props: DashboardProps) {
           </div>
 
           <WorkspaceSection
-            title="Active projects"
+            title="Production flow"
             count={props.visibleProjects.length}
             icon={FolderKanban}
           >
@@ -823,7 +823,7 @@ export function PrecisionDashboard(props: DashboardProps) {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <WorkspaceSection
-              title="Recent activity"
+              title="Activity"
               count={activity.length}
               icon={Clock3}
               action={
@@ -834,7 +834,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                     onClick={() => setActivityMode("recent")}
                   >
                     {activityMode === "recent" ? <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)] shadow-sm" /> : null}
-                    <span className="relative">Recent</span>
+                    <span className="relative">Recent Activity</span>
                   </button>
                   <button
                     className={cn("relative rounded px-2 py-1 text-[10px] font-medium transition-colors", activityMode === "team" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]")}
@@ -842,7 +842,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                     onClick={() => setActivityMode("team")}
                   >
                     {activityMode === "team" ? <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)] shadow-sm" /> : null}
-                    <span className="relative">Team</span>
+                    <span className="relative">Team Activity</span>
                   </button>
                 </div>
               }
@@ -883,7 +883,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               )}
             </WorkspaceSection>
 
-            <WorkspaceSection title="Salary batch progress" icon={Download}>
+            <WorkspaceSection title="Salary batch - Batch progress" icon={Download}>
               <div className="px-4 py-4">
                 <div className="flex items-end justify-between">
                   <div>

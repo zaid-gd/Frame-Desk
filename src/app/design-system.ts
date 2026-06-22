@@ -2,7 +2,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 export const cutlab = {
   color: {
-    charcoal: "#111318",
+    charcoal: "#090C0D",
     graphite: "#181B21",
     softWhite: "#F4F6F8",
     teal: "#3478F6",
@@ -42,7 +42,7 @@ export const cutlab = {
     3: "0 28px 80px rgba(0, 7, 10, 0.3)"
   },
   font: {
-    heading: "var(--font-geist-sans), Geist, sans-serif",
+    heading: "var(--font-space-grotesk), var(--font-geist-sans), Geist, sans-serif",
     body: "var(--font-geist-sans), Geist, sans-serif"
   }
 } as const;
@@ -85,7 +85,7 @@ export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.co
   return {
     "--app-accent": accent,
     "--app-highlight": isDark ? "#81AAFF" : "#1F66E5",
-    "--app-canvas": isDark ? "#111318" : "#F7F8FA",
+    "--app-canvas": isDark ? cutlab.color.charcoal : "#F7F8FA",
     "--app-panel": isDark ? "#181B21" : "#FFFFFF",
     "--app-sidebar": isDark ? "#14161B" : "#F5F6F8",
     "--app-soft-panel": isDark ? "#1D2027" : "#F3F5F7",

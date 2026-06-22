@@ -340,7 +340,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         initial={reduceMotion ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ ...contentTransition, delay: reduceMotion ? 0 : 0.14 }}
-        className="mt-4 grid gap-4 xl:h-[calc(100dvh-340px)] xl:min-h-[500px] xl:grid-cols-[minmax(0,1fr)_320px]"
+        className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"
       >
         <section
           aria-busy={isUpdating}

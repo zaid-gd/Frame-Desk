@@ -19,6 +19,10 @@ import {
   buildPayoutReport,
   payoutReportToCsv,
 } from "../src/lib/payout-reporting";
+import {
+  buildInvoiceDrafts,
+  invoiceDraftsToCsv,
+} from "../src/lib/invoice-reporting";
 import type { SalaryBatch, WorkItem } from "../src/lib/types";
 
 const modules = import.meta.glob("./**/*.ts");
@@ -61,6 +65,8 @@ type TestProject = {
   startDate: string;
   dueDate: string;
   earnings: number;
+  paid?: boolean;
+  paidDate?: string;
   notes: string;
   templateId?: ProjectTemplateId;
   templateProjectType?: string;
@@ -133,6 +139,85 @@ async function setupTeam() {
 }
 
 describe("salary payout reporting", () => {
+  test("builds local invoice drafts for delivered client work", () => {
+    const projects: WorkItem[] = [
+      {
+        id: "client-video-1",
+        profileId: "video-editing",
+        title: "Launch edit",
+        client: "Northline Foods",
+        status: "Delivered",
+        workType: "Freelance",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-08",
+        earnings: 1800,
+        notes: "",
+      },
+      {
+        id: "client-video-2",
+        profileId: "video-editing",
+        title: "Cutdown pack",
+        client: "Northline Foods",
+        status: "Delivered",
+        workType: "Freelance",
+        startDate: "2026-06-03",
+        dueDate: "2026-06-12",
+        earnings: 700,
+        paid: true,
+        paidDate: "2026-06-15",
+        notes: "",
+      },
+      {
+        id: "salary-edit",
+        profileId: "video-editing",
+        title: "Internal episode",
+        client: "Channel",
+        status: "Delivered",
+        workType: "Job / Salary",
+        startDate: "2026-06-03",
+        dueDate: "2026-06-12",
+        earnings: 999,
+        notes: "",
+      },
+      {
+        id: "undelivered",
+        profileId: "video-editing",
+        title: "Pending edit",
+        client: "Northline Foods",
+        status: "In Progress",
+        workType: "Freelance",
+        startDate: "2026-06-03",
+        dueDate: "2026-06-12",
+        earnings: 1200,
+        notes: "",
+      },
+    ];
+
+    const drafts = buildInvoiceDrafts({
+      projects,
+      salaryWorkType: "Job / Salary",
+      currencyCode: "AED",
+      period: "month",
+      now: new Date("2026-06-20T08:00:00.000Z"),
+    });
+
+    expect(drafts).toHaveLength(1);
+    expect(drafts[0]).toMatchObject({
+      client: "Northline Foods",
+      invoiceNumber: "DRAFT-20260620-NORTHLINE-FOODS",
+      issueDate: "2026-06-20",
+      dueDate: "2026-07-04",
+      total: 1800,
+      currencyCode: "AED",
+    });
+    expect(drafts[0].lineItems.map((item) => item.title)).toEqual(["Launch edit"]);
+
+    const csv = invoiceDraftsToCsv(drafts);
+    expect(csv).toContain("DRAFT-20260620-NORTHLINE-FOODS,Northline Foods,2026-06-20,2026-07-04,2026-06-08,Launch edit,Freelance,1800,AED");
+    expect(csv).not.toContain("Cutdown pack");
+    expect(csv).not.toContain("Internal episode");
+    expect(csv).not.toContain("Pending edit");
+  });
   test("calculates period earnings, legacy batch fallbacks, and editor attribution", () => {
     const projects: WorkItem[] = [
       {
@@ -261,6 +346,19 @@ describe("salary payout reporting", () => {
     const csv = payoutReportToCsv(report, "AED");
     expect(csv).toContain("\"Launch, \"\"cut\"\"\"");
     expect(csv).toContain("Salary batch,2026-06-12,Batch 2,Jordan Lee,Unpaid,9000,AED");
+  });
+
+  test("persists client project payment metadata", async () => {
+    const { owner, teamId } = await setupTeam();
+    await owner.mutation(api.workItems.replaceAll, {
+      items: [project("paid-project", teamId, { status: "Delivered", paid: true, paidDate: "2026-06-20T10:00:00.000Z" })],
+    });
+
+    const items = await owner.query(api.workItems.list, {});
+    expect(items.find((item) => item.id === "paid-project")).toMatchObject({
+      paid: true,
+      paidDate: "2026-06-20T10:00:00.000Z",
+    });
   });
 
   test("persists optional payment metadata while legacy batches remain readable", async () => {

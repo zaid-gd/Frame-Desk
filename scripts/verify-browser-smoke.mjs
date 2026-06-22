@@ -17,7 +17,7 @@ const routes = [
   {
     path: "/reports",
     label: "reports",
-    expectedText: ["Reports", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
+    expectedText: ["Reports", "Invoice drafts", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
   },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
   { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },

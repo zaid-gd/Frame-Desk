@@ -92,8 +92,9 @@ edit progress, earnings, and recent activity into one operational view.
 ![CutLab Studio editing templates for common video production workflows](assets/readme/editing-templates.png)
 
 Eight built-in templates cover YouTube, reels, corporate events, product ads,
-weddings, social campaigns, podcasts, and client retainers. Each template
-prefills stages, deliverables, checklists, work type, and expected duration.
+weddings, social campaigns, podcasts, and client retainers. Custom templates can
+also be saved for recurring workflows. Each template prefills stages,
+deliverables, checklists, work type, and expected duration.
 
 ### Keep Every Deliverable And Version Traceable
 
@@ -141,7 +142,9 @@ earnings, notes, references, and team activity stay inside the workspace.
 
 Google Drive, Dropbox, Slack, and Frame.io connection details and project links
 can be organized in CutLab today. Live OAuth, automatic file synchronization,
-and message delivery remain explicitly modeled as future integration work.
+and message delivery remain explicitly modeled as future integration work. The
+[third-party integration review](docs/security/THIRD_PARTY_INTEGRATION_REVIEW.md)
+defines the trust gate for future OAuth, webhook, accounting, or payment work.
 
 ## Feature Status
 
@@ -149,7 +152,7 @@ and message delivery remain explicitly modeled as future integration work.
 | --- | --- | --- |
 | Production dashboard | Available | Surfaces delivery urgency, workflow distribution, feedback, earnings, salary batches, deadlines, and activity. |
 | Personal and team projects | Available | Keeps solo projects separate from team-owned work while sharing one production index. |
-| Project templates | Available | Eight editing workflows prefill stages, deliverables, checklists, work type, and expected duration. |
+| Project templates | Available | Eight editing workflows plus reusable custom templates prefill stages, deliverables, checklists, work type, and expected duration. |
 | Client management | Available | Stores client contacts, project relationships, delivery context, and portal access. |
 | Team workspaces | Available | Supports shared projects, roles, invitations, assignments, comments, activity, notifications, and chat. |
 | Project file management | Available | Supports Convex Storage uploads, provider-neutral external links, client visibility, download controls, and typed approval states. |
@@ -167,11 +170,12 @@ and message delivery remain explicitly modeled as future integration work.
 | Clerk authentication | Available | Clerk sign-in supplies authenticated identity to the app and Convex. |
 | Convex sync | Available | Projects, settings, resources, payouts, teams, files, portals, and profiles sync through Convex with local fallback and recovery. |
 | Google Drive integration | Modeled | Google Drive links and provider IDs are supported; OAuth and API synchronization are not implemented. |
-| Dropbox integration | Modeled | Connection details and project links can be stored; OAuth and API synchronization are not implemented. |
+| Dropbox integration | Modeled | Dropbox links and provider IDs are supported; OAuth and API synchronization are not implemented. |
 | Slack integration | Modeled | Workspace and channel details can be stored; live message delivery is not implemented. |
 | Frame.io integration | Modeled | Frame.io links and provider IDs are supported; OAuth and API synchronization are not implemented. |
-| Full invoicing | Planned | Earnings and payouts are tracked, but invoice generation, payment collection, and accounting integrations are not implemented. |
-| Custom template builder | Planned | Built-in templates are available; reusable user-defined template creation is not implemented. |
+| Invoice drafts | Available | Reports generate local invoice CSV drafts for unpaid delivered client projects; payment collection and accounting integrations are not implemented. |
+| Client payment tracking | Available | Delivered billable projects can be marked paid/unpaid locally and sync through Convex. |
+| Custom template builder | Available | Create, edit, delete, and reuse user-defined project templates from the Templates page and project start dialog. |
 
 Planned work is outlined in the [CutLab Studio Roadmap](docs/product/ROADMAP.md).
 
@@ -230,7 +234,7 @@ The Convex-backed Team workspace has a static invariant check with
 
 CutLab Studio currently includes the redesigned production dashboard, separated
 personal and team projects, client management, delivery timeline, calendar,
-versioned media library, feedback queue, eight editing templates, project file
+versioned media library, feedback queue, eight editing templates plus custom reusable templates, project file
 and version management, secured client portals, timecoded feedback, team
 collaboration, payout reporting, public profiles, indexed settings, responsive
 light and dark themes, Clerk authentication, resilient Convex synchronization,

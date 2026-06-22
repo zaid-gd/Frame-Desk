@@ -6,7 +6,6 @@ import type {
   StoredProjectStatus,
   StoredTeamRole,
 } from "./domain-values";
-import type { ProjectTemplateId } from "./project-templates";
 
 export type EarningsMode = "manual" | "optional" | "batch" | "none";
 
@@ -55,9 +54,11 @@ export type WorkItem = {
   startDate: string;
   dueDate: string;
   earnings: number;
+  paid?: boolean;
+  paidDate?: string;
   notes: string;
   integrationLinks?: IntegrationLinks;
-  templateId?: ProjectTemplateId;
+  templateId?: string;
   templateProjectType?: string;
   workflowStages?: string[];
   templateDeliverables?: Array<{
@@ -66,6 +67,25 @@ export type WorkItem = {
     initialStatus: FileStatus;
   }>;
   checklistItems?: string[];
+  checklistCompleted?: Record<string, boolean>;
+};
+
+export type SavedProjectTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  projectType: string;
+  workType: "channel" | "freelance";
+  durationDays: number;
+  workflowStages: string[];
+  deliverables: Array<{
+    title: string;
+    category: FileCategory;
+    initialStatus: FileStatus;
+  }>;
+  checklistItems: string[];
+  custom?: boolean;
+  updatedAt?: string;
 };
 
 export type ResourceLink = {
@@ -137,6 +157,7 @@ export type SettingsState = {
   weekStart: string;
   currencyCode: string;
   customClients: string[];
+  customProjectTemplates: SavedProjectTemplate[];
   projectTags: string[];
   salaryWorkType: string;
   salaryBatchSize: number;

@@ -23,6 +23,8 @@ import {
 } from "../src/lib/timecode";
 
 const MAX_DELIVERABLES = 50;
+const MAX_PROJECT_FILES = 100;
+const MAX_PROJECT_VERSIONS = 500;
 const MAX_REVISIONS = 100;
 const MAX_EVENTS = 100;
 const MAX_SUMMARY_LENGTH = 800;
@@ -616,40 +618,77 @@ export const addDeliverable = mutation({
     downloadable: v.boolean(),
   },
   handler: async (ctx, args) => {
-    const { portal, identity, project } = await requireEditablePortal(ctx, args.portalId);
+    const { identity, project } = await requireEditablePortal(ctx, args.portalId);
     const title = cleanText(args.title, 160);
+    const detail = cleanText(args.detail, 300);
     const url = args.url.trim();
+    const status = normalizeDeliverableStatus(args.status);
+    const actor = identity.name || identity.email || "CutLab user";
     if (!title) throw new Error("Deliverable title is required");
     if (!validPublicUrl(url)) throw new Error("Enter a valid http or https deliverable URL");
-    const existing = await ctx.db
-      .query("portalDeliverables")
-      .withIndex("by_portalId_and_createdAt", (q) => q.eq("portalId", args.portalId))
+    const existingVisibleDeliverables = await ctx.db
+      .query("projectFiles")
+      .withIndex("by_projectId_and_category_and_clientVisible_and_createdAt", (q) =>
+        q
+          .eq("projectId", project.id)
+          .eq("category", "Deliverable")
+          .eq("clientVisible", true)
+      )
       .take(MAX_DELIVERABLES);
-    if (existing.length >= MAX_DELIVERABLES) throw new Error("This portal has reached its deliverable limit");
+    if (existingVisibleDeliverables.length >= MAX_DELIVERABLES) throw new Error("This portal has reached its deliverable limit");
+    const existingFiles = await ctx.db
+      .query("projectFiles")
+      .withIndex("by_projectId_and_createdAt", (q) => q.eq("projectId", project.id))
+      .take(MAX_PROJECT_FILES);
+    if (existingFiles.length >= MAX_PROJECT_FILES) throw new Error("This project has reached its 100-file limit");
+    const existingVersions = await ctx.db
+      .query("projectFileVersions")
+      .withIndex("by_projectId_and_uploadedAt", (q) => q.eq("projectId", project.id))
+      .take(MAX_PROJECT_VERSIONS);
+    if (existingVersions.length >= MAX_PROJECT_VERSIONS) throw new Error("This project has reached its 500-version history limit");
     const now = new Date().toISOString();
-    await ctx.db.insert("portalDeliverables", {
-      portalId: args.portalId,
+    const fileId = await ctx.db.insert("projectFiles", {
+      projectId: project.id,
+      ownerUserId: project.userId,
+      teamId: project.teamId,
+      category: "Deliverable",
       title,
-      detail: cleanText(args.detail, 300),
-      url,
-      status: args.status,
+      description: detail,
+      status,
+      clientVisible: true,
       downloadable: args.downloadable,
+      createdByUserId: identity.tokenIdentifier,
+      createdByName: actor,
       createdAt: now,
       updatedAt: now,
+    });
+    await ctx.db.insert("projectFileVersions", {
+      projectId: project.id,
+      projectFileId: fileId,
+      versionNumber: 1,
+      status,
+      provider: "external",
+      externalUrl: url,
+      fileName: title,
+      mimeType: "text/uri-list",
+      size: 0,
+      uploadedByUserId: identity.tokenIdentifier,
+      uploadedByName: actor,
+      uploadedAt: now,
+      notes: detail,
     });
     await insertEvent(ctx, args.portalId, "deliverable_added", "New file available", `${title} was added to the project deliverables.`);
     await recordProjectActivity(ctx, {
       project,
       actorUserId: identity.tokenIdentifier,
-      actorName: identity.name || identity.email || "CutLab user",
-      kind: "deliverable_added",
-      message: `${title} was added to deliverables.`,
-      detail: cleanText(args.detail, 300) || undefined,
+      actorName: actor,
+      kind: "project_file_added",
+      message: `${title} was added to deliverable files.`,
+      detail: detail || undefined,
     });
-    return null;
+    return { fileId };
   },
 });
-
 export const removeDeliverable = mutation({
   args: { deliverableId: v.id("portalDeliverables") },
   handler: async (ctx, args) => {
