@@ -62,6 +62,7 @@ type BuildPayoutReportOptions = {
   salaryWorkType: string;
   salaryBatchAmount: number;
   profileName: string;
+  currentUserId?: string;
   editors?: PayoutEditor[];
   period: PayoutPeriod;
   now?: Date;
@@ -106,6 +107,7 @@ export function buildPayoutReport({
   salaryWorkType,
   salaryBatchAmount,
   profileName,
+  currentUserId,
   editors = [],
   period,
   now,
@@ -114,12 +116,15 @@ export function buildPayoutReport({
   const editorNames = new Map(editors.map((editor) => [editor.userId, editor.name]));
   const personalEditorId = "personal";
   const personalEditorName = profileName.trim() || "You";
+  const resolveEditorId = (editorId: string) =>
+    currentUserId && editorId === currentUserId ? personalEditorId : editorId;
 
   const deliveredProjects = projects
     .filter((project) => normalizeStoredProjectStatus(project.status) === "Delivered")
     .filter((project) => isInRange(project.dueDate, range.start, range.end))
     .map((project): PayoutProjectRow => {
-      const editorId = project.assigneeUserIds?.[0] || project.ownerUserId || personalEditorId;
+      const rawEditorId = project.assigneeUserIds?.[0] || project.ownerUserId || personalEditorId;
+      const editorId = resolveEditorId(rawEditorId);
       const editorName = editorNames.get(editorId) || (editorId === personalEditorId ? personalEditorName : "Unassigned");
       const isSalaryEdit = project.workType.trim().toLowerCase() === salaryWorkType.trim().toLowerCase();
       return {

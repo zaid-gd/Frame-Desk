@@ -917,6 +917,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       projects={projects}
       salaryBatches={salaryBatches}
       settings={settings}
+      currentUserId={teamData?.currentMember.userId}
       editors={activeTeamMembers.map((member) => ({ userId: member.userId, name: member.name }))}
       onUpdateBatchPayment={updateSalaryBatchPayment}
     />
@@ -2934,11 +2935,13 @@ function TemplatesDesignPage({
 function ReportsDesignPage({
   projects,
   salaryBatches,
+  currentUserId,
   editors,
   onUpdateBatchPayment,
 }: {
   projects: WorkItem[];
   salaryBatches: SalaryBatch[];
+  currentUserId?: string;
   editors: PayoutEditor[];
   onUpdateBatchPayment: (batchId: string, paid: boolean) => void;
 }) {
@@ -2950,9 +2953,10 @@ function ReportsDesignPage({
     salaryWorkType: settings.salaryWorkType,
     salaryBatchAmount: settings.salaryBatchAmount,
     profileName: settings.profileName,
+    currentUserId,
     editors,
     period,
-  }), [editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
+  }), [currentUserId, editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
   const workTypeOptions = projectWorkTypeOptions(settings, projects);
   const workMixData = workTypeOptions
     .map((kind) => ({

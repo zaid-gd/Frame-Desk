@@ -348,6 +348,54 @@ describe("salary payout reporting", () => {
     expect(csv).toContain("Salary batch,2026-06-12,Batch 2,Jordan Lee,Unpaid,9000,AED");
   });
 
+  test("coalesces current team member edits with personal batch earnings", () => {
+    const projects: WorkItem[] = Array.from({ length: 20 }, (_, index) => ({
+      id: "salary-edit-" + (index + 1),
+      teamId: "team",
+      ownerUserId: "current-user",
+      assigneeUserIds: [],
+      profileId: "video-editing",
+      title: "Salary edit " + (index + 1),
+      status: "Delivered",
+      workType: "Job / Salary",
+      startDate: "2026-06-01",
+      dueDate: "2026-06-20",
+      earnings: 0,
+      notes: "",
+    }));
+    const report = buildPayoutReport({
+      projects,
+      salaryBatches: [
+        {
+          id: "batch-1",
+          number: 1,
+          completedDate: "2026-06-20",
+          archived: false,
+          archivedDate: "",
+          amount: 10000,
+          paid: false,
+          paidDate: "",
+        },
+      ],
+      salaryWorkType: "Job / Salary",
+      salaryBatchAmount: 10000,
+      profileName: "Screen",
+      currentUserId: "current-user",
+      editors: [{ userId: "current-user", name: "Team member" }],
+      period: "year",
+      now: new Date(2026, 5, 20),
+    });
+
+    expect(report.editors).toHaveLength(1);
+    expect(report.editors[0]).toMatchObject({
+      name: "Screen",
+      deliveredProjects: 20,
+      salaryEdits: 20,
+      batchEarnings: 10000,
+      totalEarnings: 10000,
+    });
+  });
+
   test("persists client project payment metadata", async () => {
     const { owner, teamId } = await setupTeam();
     await owner.mutation(api.workItems.replaceAll, {
