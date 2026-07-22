@@ -162,6 +162,7 @@ export default defineSchema({
     status: v.optional(fileStatusValidator),
     provider: fileProviderValidator,
     storageId: v.optional(v.id("_storage")),
+    r2Key: v.optional(v.string()),
     externalUrl: v.optional(v.string()),
     externalId: v.optional(v.string()),
     fileName: v.string(),
@@ -174,7 +175,18 @@ export default defineSchema({
   })
     .index("by_projectFileId_and_versionNumber", ["projectFileId", "versionNumber"])
     .index("by_projectId_and_uploadedAt", ["projectId", "uploadedAt"])
-    .index("by_storageId", ["storageId"]),
+    .index("by_storageId", ["storageId"])
+    .index("by_r2Key", ["r2Key"]),
+
+  r2UploadSessions: defineTable({
+    projectId: v.string(),
+    projectFileId: v.optional(v.id("projectFiles")),
+    key: v.string(),
+    uploaderUserId: v.string(),
+    status: v.union(v.literal("pending"), v.literal("completed")),
+    createdAt: v.string(),
+    expiresAt: v.number(),
+  }).index("by_key", ["key"]),
 
   teamWorkspaces: defineTable({
     ownerUserId: v.string(),

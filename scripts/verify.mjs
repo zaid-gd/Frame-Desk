@@ -200,7 +200,7 @@ const sourceChecks = [
   ["src/app/team-chat/page.tsx", "<TrackerApp page=\"team-chat\" />", "dedicated Team Chat route"],
   ["src/app/tracker-app.tsx", "My Projects", "personal project workspace"],
   ["src/app/tracker-app.tsx", "Team Projects", "team project workspace"],
-  ["src/app/tracker-app.tsx", "SIDEBAR_COLLAPSED_STORAGE_KEY", "collapsible sidebar persistence"],
+  ["src/components/workspace-shell.tsx", "const collapsed = true;", "permanently collapsed desktop sidebar"],
   ["src/app/tracker-app.tsx", "aria-label=\"Go to dashboard\"", "clickable app logo"],
   ["src/app/tracker-app.tsx", "Activity Feed", "team activity feed surface"],
   ["src/app/tracker-app.tsx", "function saveLink", "integration link save workflow"],

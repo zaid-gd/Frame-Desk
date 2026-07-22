@@ -1,5 +1,13 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { recordProjectActivity } from "./projectActivity";
 import {
@@ -135,6 +143,7 @@ async function insertVersion(
     downloadable: boolean;
     provider: FileProvider;
     storageId?: Id<"_storage">;
+    r2Key?: string;
     externalUrl?: string;
     externalId?: string;
     fileName: string;
@@ -158,6 +167,15 @@ async function insertVersion(
       .unique();
     if (existingStorageReference) {
       throw new Error("This uploaded file is already attached to a project version");
+    }
+  }
+  if (args.r2Key) {
+    const existingR2Reference = await ctx.db
+      .query("projectFileVersions")
+      .withIndex("by_r2Key", (q) => q.eq("r2Key", args.r2Key))
+      .unique();
+    if (existingR2Reference) {
+      throw new Error("This R2 object is already attached to a project version");
     }
   }
   let fileId = args.projectFileId;
@@ -196,6 +214,7 @@ async function insertVersion(
     status: args.status,
     provider: args.provider,
     storageId: args.storageId,
+    r2Key: args.r2Key,
     externalUrl: args.externalUrl,
     externalId: cleanText(args.externalId ?? "", 300) || undefined,
     fileName: cleanText(args.fileName, 240),
@@ -290,6 +309,104 @@ export const generateUploadUrl = mutation({
   handler: async (ctx, args) => {
     await requireProjectAccess(ctx, args.projectId, "editProjects");
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const createR2UploadSession = internalMutation({
+  args: {
+    projectId: v.string(),
+    projectFileId: v.optional(v.id("projectFiles")),
+    fileName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { identity, project } = await requireProjectAccess(ctx, args.projectId, "editProjects");
+    const safeName = cleanText(args.fileName, 160).replace(/[^a-zA-Z0-9._-]+/g, "-") || "file";
+    const key = `projects/${encodeURIComponent(project.id)}/files/${crypto.randomUUID()}-${safeName}`;
+    const now = new Date().toISOString();
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    const sessionId = await ctx.db.insert("r2UploadSessions", {
+      projectId: project.id,
+      projectFileId: args.projectFileId,
+      key,
+      uploaderUserId: identity.tokenIdentifier,
+      status: "pending",
+      createdAt: now,
+      expiresAt,
+    });
+    return { sessionId, key, expiresAt };
+  },
+});
+
+export const getR2UploadSession = internalQuery({
+  args: { sessionId: v.id("r2UploadSessions") },
+  handler: async (ctx, args) => {
+    const identity = await requireIdentity(ctx);
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.uploaderUserId !== identity.tokenIdentifier) return null;
+    return session;
+  },
+});
+
+export const getR2DownloadTarget = internalQuery({
+  args: { versionId: v.id("projectFileVersions") },
+  handler: async (ctx, args) => {
+    const version = await ctx.db.get(args.versionId);
+    if (!version?.r2Key) return null;
+    await requireProjectAccess(ctx, version.projectId, "viewProjects");
+    return {
+      key: version.r2Key,
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+    };
+  },
+});
+
+export const finalizeR2Upload = internalMutation({
+  args: {
+    sessionId: v.id("r2UploadSessions"),
+    projectId: v.string(),
+    projectFileId: v.optional(v.id("projectFiles")),
+    category: fileCategoryValidator,
+    title: v.string(),
+    description: v.string(),
+    status: fileStatusValidator,
+    clientVisible: v.boolean(),
+    downloadable: v.boolean(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    notes: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const { identity, project } = await requireProjectAccess(ctx, args.projectId, "editProjects");
+    const session = await ctx.db.get(args.sessionId);
+    if (!session || session.projectId !== args.projectId || session.uploaderUserId !== identity.tokenIdentifier) {
+      throw new Error("R2 upload session not found");
+    }
+    if (session.status !== "pending") throw new Error("R2 upload session already used");
+    if (session.expiresAt <= Date.now()) throw new Error("R2 upload session expired");
+    if (args.projectFileId && session.projectFileId && args.projectFileId !== session.projectFileId) {
+      throw new Error("R2 upload target changed");
+    }
+    const fileId = await insertVersion(ctx, {
+      project: project,
+      identity,
+      projectFileId: args.projectFileId ?? session.projectFileId,
+      category: args.category,
+      title: args.title,
+      description: args.description,
+      status: args.status,
+      clientVisible: args.clientVisible,
+      downloadable: args.downloadable,
+      provider: "r2",
+      r2Key: session.key,
+      fileName: args.fileName,
+      mimeType: args.mimeType,
+      size: args.size,
+      notes: args.notes,
+    });
+    await ctx.db.patch(args.sessionId, { status: "completed" });
+    return fileId;
   },
 });
 
@@ -408,6 +525,9 @@ export const removeFile = mutation({
     await Promise.all(
       versions.map(async (version) => {
         if (version.storageId) await ctx.storage.delete(version.storageId);
+        if (version.r2Key) {
+          await ctx.scheduler.runAfter(0, internal.r2.deleteObject, { key: version.r2Key });
+        }
         await ctx.db.delete(version._id);
       })
     );

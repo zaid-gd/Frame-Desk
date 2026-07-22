@@ -26,6 +26,8 @@
     "verify:prod": "node scripts/verify-production.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1093.0",
+    "@aws-sdk/s3-request-presigner": "^3.1093.0",
     "@clerk/nextjs": "^7.4.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",

@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { deleteProjectActivity, recordProjectActivity } from "./projectActivity";
@@ -519,6 +520,7 @@ async function deleteWorkItem(
   await Promise.all(
     projectVersions.map(async (version) => {
       if (version.storageId) await ctx.storage.delete(version.storageId);
+      if (version.r2Key) await ctx.scheduler.runAfter(0, internal.r2.deleteObject, { key: version.r2Key });
       await ctx.db.delete(version._id);
     })
   );

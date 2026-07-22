@@ -78,7 +78,7 @@ export function isClientSafeApprovalStatus(value: unknown) {
   return normalizeFileStatus(value) !== "draft";
 }
 
-export const FILE_PROVIDER_VALUES = ["convex", "external", "google_drive", "dropbox", "frame_io"] as const;
+export const FILE_PROVIDER_VALUES = ["convex", "r2", "external", "google_drive", "dropbox", "frame_io"] as const;
 export type FileProvider = (typeof FILE_PROVIDER_VALUES)[number];
 
 export const TEAM_ROLE_VALUES = ["Owner", "Editor", "Reviewer"] as const;

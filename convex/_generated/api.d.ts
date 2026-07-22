@@ -13,6 +13,7 @@ import type * as domainValidators from "../domainValidators.js";
 import type * as projectActivity from "../projectActivity.js";
 import type * as projectFiles from "../projectFiles.js";
 import type * as publicProfiles from "../publicProfiles.js";
+import type * as r2 from "../r2.js";
 import type * as resourceLinks from "../resourceLinks.js";
 import type * as salaryBatches from "../salaryBatches.js";
 import type * as settings from "../settings.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   projectActivity: typeof projectActivity;
   projectFiles: typeof projectFiles;
   publicProfiles: typeof publicProfiles;
+  r2: typeof r2;
   resourceLinks: typeof resourceLinks;
   salaryBatches: typeof salaryBatches;
   settings: typeof settings;

@@ -24,6 +24,7 @@ This roadmap describes planned directions, not shipped features or delivery comm
 
 - Add Google Drive OAuth and API synchronization for project files and folders.
 - Add Frame.io OAuth and API synchronization for review assets, comments, and approvals.
+- Release the prepared Cloudflare R2 storage provider for large project uploads after deployment and CORS validation.
 - Preserve the provider-neutral file model so integrations remain optional.
 
 ## Phase 5: Billing, Reporting, And Studio Operations

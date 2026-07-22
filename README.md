@@ -157,6 +157,7 @@ defines the trust gate for future OAuth, webhook, accounting, or payment work.
 | Team workspaces | Available | Supports shared projects, roles, invitations, assignments, comments, activity, notifications, and chat. |
 | Project file management | Available | Supports Convex Storage uploads, provider-neutral external links, client visibility, download controls, and typed approval states. |
 | File version history | Available | Stores immutable uploaded or linked revisions with normalized status, file, provider, uploader, and timestamp metadata. |
+| Cloudflare R2 storage | Upcoming | Prepared signed-upload path for large media files; current uploads remain on Convex Storage. |
 | Client portals | Available | Provides no-account progress, approved downloads, delivery history, and timecoded revision requests through public links. |
 | Portal access controls | Available | Editors can publish, unpublish, disable, expire, regenerate, or password-protect a portal. |
 | Timecoded feedback | Available | Team comments and client revisions accept `MM:SS` and `HH:MM:SS` timestamps. |
@@ -194,7 +195,7 @@ final delivery, and the resulting dashboard update.
 | Language | TypeScript |
 | Auth | Clerk |
 | Backend | Convex |
-| Storage | Convex Storage plus provider-neutral external links |
+| Storage | Convex Storage plus provider-neutral external links; Cloudflare R2 upcoming |
 | Local mode | Browser storage |
 | Analytics | Vercel Analytics, Vercel Speed Insights |
 | Tests | Vitest, `convex-test`, Playwright, route/runtime verifiers |
@@ -209,6 +210,35 @@ final delivery, and the resulting dashboard update.
 - Server authorization always derives from the authenticated Convex identity.
 - Team roles gate project and file mutations.
 - Deleted projects clean up file versions, client portals, and project activity.
+
+### Upcoming: Cloudflare R2 uploads
+
+Cloudflare R2 support is prepared but intentionally parked. Current project
+uploads use Convex Storage. When the R2 feature is released, Convex will remain
+the owner of file metadata, authorization, version history, and portal
+visibility while R2 stores binary objects behind short-lived signed URLs.
+
+Do not set `NEXT_PUBLIC_FILE_STORAGE_PROVIDER=r2` or configure the R2 secrets
+yet. The future setup will use `R2_ENDPOINT`, `R2_REGION`, `R2_ACCESS_KEY_ID`,
+`R2_SECRET_ACCESS_KEY`, and `R2_BUCKET` in the Convex deployment environment.
+
+The planned R2 bucket CORS policy is:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3000", "https://your-cutlab-domain.example"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedHeaders": ["Content-Type"],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Existing Convex Storage versions continue to work and are not migrated
+automatically. Consider an R2 lifecycle rule for abandoned objects under
+`projects/` if users can close the upload dialog after a successful PUT.
 
 More detail lives in [Project File Architecture](docs/architecture/project-file-architecture.md).
 

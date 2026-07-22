@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalQuery, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
 import { recordProjectActivity } from "./projectActivity";
 import {
@@ -223,9 +223,13 @@ async function visibleProjectDeliverables(ctx: QueryCtx, projectId: string) {
       if (!isClientSafeApprovalStatus(status)) return null;
       const url = latest.storageId
         ? await ctx.storage.getUrl(latest.storageId)
-        : latest.externalUrl;
-      if (!url) return null;
+        : latest.r2Key
+          ? null
+          : latest.externalUrl;
+      if (!url && !latest.r2Key) return null;
       return {
+        versionId: latest._id,
+        provider: latest.provider,
         title: file.title,
         detail: file.description,
         url,
@@ -240,6 +244,40 @@ async function visibleProjectDeliverables(ctx: QueryCtx, projectId: string) {
     (item): item is NonNullable<typeof item> => item !== null
   );
 }
+
+export const getPublicR2DownloadTarget = internalQuery({
+  args: {
+    token: v.string(),
+    versionId: v.id("projectFileVersions"),
+    password: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const portal = await ctx.db
+      .query("clientPortals")
+      .withIndex("by_token", (q) => q.eq("token", args.token.trim()))
+      .unique();
+    if (!portal || portalAccessState(portal) !== "active" || !(await portalPasswordMatches(portal, args.password))) {
+      return null;
+    }
+    const version = await ctx.db.get(args.versionId);
+    if (!version?.r2Key || version.projectId !== portal.projectId) return null;
+    const file = await ctx.db.get(version.projectFileId);
+    if (!file || file.category !== "Deliverable" || !file.clientVisible || !isClientSafeApprovalStatus(normalizeFileStatus(file.status))) {
+      return null;
+    }
+    const latest = await ctx.db
+      .query("projectFileVersions")
+      .withIndex("by_projectFileId_and_versionNumber", (q) => q.eq("projectFileId", file._id))
+      .order("desc")
+      .first();
+    if (latest?._id !== version._id) return null;
+    return {
+      key: version.r2Key,
+      fileName: version.fileName,
+      mimeType: version.mimeType,
+    };
+  },
+});
 
 async function requireEditablePortal(ctx: MutationCtx, portalId: Doc<"clientPortals">["_id"]) {
   const portal = await ctx.db.get(portalId);

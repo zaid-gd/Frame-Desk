@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   Box,
   Button,
@@ -23,6 +23,7 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { CutLabLockup } from "../cutlab-brand";
 import { emptyStateAssets } from "../brand-assets";
 import { cutlab, cutlabPanelSx } from "../design-system";
@@ -53,11 +54,28 @@ export function ClientPortalView({ token }: { token: string }) {
     token ? (portalPassword ? { token, password: portalPassword } : { token }) : "skip"
   );
   const submitRevision = useMutation(api.clientPortals.submitRevision);
+  const createPortalDownloadUrl = useAction(api.r2.createPortalDownloadUrl);
   const [clientName, setClientName] = useState("");
   const [timecode, setTimecode] = useState("");
   const [request, setRequest] = useState("");
   const [submitState, setSubmitState] = useState<"idle" | "submitting" | "submitted">("idle");
   const [error, setError] = useState("");
+
+  async function openDeliverable(item: { url?: string | null; provider?: string; versionId?: Id<"projectFileVersions"> }) {
+    try {
+      const url = item.url ?? (item.provider === "r2" && item.versionId
+        ? await createPortalDownloadUrl({
+            token,
+            versionId: item.versionId,
+            ...(portalPassword ? { password: portalPassword } : {}),
+          })
+        : null);
+      if (!url) throw new Error("This file is no longer available.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open this file.");
+    }
+  }
 
   async function submitFeedback() {
     const message = request.trim();
@@ -223,11 +241,11 @@ export function ClientPortalView({ token }: { token: string }) {
                       </Box>
                       <StatusChip label={approvalStatusLabel(item.status)} tone={deliverableTone(item.status)} />
                       <Stack direction="row" gap={0.6}>
-                        <Button component="a" href={item.url} target="_blank" rel="noreferrer" aria-label={`View ${item.title}`} sx={iconButtonSx}>
+                        <Button onClick={() => void openDeliverable(item)} aria-label={`View ${item.title}`} sx={iconButtonSx}>
                           <OpenInNewIcon sx={{ fontSize: 18 }} />
                         </Button>
                         {item.downloadable ? (
-                          <Button component="a" href={item.url} download target="_blank" rel="noreferrer" aria-label={`Download ${item.title}`} sx={iconButtonSx}>
+                          <Button onClick={() => void openDeliverable(item)} aria-label={`Download ${item.title}`} sx={iconButtonSx}>
                             <FileDownloadOutlinedIcon sx={{ fontSize: 18 }} />
                           </Button>
                         ) : null}

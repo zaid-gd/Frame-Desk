@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { UserProfile } from "@clerk/nextjs";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
 import { useOptionalAuth } from "@/lib/optional-auth";
 import { api } from "../../convex/_generated/api";
@@ -154,7 +154,6 @@ const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const MIN_PUBLIC_SLUG_LENGTH = 2;
 const sidebarWidth = 248;
 const collapsedSidebarWidth = 76;
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "cutlab-studio:sidebar-collapsed:v1";
 const LOCAL_PROJECT_ACTIVITY_STORAGE_KEY = "cutlab-studio:project-activity:v1";
 const headingFont = cutlab.font.heading;
 const defaultAccent = cutlab.color.teal;
@@ -269,8 +268,10 @@ type DashboardPipelineItem = {
 const profile = getProfile(DEFAULT_PROFILE_ID);
 
 const statusOptions: ProjectStatus[] = [...PROJECT_STATUS_VALUES];
+// Upcoming capability: keep R2 disabled until the storage release is approved.
+const R2_STORAGE_ENABLED = false;
 const externalFileProviderOptions = FILE_PROVIDER_VALUES.filter(
-  (provider): provider is Exclude<FileProvider, "convex"> => provider !== "convex"
+  (provider): provider is Exclude<FileProvider, "convex" | "r2"> => provider !== "convex" && provider !== "r2"
 );
 const billingOptions = ["ALL", "Paid", "Unpaid"];
 const dueOptions: DueFilter[] = ["ALL", "This Week", "Overdue", "Delivered"];
@@ -474,7 +475,6 @@ export function TrackerApp({ page, experienceMode = "workspace" }: { page: PageK
   const [dueFilter, setDueFilter] = useState<DueFilter>("ALL");
   const [billingFilter, setBillingFilter] = useState<"ALL" | "Paid" | "Unpaid">("ALL");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt_desc");
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dashboardActivity, setDashboardActivity] = useState<DashboardActivity[]>([]);
   const [localProjectActivity, setLocalProjectActivity] = useState<ProjectActivityEvent[]>(() => {
     if (typeof window === "undefined") return [];
@@ -497,11 +497,6 @@ export function TrackerApp({ page, experienceMode = "workspace" }: { page: PageK
       return;
     }
     setOnboardingVariant(resolveOnboardingVariant());
-  }, [isSample]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || isSample) return;
-    setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
   }, [isSample]);
 
   useEffect(() => {
@@ -1050,12 +1045,6 @@ export function TrackerApp({ page, experienceMode = "workspace" }: { page: PageK
       <WorkspaceShell
         page={page}
         settings={settings}
-        collapsed={sidebarCollapsed}
-        onToggle={() => {
-          const next = !sidebarCollapsed;
-          setSidebarCollapsed(next);
-          window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-        }}
         onNewProject={() => openNewProject("personal")}
         canCreateProject={canCreateProjects}
         starterNavigation={!isSample && personalProjects.length === 0}
@@ -3777,6 +3766,18 @@ function IntegrationsDesignPage({
         />
 
         <Paper sx={{ ...panelSx, p: 2.25 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} gap={1.2}>
+            <Box>
+              <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Cloudflare R2 Storage</Typography>
+              <Typography sx={{ color: muted, fontSize: 13, mt: 0.45, maxWidth: 720 }}>
+                Upcoming. Large-file storage through Cloudflare R2 is being prepared for a future release. Project uploads currently use CutLab&apos;s Convex Storage.
+              </Typography>
+            </Box>
+            <Chip label="Upcoming" size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px", fontWeight: 760 }} />
+          </Stack>
+        </Paper>
+
+        <Paper sx={{ ...panelSx, p: 2.25 }}>
           <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" gap={1.2} sx={{ mb: 1.5 }}>
             <Box>
               <Typography sx={{ color: ink, fontSize: 20, fontWeight: 760 }}>Project Integrations</Typography>
@@ -5976,6 +5977,9 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
   );
   const generateUploadUrl = useMutation(api.projectFiles.generateUploadUrl);
   const saveStorageVersion = useMutation(api.projectFiles.saveStorageVersion);
+  const createR2UploadUrl = useAction(api.r2.createUploadUrl);
+  const completeR2Upload = useAction(api.r2.completeUpload);
+  const createR2DownloadUrl = useAction(api.r2.createDownloadUrl);
   const saveExternalVersion = useMutation(api.projectFiles.saveExternalVersion);
   const updateFile = useMutation(api.projectFiles.updateFile);
   const removeFile = useMutation(api.projectFiles.removeFile);
@@ -5998,6 +6002,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
   const [externalSize, setExternalSize] = useState(0);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const useR2Storage = R2_STORAGE_ENABLED && process.env.NEXT_PUBLIC_FILE_STORAGE_PROVIDER === "r2";
 
   const files = fileData?.files ?? [];
   const filteredFiles = categoryFilter === "All" ? files : files.filter((file) => file.category === categoryFilter);
@@ -6060,20 +6065,42 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
       };
       if (source === "upload") {
         if (!browserFile) throw new Error("Choose a file to upload.");
-        const uploadUrl = await generateUploadUrl({ projectId: project.id });
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": browserFile.type || "application/octet-stream" },
-          body: browserFile,
-        });
-        if (!response.ok) throw new Error("File upload failed.");
-        const payload = await response.json() as { storageId: Id<"_storage"> };
-        await saveStorageVersion({
-          ...shared,
-          storageId: payload.storageId,
-          fileName: browserFile.name,
-          mimeType: browserFile.type || "application/octet-stream",
-        });
+        const mimeType = browserFile.type || "application/octet-stream";
+        if (useR2Storage) {
+          const upload = await createR2UploadUrl({
+            projectId: project.id,
+            projectFileId: targetFileId,
+            fileName: browserFile.name,
+            mimeType,
+          });
+          const response = await fetch(upload.url, {
+            method: "PUT",
+            headers: { "Content-Type": mimeType },
+            body: browserFile,
+          });
+          if (!response.ok) throw new Error("R2 file upload failed.");
+          await completeR2Upload({
+            ...shared,
+            sessionId: upload.sessionId,
+            fileName: browserFile.name,
+            mimeType,
+          });
+        } else {
+          const uploadUrl = await generateUploadUrl({ projectId: project.id });
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { "Content-Type": mimeType },
+            body: browserFile,
+          });
+          if (!response.ok) throw new Error("File upload failed.");
+          const payload = await response.json() as { storageId: Id<"_storage"> };
+          await saveStorageVersion({
+            ...shared,
+            storageId: payload.storageId,
+            fileName: browserFile.name,
+            mimeType,
+          });
+        }
       } else {
         if (!externalUrl.trim()) throw new Error("Enter a file URL.");
         await saveExternalVersion({
@@ -6127,6 +6154,16 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
       setError(caught instanceof Error ? caught.message : "Could not remove this file.");
     } finally {
       setBusy("");
+    }
+  }
+
+  async function openVersion(version: NonNullable<typeof fileData>["uploadHistory"][number]) {
+    try {
+      const url = version.url ?? (version.provider === "r2" ? await createR2DownloadUrl({ versionId: version._id }) : null);
+      if (!url) throw new Error("This file is no longer available.");
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not open this file.");
     }
   }
 
@@ -6191,7 +6228,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                         </Box>
                         <Stack direction="row" alignItems="center" gap={0.7} onClick={(event) => event.stopPropagation()}>
                           {canEdit ? <CompactSelect value={file.status} options={[...FILE_STATUS_VALUES]} labels={APPROVAL_STATUS_LABELS} onChange={(nextStatus) => changeFileMetadata(file, { status: nextStatus as FileStatus })} width={164} /> : <StatusChip status={approvalStatusLabel(file.status)} />}
-                          {latest?.url ? <Button component="a" href={latest.url} target="_blank" rel="noreferrer" aria-label={`Open ${file.title}`} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}><FileDownloadOutlinedIcon sx={{ fontSize: 18 }} /></Button> : null}
+                          {latest && (latest.url || latest.provider === "r2") ? <Button onClick={() => void openVersion(latest)} aria-label={`Open ${file.title}`} sx={{ minWidth: 34, width: 34, height: 34, color: accent, p: 0 }}><FileDownloadOutlinedIcon sx={{ fontSize: 18 }} /></Button> : null}
                         </Stack>
                       </Stack>
                     </AccordionSummary>
@@ -6208,7 +6245,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                               </Typography>
                               {version.notes ? <Typography sx={{ color: muted, fontSize: 11.5, mt: 0.45 }}>{version.notes}</Typography> : null}
                             </Box>
-                            {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" size="small" endIcon={<OpenInNewIcon />} sx={{ color: accent, alignSelf: { xs: "flex-start", sm: "center" } }}>Open</Button> : null}
+                            {version.url || version.provider === "r2" ? <Button onClick={() => void openVersion(version)} size="small" endIcon={<OpenInNewIcon />} sx={{ color: accent, alignSelf: { xs: "flex-start", sm: "center" } }}>Open</Button> : null}
                           </Stack>
                         ))}
                       </Stack>
@@ -6251,7 +6288,7 @@ function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: 
                       {version.status ? approvalStatusLabel(version.status) : "Approval state not recorded"}
                     </Typography>
                   </Box>
-                  {version.url ? <Button component="a" href={version.url} target="_blank" rel="noreferrer" sx={{ minWidth: 32, width: 32, height: 32, color: accent, p: 0 }}><OpenInNewIcon sx={{ fontSize: 17 }} /></Button> : null}
+                  {version.url || version.provider === "r2" ? <Button onClick={() => void openVersion(version)} sx={{ minWidth: 32, width: 32, height: 32, color: accent, p: 0 }}><OpenInNewIcon sx={{ fontSize: 17 }} /></Button> : null}
                 </Stack>
               );
             }) : <Typography sx={{ color: muted, fontSize: 12.5, py: 1 }}>Upload history will appear after the first file or linked version is added.</Typography>}
@@ -6331,6 +6368,7 @@ function providerLabel(provider: string) {
   if (provider === "dropbox") return "Dropbox";
   if (provider === "frame_io") return "Frame.io";
   if (provider === "convex") return "CutLab Upload";
+  if (provider === "r2") return "Cloudflare R2";
   return "External Link";
 }
 

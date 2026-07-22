@@ -6,7 +6,6 @@ import {
   ChartNoAxesCombined,
   CheckSquare2,
   ChevronDown,
-  ChevronLeft,
   CircleUserRound,
   FolderKanban,
   Images,
@@ -169,8 +168,6 @@ function routeIsActive(currentPage: ShellPage, item: RouteItem) {
 export function WorkspaceShell({
   page,
   settings,
-  collapsed,
-  onToggle,
   onNewProject,
   canCreateProject,
   starterNavigation = false,
@@ -179,8 +176,6 @@ export function WorkspaceShell({
 }: {
   page: ShellPage;
   settings: SettingsState;
-  collapsed: boolean;
-  onToggle: () => void;
   onNewProject: () => void;
   canCreateProject: boolean;
   starterNavigation?: boolean;
@@ -193,6 +188,7 @@ export function WorkspaceShell({
   const goChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useHydratedReducedMotion();
   const router = useRouter();
+  const collapsed = true;
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -244,7 +240,7 @@ export function WorkspaceShell({
 
   return (
     <div className="min-h-dvh bg-[var(--app-canvas)] text-[var(--app-ink)]">
-      <DesktopSidebar page={page} settings={settings} collapsed={collapsed} onToggle={onToggle} starterNavigation={starterNavigation} />
+      <DesktopSidebar page={page} settings={settings} starterNavigation={starterNavigation} />
 
       <div
         className={cn(
@@ -255,7 +251,7 @@ export function WorkspaceShell({
         <header
           className={cn(
             "fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-3 backdrop-blur-xl transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between",
-            collapsed ? "lg:left-[76px]" : "lg:left-[224px]",
+            "lg:left-[76px]",
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
@@ -277,7 +273,7 @@ export function WorkspaceShell({
             variant="outline"
             className={cn(
               "hidden h-9 w-[540px] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-3 text-[var(--app-muted)] shadow-none transition-[left,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:absolute lg:flex lg:-translate-x-1/2",
-              collapsed ? "lg:left-[calc(50vw-76px)]" : "lg:left-[calc(50vw-224px)]",
+              "lg:left-[calc(50vw-76px)]",
             )}
             onClick={() => setCommandOpen(true)}
           >
@@ -340,17 +336,14 @@ export function WorkspaceShell({
 function DesktopSidebar({
   page,
   settings,
-  collapsed,
-  onToggle,
   starterNavigation,
 }: {
   page: ShellPage;
   settings: SettingsState;
-  collapsed: boolean;
-  onToggle: () => void;
   starterNavigation: boolean;
 }) {
   const reduceMotion = useHydratedReducedMotion();
+  const collapsed = true;
   const [showAllTools, setShowAllTools] = useState(false);
   const visibleGroups = starterNavigation && !showAllTools
     ? routeGroups.map((group) => ({ ...group, items: group.items.filter((item) => starterPages.has(item.page) || item.page === page) })).filter((group) => group.items.length)
@@ -359,20 +352,19 @@ function DesktopSidebar({
   return (
     <motion.aside
       initial={false}
-      animate={{ width: collapsed ? 76 : 224 }}
+      animate={{ width: 76 }}
       transition={reduceMotion ? { duration: 0 } : shellTransition}
       className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-sidebar)] lg:flex lg:flex-col"
     >
       <div className={cn(
-        "border-b border-[var(--app-border)]",
-        collapsed ? "grid h-[104px] grid-rows-[42px_28px] justify-items-center gap-1 px-2 py-6" : "flex h-[104px] items-start justify-between gap-3 px-5 pt-6",
+        "grid h-14 grid-cols-1 items-center justify-items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-2 backdrop-blur-xl",
       )}>
         <Link
           href="/"
           aria-label="Go to dashboard"
           className={cn(
             "min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-sidebar)]",
-            collapsed ? "flex w-[60px] items-center justify-center overflow-hidden" : "flex-1",
+            "flex h-full w-[60px] items-center justify-center overflow-hidden",
           )}
         >
           <motion.div
@@ -400,29 +392,6 @@ function DesktopSidebar({
           </motion.div>
         </Link>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <motion.button
-              type="button"
-              whileHover={reduceMotion ? undefined : { x: collapsed ? 1 : -1 }}
-              whileTap={reduceMotion ? undefined : { scale: 0.92 }}
-              animate={{ rotate: collapsed ? 180 : 0 }}
-              transition={reduceMotion ? { duration: 0 } : shellTransition}
-              className={cn(
-                "flex shrink-0 items-center justify-center rounded-md outline-none transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
-                collapsed
-                  ? "size-7 text-[var(--app-muted)] hover:bg-[var(--app-active)] hover:text-[var(--app-highlight)] focus-visible:bg-[var(--app-active)] focus-visible:text-[var(--app-highlight)]"
-                  : "mt-1 size-7 text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)]",
-              )}
-              onClick={onToggle}
-              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-              aria-pressed={collapsed}
-            >
-              <ChevronLeft className="size-4" strokeWidth={2.1} />
-            </motion.button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</TooltipContent>
-        </Tooltip>
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">

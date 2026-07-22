@@ -205,7 +205,7 @@ const checks = [
   ["src/app/tracker-app.tsx", "Team Projects", "team projects workspace tab"],
   ["src/app/tracker-app.tsx", "New Team Project", "explicit team project creation"],
   ["src/app/tracker-app.tsx", "scope: \"personal\" | \"team\" = \"personal\"", "personal-first project creation"],
-  ["src/app/tracker-app.tsx", "SIDEBAR_COLLAPSED_STORAGE_KEY", "persisted collapsible sidebar"],
+  ["src/components/workspace-shell.tsx", "const collapsed = true;", "permanently collapsed desktop sidebar"],
   ["src/app/tracker-app.tsx", "aria-label=\"Go to dashboard\"", "clickable sidebar and mobile logo"],
   ["src/app/tracker-app.tsx", "Chat unavailable for your role", "no-chat role UI state"],
   ["src/app/tracker-app.tsx", "does not have permission to view or send chat messages", "no-chat role explanatory copy"],

@@ -38,6 +38,7 @@ export const storedFileStatusValidator = v.union(
 
 export const fileProviderValidator = v.union(
   v.literal("convex"),
+  v.literal("r2"),
   v.literal("external"),
   v.literal("google_drive"),
   v.literal("dropbox"),
