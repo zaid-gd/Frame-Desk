@@ -36,7 +36,7 @@ const linkStyle: CSSProperties = {
   border: "1px solid var(--app-border, #2A3138)",
   borderRadius: 8,
   color: "var(--app-highlight, #69C4CE)",
-  fontSize: 14,
+  fontSize: 16,
   fontWeight: 760,
   padding: "10px 14px",
   textDecoration: "none"
@@ -93,9 +93,11 @@ export function LegalPage({ title, updatedAt, intro, sections }: LegalPageProps)
     <main style={pageStyle}>
       <div style={shellStyle}>
         <nav aria-label="Legal pages" style={navStyle}>
-          <Link href="/" style={linkStyle}>Back to App</Link>
+          <Link href="/" style={linkStyle}>Back to CutLab Studio</Link>
           <Link href="/privacy" style={linkStyle}>Privacy Policy</Link>
           <Link href="/terms" style={linkStyle}>Terms of Service</Link>
+          <Link href="/accessibility" style={linkStyle}>Accessibility</Link>
+          <Link href="/contact" style={linkStyle}>Contact</Link>
         </nav>
         <article style={cardStyle}>
           <p style={eyebrowStyle}>Last updated {updatedAt}</p>
@@ -108,6 +110,9 @@ export function LegalPage({ title, updatedAt, intro, sections }: LegalPageProps)
             </section>
           ))}
         </article>
+        <footer style={{ marginTop: 28, color: "var(--app-muted, #A5ADB4)", fontSize: 14, lineHeight: 1.6 }}>
+          <p>© {new Date().getFullYear()} CutLab Studio. All rights reserved.</p>
+        </footer>
       </div>
     </main>
   );

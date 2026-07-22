@@ -1,24 +1,29 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { PrivacyControls } from "@/components/privacy-controls";
+import { siteUrl } from "@/lib/site";
 import { Providers } from "./providers";
 import "./globals.css";
 
+const siteTitle = "CutLab Studio | Video Production Workspace for Editors";
+const siteDescription = "Plan edits, track deadlines, manage client feedback, organize media, and monitor production work in one focused workspace built for video editors.";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://cutlab.studio"),
+  metadataBase: new URL(siteUrl),
   applicationName: "CutLab Studio",
-  title: "CutLab Studio",
-  description: "A local-first video editing work tracker for editors.",
+  title: siteTitle,
+  description: siteDescription,
   keywords: ["video editing", "project tracker", "local-first", "editing workflow", "salary batch"],
   authors: [{ name: "CutLab Studio" }],
   creator: "CutLab Studio",
   openGraph: {
-    title: "CutLab Studio",
-    description: "A local-first video editing work tracker for editors.",
+    title: siteTitle,
+    description: siteDescription,
     type: "website",
+    url: "/",
+    siteName: "CutLab Studio",
     images: [
       {
         url: "/og-image.png",
@@ -30,8 +35,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "CutLab Studio",
-    description: "A local-first video editing work tracker for editors.",
+    title: siteTitle,
+    description: siteDescription,
     images: ["/og-image.png"]
   },
   icons: {
@@ -41,6 +46,23 @@ export const metadata: Metadata = {
     ],
     shortcut: "/brand/icons/app-icon-dark-32.png",
     apple: "/brand/icons/app-icon-dark-256.png"
+  }
+};
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "CutLab Studio",
+  url: siteUrl,
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  description: siteDescription,
+  image: `${siteUrl}/og-image.png`,
+  publisher: {
+    "@type": "Organization",
+    name: "CutLab Studio",
+    url: siteUrl,
+    email: "Cutlab.Studios@gmail.com"
   }
 };
 
@@ -122,6 +144,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+        />
         <Script id="cutlab-theme-boot" strategy="beforeInteractive">
           {themeBootScript}
         </Script>
@@ -140,8 +166,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to workspace content
         </a>
         <Providers>{children}</Providers>
-        <Analytics />
-        <SpeedInsights />
+        <PrivacyControls />
       </body>
     </html>
   );

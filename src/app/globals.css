@@ -399,7 +399,13 @@ button:not(:disabled):active,
   [role="button"],
   input,
   select {
-    min-height: 44px;
+    min-height: 48px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

@@ -1,10 +1,11 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { UserProfile, useUser, useClerk } from "@clerk/nextjs";
+import { UserProfile } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useData } from "@/lib/data-context";
+import { useOptionalAuth } from "@/lib/optional-auth";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import {
@@ -137,6 +138,9 @@ import { PrecisionProjects } from "@/components/precision-projects";
 import { PrecisionCalendar, PrecisionTimeline } from "@/components/precision-schedule";
 import { PrecisionClients, PrecisionFeedback, PrecisionReports } from "@/components/precision-workspaces";
 import { PrecisionMedia } from "@/components/precision-media";
+import { FirstRunChecklist } from "@/components/first-run-checklist";
+import { SampleModeBar } from "@/components/sample-mode-bar";
+import { resolveOnboardingVariant, trackOnboardingEvent, type OnboardingVariant } from "@/lib/onboarding";
 
 const defaultProjectTags = ["Job / Salary", "Freelance", "Personal Channel"];
 const defaultSalaryWorkType = "Job / Salary";
@@ -431,7 +435,7 @@ const emptyForm = (): WorkItem => ({
   integrationLinks: {}
 });
 
-export function TrackerApp({ page }: { page: PageKey }) {
+export function TrackerApp({ page, experienceMode = "workspace" }: { page: PageKey; experienceMode?: "workspace" | "sample" }) {
   const {
     items,
     setItems,
@@ -447,7 +451,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
     reconcileSalaryBatches,
     updateSalaryBatchPayment,
   } = useData();
-  const { openSignIn, openSignUp } = useClerk();
+  const { openSignIn, openSignUp } = useOptionalAuth();
+  const isSample = experienceMode === "sample";
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
   const shouldLoadTeamPermissions = Boolean(isSignedIn && isConvexAuthenticated);
   const teamData = useQuery(api.team.getMyWorkspace, shouldLoadTeamPermissions ? {} : "skip");
@@ -460,6 +465,8 @@ export function TrackerApp({ page }: { page: PageKey }) {
   const [form, setForm] = useState<WorkItem>(emptyForm);
   const [formError, setFormError] = useState("");
   const [authChoiceOpen, setAuthChoiceOpen] = useState(false);
+  const [onboardingVariant, setOnboardingVariant] = useState<OnboardingVariant>("v2");
+  const onboardingStartedAt = useRef(Date.now());
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | "All">("All");
   const [kindFilter, setKindFilter] = useState<ProjectKind>("ALL");
@@ -484,17 +491,26 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [settings]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (isSample) {
+      setOnboardingVariant("v2");
+      trackOnboardingEvent("sample_studio_opened", { variant: "v2", entrySource: "first_run_dialog" });
+      return;
+    }
+    setOnboardingVariant(resolveOnboardingVariant());
+  }, [isSample]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isSample) return;
     setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
-  }, []);
+  }, [isSample]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || isSample) return;
     window.localStorage.setItem(LOCAL_PROJECT_ACTIVITY_STORAGE_KEY, JSON.stringify(localProjectActivity.slice(0, 500)));
-  }, [localProjectActivity]);
+  }, [isSample, localProjectActivity]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !isAuthLoaded) return;
+    if (typeof window === "undefined" || !isAuthLoaded || isSample) return;
     if (isSignedIn) {
       window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, "account");
       setAuthChoiceOpen(false);
@@ -503,7 +519,12 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
     const savedMode = window.localStorage.getItem(AUTH_MODE_STORAGE_KEY);
     setAuthChoiceOpen(!savedMode);
-  }, [isAuthLoaded, isSignedIn]);
+  }, [isAuthLoaded, isSample, isSignedIn]);
+
+  useEffect(() => {
+    if (!authChoiceOpen) return;
+    trackOnboardingEvent("onboarding_dialog_viewed", { variant: onboardingVariant, entrySource: "workspace_root" });
+  }, [authChoiceOpen, onboardingVariant]);
 
   const projects = useMemo(() => items.filter((item) => (item.profileId || DEFAULT_PROFILE_ID) === profile.id), [items]);
   const personalProjects = useMemo(() => projects.filter((item) => !item.teamId), [projects]);
@@ -531,7 +552,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
   }, [settings, teamProjects]);
   const projectPermissions = teamData?.currentMember.permissions;
   const canCreateTeamProjects = teamSyncUnavailable || teamDataLoading ? false : Boolean(teamData && projectPermissions?.createProjects);
-  const canCreateProjects = true;
+  const canCreateProjects = !isSample;
   const canEditProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.editProjects);
   const canUpdateProjectStatus = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.updateStatus);
   const canCommentProjects = teamSyncUnavailable || teamDataLoading ? false : !teamData || Boolean(projectPermissions?.commentProjects);
@@ -641,11 +662,13 @@ export function TrackerApp({ page }: { page: PageKey }) {
       window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, "local");
     }
     setAuthChoiceOpen(false);
+    trackOnboardingEvent("workspace_mode_selected", { variant: onboardingVariant, mode: "local", elapsedMs: Date.now() - onboardingStartedAt.current });
     notify("Using local mode on this device.", "info");
   }
 
   function launchAccountFlow(mode: "sign-up" | "sign-in") {
     setAuthChoiceOpen(false);
+    trackOnboardingEvent("workspace_mode_selected", { variant: onboardingVariant, mode: "account", elapsedMs: Date.now() - onboardingStartedAt.current });
     if (mode === "sign-up") {
       openSignUp();
       return;
@@ -699,6 +722,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
 
   function openProjectDetails(item: WorkItem) {
     setDetailProjectId(item.id);
+    if (isSample) trackOnboardingEvent("sample_project_opened", { variant: "v2", entrySource: "sample_dashboard" });
   }
 
   function canDeleteProject(project: WorkItem | null) {
@@ -813,6 +837,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
       integrationLinks: normalizedForm.integrationLinks
     };
     setItems((current) => (editingId ? current.map((item) => (item.id === editingId ? payload : item)) : [payload, ...current]));
+    if (!editingId) {
+      trackOnboardingEvent("first_project_created", { variant: onboardingVariant, mode: isSignedIn ? "account" : "local", elapsedMs: Date.now() - onboardingStartedAt.current });
+    }
     setDashboardActivity((current) => {
       const activity: DashboardActivity = {
         id: createId(),
@@ -846,7 +873,9 @@ export function TrackerApp({ page }: { page: PageKey }) {
     notify(`Client "${canonical}" added.`);
   }
 
-  const pageContent = page === "dashboard" ? (
+  const pageContent = page === "dashboard" && personalProjects.length === 0 && !isSample ? (
+    <FirstRunChecklist mode={isSignedIn ? "account" : "local"} onCreateProject={() => openNewProject("personal")} />
+  ) : page === "dashboard" ? (
     <PrecisionDashboard
       settings={settings}
       stats={stats}
@@ -976,10 +1005,10 @@ export function TrackerApp({ page }: { page: PageKey }) {
     <ProjectDetailDialog
       project={detailProject}
       settings={settings}
-      canEdit={canEditProjects || !detailProject?.teamId}
+      canEdit={!isSample && (canEditProjects || !detailProject?.teamId)}
       canDelete={canDeleteProject(detailProject)}
-      canUpdateStatus={canUpdateProjectStatus || canEditProjects || !detailProject?.teamId}
-      canComment={canCommentProjects}
+      canUpdateStatus={!isSample && (canUpdateProjectStatus || canEditProjects || !detailProject?.teamId)}
+      canComment={!isSample && canCommentProjects}
       teamMembers={activeTeamMembers}
       localActivity={localProjectActivity.filter((event) => event.projectId === detailProject?.id)}
       onClose={() => setDetailProjectId("")}
@@ -1007,6 +1036,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
+        variant={onboardingVariant}
         onChooseLocal={chooseLocalMode}
         onCreateAccount={() => launchAccountFlow("sign-up")}
         onSignIn={() => launchAccountFlow("sign-in")}
@@ -1028,8 +1058,10 @@ export function TrackerApp({ page }: { page: PageKey }) {
         }}
         onNewProject={() => openNewProject("personal")}
         canCreateProject={canCreateProjects}
+        starterNavigation={!isSample && personalProjects.length === 0}
         notificationSlot={<NotificationBell settings={settings} />}
       >
+        {isSample ? <SampleModeBar /> : null}
         <Box sx={{ ...appSurfaceSx(settings), minHeight: "calc(100dvh - 56px)", bgcolor: canvas, color: ink }}>
           <PageContext.Provider value={page}>
             <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
@@ -1043,6 +1075,7 @@ export function TrackerApp({ page }: { page: PageKey }) {
       {loadingStatus}
       <WelcomeChoiceDialog
         open={authChoiceOpen}
+        variant={onboardingVariant}
         onChooseLocal={chooseLocalMode}
         onCreateAccount={() => launchAccountFlow("sign-up")}
         onSignIn={() => launchAccountFlow("sign-in")}
@@ -1213,8 +1246,7 @@ function Sidebar({
 }
 
 function CloudProfileActions({ onClose }: { onClose: () => void }) {
-  const { isSignedIn } = useUser();
-  const { openSignIn, openSignUp, signOut } = useClerk();
+  const { isSignedIn, openSignIn, openSignUp, signOut } = useOptionalAuth();
 
   if (isSignedIn) {
     return (
@@ -1261,8 +1293,7 @@ function CloudProfileActions({ onClose }: { onClose: () => void }) {
 }
 
 function AccountSettingsPage() {
-  const { isSignedIn, isLoaded } = useUser();
-  const { openSignIn, openSignUp } = useClerk();
+  const { isSignedIn, isLoaded, openSignIn, openSignUp } = useOptionalAuth();
 
   return (
     <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public CutLab profile.">
@@ -1455,15 +1486,33 @@ function AppLoadingStatus() {
 
 function WelcomeChoiceDialog({
   open,
+  variant,
   onChooseLocal,
   onCreateAccount,
   onSignIn
 }: {
   open: boolean;
+  variant: OnboardingVariant;
   onChooseLocal: () => void;
   onCreateAccount: () => void;
   onSignIn: () => void;
 }) {
+  if (variant === "control") {
+    return (
+      <Dialog open={open} onClose={() => {}} fullWidth maxWidth="sm" disableEscapeKeyDown PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}>
+        <DialogTitle sx={{ fontSize: 28, fontWeight: 760, pb: 1 }}>Choose how to start</DialogTitle>
+        <DialogContent>
+          <Stack gap={2} sx={{ pt: 1 }}>
+            <Typography sx={{ color: muted, fontSize: 14 }}>Use CutLab locally on this device, or create an account to sync supported workspace data.</Typography>
+            <Button variant="outlined" onClick={onChooseLocal} sx={outlineButtonSx}>Use locally</Button>
+            <Button variant="contained" onClick={onCreateAccount} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>Create account</Button>
+            <Button variant="text" onClick={onSignIn} sx={{ color: muted }}>Sign in</Button>
+          </Stack>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog
       open={open}
@@ -1473,35 +1522,44 @@ function WelcomeChoiceDialog({
       disableEscapeKeyDown
       PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}
     >
-      <DialogTitle sx={{ fontSize: 28, fontWeight: 760, pb: 1 }}>Choose how to start</DialogTitle>
+      <DialogTitle sx={{ fontSize: { xs: 24, sm: 28 }, fontWeight: 760, pb: 1 }}>See how a real project moves through CutLab</DialogTitle>
       <DialogContent>
         <Stack gap={2} sx={{ pt: 1 }}>
           <Typography sx={{ color: muted, fontSize: 14 }}>
-            Use CutLab locally on this device, or create an account to sync your data. Account setup currently supports username plus email or GitHub.
+            Explore a populated production workflow first. Choose where your own workspace lives only when you are ready.
           </Typography>
-          <Paper sx={{ ...panelSx, p: 2 }}>
-            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Continue without account</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>
-              Keep everything in this browser only. Good for personal use on one device.
-            </Typography>
-            <Button variant="outlined" onClick={onChooseLocal} sx={{ ...outlineButtonSx, mt: 2 }}>
-              Use Locally
-            </Button>
+          <Paper sx={{ ...panelSx, borderColor: accent, p: 2.25 }}>
+            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Experience the workflow</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>Open a read-only studio with an active deadline, a client review, recent activity, and a paid delivery. No account required.</Typography>
+            <Button component={Link} href="/sample-studio" variant="contained" fullWidth sx={{ mt: 2, minHeight: 48, bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>Explore a sample studio</Button>
           </Paper>
           <Paper sx={{ ...panelSx, p: 2 }}>
-            <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Create or use an account</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 0.7 }}>
-              Sign up with username and email or continue with GitHub. GitHub sign-in will import your GitHub avatar and username into your profile defaults.
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} gap={1.2} sx={{ mt: 2 }}>
-              <Button variant="contained" onClick={onCreateAccount} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>
-                Create Account
-              </Button>
-              <Button variant="outlined" onClick={onSignIn} sx={outlineButtonSx}>
-                Sign In
-              </Button>
+            <Typography sx={{ color: ink, fontSize: 16, fontWeight: 760 }}>Ready to use your own work?</Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} gap={1.2} sx={{ mt: 1.5 }}>
+              <Button variant="outlined" onClick={onChooseLocal} sx={{ ...outlineButtonSx, minHeight: 48, flex: 1 }}>Try on this device</Button>
+              <Button variant="outlined" onClick={onCreateAccount} sx={{ ...outlineButtonSx, minHeight: 48, flex: 1 }}>Create a synced workspace</Button>
             </Stack>
+            <Typography sx={{ color: muted, fontSize: 12, mt: 1.25 }}>Device mode stays in this browser. Clearing site data can remove it. Synced mode requires an account.</Typography>
           </Paper>
+
+          <Accordion disableGutters sx={{ bgcolor: "transparent", color: ink, boxShadow: "none", border: `1px solid ${border}`, borderRadius: "6px !important", "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: muted }} />}><Typography sx={{ fontSize: 13, fontWeight: 700 }}>Before you start</Typography></AccordionSummary>
+            <AccordionDetails sx={{ color: muted, fontSize: 13, lineHeight: 1.65, pt: 0 }}>
+              Local mode saves projects and settings in this browser, so clearing site data can remove them. Account mode syncs supported project, settings, resource, and salary-batch records. If sync fails, local records are only removed after confirmed uploads. Integrations currently save links and configuration; they are not automatic file sync. Read the <Link href="/privacy" style={{ color: accent }}>Privacy Policy</Link> and <Link href="/terms" style={{ color: accent }}>Terms</Link>.
+            </AccordionDetails>
+          </Accordion>
+
+          <Accordion disableGutters sx={{ bgcolor: "transparent", color: ink, boxShadow: "none", border: `1px solid ${border}`, borderRadius: "6px !important", "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon sx={{ color: muted }} />}><Typography sx={{ fontSize: 13, fontWeight: 700 }}>How teams work</Typography></AccordionSummary>
+            <AccordionDetails sx={{ color: muted, fontSize: 13, lineHeight: 1.65, pt: 0 }}>
+              Signed-in editors and producers can share team projects according to their current role permissions. Editors can publish private review links for clients. Connected-service settings are manual links and configuration, not OAuth or automatic transfers.
+            </AccordionDetails>
+          </Accordion>
+
+          <Stack direction={{ xs: "column", sm: "row" }} alignItems={{ sm: "center" }} justifyContent="space-between" gap={1}>
+            <Typography sx={{ color: muted, fontSize: 13 }}>Reviewing a video? <Link href="/client-portal" style={{ color: accent }}>Open the private link from your editor</Link>. No account needed.</Typography>
+            <Button variant="text" onClick={onSignIn} sx={{ color: muted, flexShrink: 0 }}>Sign in</Button>
+          </Stack>
         </Stack>
       </DialogContent>
     </Dialog>
@@ -3157,9 +3215,8 @@ function ReportsDesignPage({
 }
 
 function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
-  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isSignedIn, isLoaded: isUserLoaded, openSignIn, openSignUp } = useOptionalAuth();
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
-  const { openSignIn, openSignUp } = useClerk();
   const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
   const createWorkspace = useMutation(api.team.createWorkspace);
   const joinWorkspace = useMutation(api.team.joinWorkspace);
@@ -3557,9 +3614,8 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
 }
 
 function TeamChatPage() {
-  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isSignedIn, isLoaded: isUserLoaded, openSignIn } = useOptionalAuth();
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
-  const { openSignIn } = useClerk();
   const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
   const sendChatMessage = useMutation(api.team.sendChatMessage);
   const [message, setMessage] = useState("");
@@ -4552,7 +4608,7 @@ function PageFrame({ title, subtitle, action, children }: { title: string; subti
 
 function NotificationBell({ settings }: { settings: SettingsState }) {
   const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
-  const { isSignedIn, isLoaded: isUserLoaded } = useUser();
+  const { isSignedIn, isLoaded: isUserLoaded } = useOptionalAuth();
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
   const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
   const markNotificationRead = useMutation(api.team.markNotificationRead);

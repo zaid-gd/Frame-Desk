@@ -4,7 +4,7 @@ import { join } from "node:path";
 const baseUrl = process.env.CUTLAB_VERIFY_URL || "http://localhost:3000";
 
 const routes = [
-  ["/", 200, ["Dashboard", "Production overview", "Deadline queue", "Production flow", "Activity", "Salary batch", "Recent Activity", "Team Activity", "All Projects", "Batch progress", "Sort", "Payment"]],
+  ["/", 200, ["Dashboard", "Your first production", "Turn one active edit into a clear production plan", "Create first project", "Confirm the deadline and stage"]],
   ["/projects", 200, ["Projects", "My Projects", "Team Projects"]],
   ["/clients", 200, ["Clients", "New Client"]],
   ["/timeline", 200, ["Timeline", "Delivery timeline"]],
@@ -25,6 +25,11 @@ const routes = [
   ["/client-portal", 200, ["Client Portal", "A project link is required", "No account required"]],
   ["/privacy", 200, ["Privacy Policy", "Local-First Storage", "Clerk", "Convex"]],
   ["/terms", 200, ["Terms of Service", "Local Mode", "Acceptable Use"]],
+  ["/accessibility", 200, ["Accessibility Statement", "WCAG", "Known Limitations"]],
+  ["/contact", 200, ["Contact CutLab Studio", "Cutlab.Studios@gmail.com", "Prepare email"]],
+  ["/sample-studio", 200, ["Sample Studio", "Production overview", "Summer launch film"]],
+  ["/robots.txt", 200, ["User-Agent: *", "Disallow: /projects", "Sitemap: https://cutlab-studio.vercel.app/sitemap.xml"]],
+  ["/sitemap.xml", 200, ["https://cutlab-studio.vercel.app", "https://cutlab-studio.vercel.app/privacy", "https://cutlab-studio.vercel.app/contact"]],
   ["/missing-route", 404, ["Page not found"]]
 ];
 
@@ -56,6 +61,12 @@ const routeFiles = [
   "src/app/client-portal/client-portal-view.tsx",
   "src/app/privacy/page.tsx",
   "src/app/terms/page.tsx",
+  "src/app/accessibility/page.tsx",
+  "src/app/contact/page.tsx",
+  "src/app/privacy-policy/page.tsx",
+  "src/app/sample-studio/page.tsx",
+  "src/app/robots.ts",
+  "src/app/sitemap.ts",
   "src/app/error.tsx",
   "src/app/not-found.tsx",
   "src/app/icon.png"
@@ -341,6 +352,7 @@ const appSourceHygienePatterns = [
 let failures = 0;
 let checkedInternalLinks = 0;
 let checkedNextAssets = 0;
+const verifiedNextAssets = new Set();
 let checkedSourceLinks = 0;
 let checkedPngAssets = 0;
 
@@ -485,6 +497,11 @@ for (const [route, expectedStatus, expectedText] of routes) {
     }
   }
 
+  if (route === "/sitemap.xml" && body.includes("https://cutlab-studio.vercel.app/projects")) {
+    failures += 1;
+    console.error("/sitemap.xml exposes the private projects workspace");
+  }
+
   if (route === "/") {
     const headerChecks = [
       ["x-content-type-options", "nosniff", "content type sniffing protection"],
@@ -508,13 +525,25 @@ for (const [route, expectedStatus, expectedText] of routes) {
       }
     }
 
+    const contentSecurityPolicy = response.headers.get("content-security-policy") || "";
+    for (const directive of ["default-src 'self'", "object-src 'none'", "frame-ancestors 'none'", "upgrade-insecure-requests"]) {
+      if (!contentSecurityPolicy.includes(directive)) {
+        failures += 1;
+        console.error(`${route} content-security-policy is missing ${directive}: ${contentSecurityPolicy || "<missing>"}`);
+      }
+    }
+
     const metadataChecks = [
-      ["<title>CutLab Studio</title>", "document title"],
-      ['name="description" content="A local-first video editing work tracker for editors."', "description meta tag"],
-      ['property="og:title" content="CutLab Studio"', "Open Graph title"],
+      ["<title>CutLab Studio | Video Production Workspace for Editors</title>", "document title"],
+      ['name="description" content="Plan edits, track deadlines, manage client feedback, organize media, and monitor production work in one focused workspace built for video editors."', "description meta tag"],
+      ['property="og:title" content="CutLab Studio | Video Production Workspace for Editors"', "Open Graph title"],
+      ['property="og:url" content="https://cutlab-studio.vercel.app"', "Open Graph URL"],
+      ['property="og:site_name" content="CutLab Studio"', "Open Graph site name"],
       ['property="og:image"', "Open Graph image"],
-      ['content="https://cutlab.studio/og-image.png"', "served Open Graph image URL"],
+      ['content="https://cutlab-studio.vercel.app/og-image.png"', "served Open Graph image URL"],
       ['name="twitter:card" content="summary_large_image"', "Twitter card"],
+      ['rel="canonical" href="https://cutlab-studio.vercel.app"', "canonical URL"],
+      ['type="application/ld+json"', "structured data"],
       ['href="/brand/icons/app-icon-dark-32.png"', "PNG icon link"],
       ["data-clerk-modal-centering", "Clerk modal centering style tag"]
     ];
@@ -530,9 +559,11 @@ for (const [route, expectedStatus, expectedText] of routes) {
   if (expectedStatus === 200) {
     const hrefPattern = /\s(?:href|src)="([^"]+)"/g;
     for (const match of body.matchAll(hrefPattern)) {
-      const target = match[1];
+      const target = match[1].replaceAll("&amp;", "&");
       if (!target.startsWith("/") || target.startsWith("/assets/") || target.startsWith("/brand/")) continue;
       if (target.startsWith("/_next/")) {
+        if (verifiedNextAssets.has(target)) continue;
+        verifiedNextAssets.add(target);
         checkedNextAssets += 1;
         const assetResponse = await fetch(`${baseUrl}${target}`).catch((error) => {
           failures += 1;

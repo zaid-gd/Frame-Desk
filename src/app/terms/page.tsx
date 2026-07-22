@@ -3,7 +3,10 @@ import { LegalPage } from "../legal-page";
 
 export const metadata: Metadata = {
   title: "Terms of Service | CutLab Studio",
-  description: "The terms that apply when using CutLab Studio."
+  description: "The terms that apply when using CutLab Studio.",
+  alternates: {
+    canonical: "/terms"
+  }
 };
 
 export default function TermsRoute() {

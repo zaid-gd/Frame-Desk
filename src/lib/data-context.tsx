@@ -6,6 +6,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink, SavedProjectTemplate } from "./types";
 import { normalizeIntegrationLinks } from "./integrations";
+import { sampleStudioProjects, sampleStudioResources, sampleStudioSettings } from "./sample-studio";
 import {
   FILE_CATEGORY_VALUES,
   FILE_STATUS_VALUES,
@@ -717,11 +718,48 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-export function DataProvider({ children, mode = "local" }: { children: React.ReactNode; mode?: "local" | "cloud" }) {
+export function DataProvider({ children, mode = "local" }: { children: React.ReactNode; mode?: "local" | "cloud" | "sample" }) {
   if (mode === "cloud") {
     return <CloudDataProvider>{children}</CloudDataProvider>;
   }
+  if (mode === "sample") {
+    return <SampleDataProvider>{children}</SampleDataProvider>;
+  }
   return <LocalDataProvider>{children}</LocalDataProvider>;
+}
+
+function SampleDataProvider({ children }: { children: React.ReactNode }) {
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const immutableItems = useCallback<React.Dispatch<React.SetStateAction<WorkItem[]>>>(() => {
+    setToast({ message: "The sample studio is read-only. Start your workspace to make changes.", tone: "info" });
+  }, []);
+  const immutableSettings = useCallback<React.Dispatch<React.SetStateAction<SettingsState>>>(() => undefined, []);
+  const immutableResources = useCallback<React.Dispatch<React.SetStateAction<ResourceLink[]>>>(() => undefined, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
+  const value: DataContextValue = {
+    items: sampleStudioProjects,
+    setItems: immutableItems,
+    settings: sampleStudioSettings,
+    setSettings: immutableSettings,
+    resourceLinks: sampleStudioResources,
+    setResourceLinks: immutableResources,
+    salaryBatches: [],
+    reconcileSalaryBatches: () => undefined,
+    updateSalaryBatchPayment: () => setToast({ message: "Payment state is fixed in the read-only sample.", tone: "info" }),
+    isAuthEnabled: false,
+    isSignedIn: false,
+    isAuthLoaded: true,
+    toast,
+    setToast,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 function LocalDataProvider({ children }: { children: React.ReactNode }) {

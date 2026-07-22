@@ -35,9 +35,17 @@ if (!baseUrl) {
 
 const browser = await chromium.launch({ headless: true });
 
-async function withPage(viewport, run) {
+async function withPage(viewport, run, { seedWorkspace = true } = {}) {
   const context = await browser.newContext({ viewport, reducedMotion: "no-preference" });
-  await context.addInitScript(() => {
+  await context.route("**/_vercel/**", async (route) => {
+    const isScript = route.request().resourceType() === "script";
+    await route.fulfill({
+      status: 200,
+      contentType: isScript ? "application/javascript" : "text/plain",
+      body: isScript ? "" : "ok",
+    });
+  });
+  if (seedWorkspace) await context.addInitScript(() => {
     localStorage.setItem("cutlab-studio:auth-mode:v1", "local");
     localStorage.setItem("video-editing-work-tracker:settings:v1", JSON.stringify({
       studioName: "CutLab Studio",
@@ -82,6 +90,9 @@ async function withPage(viewport, run) {
       },
     ]));
   });
+  else await context.addInitScript(() => {
+    localStorage.setItem("cutlab-studio:privacy-consent:v1", "essential");
+  });
 
   const page = await context.newPage();
   page.setDefaultTimeout(12_000);
@@ -102,11 +113,62 @@ async function withPage(viewport, run) {
   }
 }
 
+async function chooseEssentialPrivacy(page) {
+  const privacyRegion = page.getByRole("region", { name: "Privacy preferences" });
+  await privacyRegion.waitFor({ state: "visible" });
+  await privacyRegion.getByRole("button", { name: "Essential only" }).click();
+  await privacyRegion.waitFor({ state: "hidden" });
+}
+
 try {
+  await withPage({ width: 1440, height: 1000 }, async (page) => {
+    console.log("Verifying first-value onboarding and sample isolation...");
+    await page.goto(`${baseUrl}/?onboarding=v2`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    const initialProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
+    if (initialProjectData !== null) throw new Error("Fresh onboarding unexpectedly created project storage.");
+    await page.getByRole("link", { name: "Explore a sample studio" }).click();
+    await page.waitForURL(/\/sample-studio$/);
+    await page.getByRole("complementary", { name: "Sample studio mode" }).waitFor();
+    await page.getByRole("heading", { name: "Production overview" }).waitFor();
+    await page.getByTestId("project-row").first().click();
+    await page.getByRole("button", { name: "Open project" }).click();
+    await page.getByRole("dialog", { name: "Project details" }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    const sampleProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
+    if (sampleProjectData !== null) throw new Error("The sample studio wrote project records to local storage.");
+    await page.getByRole("link", { name: "Exit sample" }).click();
+    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    await page.getByRole("button", { name: "Try on this device" }).click();
+    await page.getByRole("heading", { name: "Turn one active edit into a clear production plan" }).waitFor();
+    await page.getByRole("button", { name: "Show all tools" }).click();
+    await page.getByRole("link", { name: "Clients" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "Create first project" }).click();
+    await page.getByRole("heading", { name: "Create Project" }).waitFor({ state: "visible" });
+  }, { seedWorkspace: false });
+
+  await withPage({ width: 390, height: 844 }, async (page) => {
+    console.log("Verifying mobile first-value onboarding...");
+    await page.goto(`${baseUrl}/?onboarding=v2`, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    await page.getByRole("link", { name: "Explore a sample studio" }).click();
+    await page.getByRole("complementary", { name: "Sample studio mode" }).waitFor();
+    const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
+    if (hasOverflow) throw new Error("Mobile sample studio has document-level horizontal overflow.");
+  }, { seedWorkspace: false });
+
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying dashboard and command palette...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await chooseEssentialPrivacy(page);
     await page.getByRole("heading", { name: "Production overview" }).waitFor();
+    await page.getByRole("button", { name: "Privacy choices" }).click();
+    const privacyRegion = page.getByRole("region", { name: "Privacy preferences" });
+    await privacyRegion.waitFor({ state: "visible" });
+    await privacyRegion.getByRole("button", { name: "Allow analytics" }).click();
+    await privacyRegion.waitFor({ state: "hidden" });
+    const consentChoice = await page.evaluate(() => window.localStorage.getItem("cutlab-studio:privacy-consent:v1"));
+    if (consentChoice !== "analytics") throw new Error(`Expected analytics consent to persist, received ${consentChoice}`);
     await page.getByRole("button", { name: /filters/i }).click();
     await page.getByPlaceholder("Search projects...").fill("Interaction");
     await page.getByTestId("project-row").first().click();
@@ -132,7 +194,11 @@ try {
   await withPage({ width: 390, height: 844 }, async (page) => {
     console.log("Verifying mobile navigation and project inspector...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await chooseEssentialPrivacy(page);
     await page.getByRole("heading", { name: "Production overview" }).waitFor();
+    await page.getByRole("button", { name: "New project" }).click();
+    await page.getByRole("heading", { name: "Create Project" }).waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
     await page.getByTestId("mobile-project-row").first().click();
     await page.getByRole("dialog", { name: "Project details" }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
@@ -147,12 +213,12 @@ try {
     console.log("Verifying theme and reduced-motion preference...");
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded" });
+    await chooseEssentialPrivacy(page);
     const reduced = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
     if (!reduced) throw new Error("Reduced-motion media preference was not applied.");
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForFunction(() => document.documentElement.classList.contains("dark"));
   });
-
   console.log("UI interactions verified across desktop, mobile, calendar, media, settings, and reduced-motion states.");
 } finally {
   await browser.close();

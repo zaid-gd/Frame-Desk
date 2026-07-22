@@ -3,7 +3,10 @@ import { LegalPage } from "../legal-page";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | CutLab Studio",
-  description: "How CutLab Studio collects, uses, stores, and shares information."
+  description: "How CutLab Studio collects, uses, stores, and shares information.",
+  alternates: {
+    canonical: "/privacy"
+  }
 };
 
 export default function PrivacyPolicyRoute() {
@@ -38,7 +41,10 @@ export default function PrivacyPolicyRoute() {
         {
           title: "Cookies And Similar Technologies",
           body: (
-            <p>CutLab Studio uses browser storage for local workspace data and app preferences. Account mode may use cookies, local storage, or similar technologies from Clerk to keep you signed in and protect sessions. We do not use these technologies to sell personal information.</p>
+            <>
+              <p>CutLab Studio uses browser storage for local workspace data, app preferences, and your privacy choice. Account mode may use cookies, local storage, or similar technologies from Clerk to keep you signed in and protect sessions. We do not use these technologies to sell personal information.</p>
+              <p>With your permission, Vercel Analytics and Vercel Speed Insights may collect usage and performance information such as pages visited, device and browser characteristics, approximate location derived from network information, and page performance measurements. These optional tools remain disabled until you choose Allow analytics.</p>
+            </>
           )
         },
         {
@@ -46,7 +52,7 @@ export default function PrivacyPolicyRoute() {
           body: (
             <>
               <p>We do not sell your personal information. We share information only when needed to operate the service, comply with law, protect rights and security, or when you direct us to do so.</p>
-              <p>Service providers may include Clerk for authentication, Convex for optional cloud sync, hosting and infrastructure providers, and any third-party integration providers you choose to connect or configure. Those providers process information under their own terms and privacy commitments.</p>
+              <p>Service providers may include Clerk for authentication, Convex for optional cloud sync, Vercel for hosting and optional analytics and performance measurement, and any third-party integration providers you choose to connect or configure. Those providers process information under their own terms and privacy commitments.</p>
             </>
           )
         },
@@ -65,7 +71,7 @@ export default function PrivacyPolicyRoute() {
         {
           title: "Your Choices And Rights",
           body: (
-            <p>You can use CutLab Studio in local mode, update or delete project records, edit profile and organization settings, disconnect integrations, clear browser storage, or stop using account sync. Depending on where you live, you may have rights to access, correct, delete, export, restrict, object to, or appeal decisions about your personal information. California, other U.S. state, EEA, UK, and similar privacy rights can be exercised by contacting us.</p>
+            <p>You can use CutLab Studio in local mode, update or delete project records, edit profile and organization settings, disconnect integrations, clear browser storage, or stop using account sync. You can withdraw analytics consent at any time through Privacy choices in the app footer or menu; optional measurement stops on subsequent page loads. Depending on where you live, you may have rights to access, correct, delete, export, restrict, object to, or appeal decisions about your personal information. California, other U.S. state, EEA, UK, and similar privacy rights can be exercised by contacting us.</p>
           )
         },
         {

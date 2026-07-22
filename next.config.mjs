@@ -3,7 +3,27 @@ import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "font-src 'self' data:",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+  "img-src 'self' data: blob: https:",
+  "object-src 'none'",
+  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com https://va.vercel-scripts.com https://vercel.live",
+  "style-src 'self' 'unsafe-inline'",
+  "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://va.vercel-scripts.com https://*.vercel-insights.com https://vercel.live",
+  "worker-src 'self' blob:",
+  "upgrade-insecure-requests"
+].join("; ");
+
 const nextConfig = {
+  compress: true,
+  images: {
+    formats: ["image/avif", "image/webp"]
+  },
   turbopack: {
     root
   },
@@ -27,6 +47,10 @@ const nextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()"
+          },
+          {
+            key: "Content-Security-Policy",
+            value: contentSecurityPolicy
           }
         ]
       }

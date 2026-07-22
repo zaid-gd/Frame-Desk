@@ -11,7 +11,7 @@ const routes = [
   {
     path: "/team",
     label: "team",
-    expectedText: ["Team", "Active members", "Checking account status"],
+    expectedText: ["Team", "Active members"],
   },
   { path: "/team-chat", label: "team-chat", expectedText: ["Team Chat", "Manage Team"] },
   {

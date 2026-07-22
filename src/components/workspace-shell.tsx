@@ -23,13 +23,15 @@ import {
   Workflow,
 } from "lucide-react";
 import { motion } from "motion/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useClerk, useUser } from "@clerk/nextjs";
 import { useData } from "@/lib/data-context";
+import { useOptionalAuth } from "@/lib/optional-auth";
 import type { SettingsState } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { PrivacyPreferencesButton } from "@/components/privacy-controls";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -126,6 +128,7 @@ const routeGroups: RouteGroup[] = [
 ];
 
 const allRoutes = routeGroups.flatMap((group) => group.items);
+const starterPages = new Set<ShellPage>(["dashboard", "projects", "calendar", "feedback", "settings"]);
 
 const mobileRoutes: RouteItem[] = [
   allRoutes.find((route) => route.page === "dashboard")!,
@@ -170,6 +173,7 @@ export function WorkspaceShell({
   onToggle,
   onNewProject,
   canCreateProject,
+  starterNavigation = false,
   notificationSlot,
   children,
 }: {
@@ -179,6 +183,7 @@ export function WorkspaceShell({
   onToggle: () => void;
   onNewProject: () => void;
   canCreateProject: boolean;
+  starterNavigation?: boolean;
   notificationSlot?: ReactNode;
   children: ReactNode;
 }) {
@@ -239,7 +244,7 @@ export function WorkspaceShell({
 
   return (
     <div className="min-h-dvh bg-[var(--app-canvas)] text-[var(--app-ink)]">
-      <DesktopSidebar page={page} settings={settings} collapsed={collapsed} onToggle={onToggle} />
+      <DesktopSidebar page={page} settings={settings} collapsed={collapsed} onToggle={onToggle} starterNavigation={starterNavigation} />
 
       <div
         className={cn(
@@ -255,9 +260,13 @@ export function WorkspaceShell({
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
             <div className="flex items-center gap-2 lg:hidden">
-              <img
+              <Image
                 src="/brand/logo/cutlab-studio.png"
                 alt="CutLab Studio"
+                width={95}
+                height={36}
+                priority
+                sizes="95px"
                 className="h-7 w-auto object-contain brightness-0 dark:brightness-100"
               />
             </div>
@@ -310,7 +319,19 @@ export function WorkspaceShell({
         </main>
       </div>
 
-      <MobileNavigation page={page} open={moreOpen} onOpenChange={setMoreOpen} />
+      {(page === "dashboard" || page === "projects") && canCreateProject ? (
+        <motion.button
+          type="button"
+          whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+          className="fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-4 z-40 flex min-h-12 items-center gap-2 rounded-md bg-[var(--app-accent)] px-4 text-sm font-semibold text-white shadow-[var(--app-shadow-2)] outline-none hover:bg-[var(--app-highlight)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-canvas)] sm:hidden"
+          onClick={onNewProject}
+        >
+          <Plus className="size-4" />
+          New project
+        </motion.button>
+      ) : null}
+
+      <MobileNavigation page={page} open={moreOpen} onOpenChange={setMoreOpen} starterNavigation={starterNavigation} />
       <WorkspaceCommand open={commandOpen} onOpenChange={setCommandOpen} onNewProject={onNewProject} />
     </div>
   );
@@ -321,13 +342,19 @@ function DesktopSidebar({
   settings,
   collapsed,
   onToggle,
+  starterNavigation,
 }: {
   page: ShellPage;
   settings: SettingsState;
   collapsed: boolean;
   onToggle: () => void;
+  starterNavigation: boolean;
 }) {
   const reduceMotion = useHydratedReducedMotion();
+  const [showAllTools, setShowAllTools] = useState(false);
+  const visibleGroups = starterNavigation && !showAllTools
+    ? routeGroups.map((group) => ({ ...group, items: group.items.filter((item) => starterPages.has(item.page) || item.page === page) })).filter((group) => group.items.length)
+    : routeGroups;
 
   return (
     <motion.aside
@@ -348,21 +375,29 @@ function DesktopSidebar({
             collapsed ? "flex w-[60px] items-center justify-center overflow-hidden" : "flex-1",
           )}
         >
-          <motion.img
+          <motion.div
             initial={false}
             animate={{
               opacity: collapsed ? 0.75 : 1,
               height: collapsed ? 16 : 48,
-              maxWidth: collapsed ? 58 : 178,
+              width: collapsed ? 42 : 127,
             }}
             transition={reduceMotion ? { duration: 0 } : shellTransition}
-            src="/brand/logo/cutlab-studio.png"
-            alt="CutLab Studio"
             className={cn(
-              "w-auto object-contain brightness-0 dark:brightness-100",
-              collapsed ? "object-center" : "object-left",
+              "relative shrink-0 overflow-hidden",
+              collapsed ? "mx-auto" : "mr-auto",
             )}
-          />
+          >
+            <Image
+              src="/brand/logo/cutlab-studio.png"
+              alt="CutLab Studio"
+              width={190}
+              height={72}
+              priority
+              sizes="(min-width: 1024px) 127px, 95px"
+              className="h-full w-full object-contain object-left brightness-0 dark:brightness-100"
+            />
+          </motion.div>
         </Link>
 
         <Tooltip>
@@ -391,7 +426,7 @@ function DesktopSidebar({
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-        {routeGroups.map((group, groupIndex) => (
+        {visibleGroups.map((group, groupIndex) => (
           <div key={group.label} className="mb-4">
             {!collapsed ? (
               <motion.p
@@ -420,10 +455,32 @@ function DesktopSidebar({
             </div>
           </div>
         ))}
+        {starterNavigation ? (
+          <button
+            type="button"
+            className={cn("mt-1 flex min-h-9 w-full items-center rounded-md text-xs font-semibold text-[var(--app-muted)] outline-none hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]", collapsed ? "justify-center" : "gap-2 px-2.5")}
+            onClick={() => setShowAllTools((value) => !value)}
+            aria-expanded={showAllTools}
+          >
+            <MoreHorizontal className="size-4" />{collapsed ? <span className="sr-only">{showAllTools ? "Show starter tools" : "Show all tools"}</span> : showAllTools ? "Show starter tools" : "Show all tools"}
+          </button>
+        ) : null}
       </nav>
 
       <div className="border-t border-[var(--app-border)] p-2">
         <ProfileMenu settings={settings} collapsed={collapsed} page={page} />
+        {!collapsed ? (
+          <footer className="mt-2 border-t border-[var(--app-border)] px-2 pt-2 text-[11px] leading-5 text-[var(--app-subtle)]">
+            <nav aria-label="Support and legal" className="flex flex-wrap gap-x-3 gap-y-1">
+              <Link className="hover:text-[var(--app-ink)]" href="/contact">Contact</Link>
+              <Link className="hover:text-[var(--app-ink)]" href="/privacy">Privacy</Link>
+              <Link className="hover:text-[var(--app-ink)]" href="/terms">Terms</Link>
+              <Link className="hover:text-[var(--app-ink)]" href="/accessibility">Accessibility</Link>
+              <PrivacyPreferencesButton className="text-left hover:text-[var(--app-ink)]" />
+            </nav>
+            <p className="mt-1">© {new Date().getFullYear()} CutLab Studio</p>
+          </footer>
+        ) : null}
       </div>
     </motion.aside>
   );
@@ -493,8 +550,7 @@ function SidebarRoute({
 
 function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; collapsed: boolean; page: ShellPage }) {
   const { isAuthEnabled } = useData();
-  const { isSignedIn } = useUser();
-  const { openSignIn, openSignUp, signOut } = useClerk();
+  const { isSignedIn, openSignIn, openSignUp, signOut } = useOptionalAuth();
   const [open, setOpen] = useState(false);
   const reduceMotion = useHydratedReducedMotion();
   const name = settings.profileName || "Your profile";
@@ -662,16 +718,21 @@ function MobileNavigation({
   page,
   open,
   onOpenChange,
+  starterNavigation,
 }: {
   page: ShellPage;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  starterNavigation: boolean;
 }) {
   const reduceMotion = useHydratedReducedMotion();
+  const primaryRoutes = starterNavigation
+    ? ["dashboard", "projects", "calendar", "feedback"].map((key) => allRoutes.find((route) => route.page === key)!)
+    : mobileRoutes;
 
   return (
     <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-40 grid h-[calc(68px+env(safe-area-inset-bottom))] grid-cols-5 border-t border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_94%,transparent)] px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl lg:hidden">
-      {mobileRoutes.map((item) => {
+      {primaryRoutes.map((item) => {
         const Icon = item.icon;
         const active = routeIsActive(page, item);
         return (
@@ -724,7 +785,7 @@ function MobileNavigation({
             <SheetTitle>Workspace</SheetTitle>
           </SheetHeader>
           <div className="mt-3 grid grid-cols-2 gap-2">
-            {allRoutes.filter((route) => !mobileRoutes.some((mobile) => mobile.page === route.page)).map((item) => {
+            {allRoutes.filter((route) => !primaryRoutes.some((mobile) => mobile.page === route.page)).map((item) => {
               const Icon = item.icon;
               return (
                 <Link
@@ -744,6 +805,17 @@ function MobileNavigation({
                 </Link>
               );
             })}
+          </div>
+          <div className="mt-4 border-t border-[var(--app-border)] pt-4">
+            <p className="px-1 text-xs font-semibold text-[var(--app-muted)]">Support and legal</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/contact" onClick={() => onOpenChange(false)}>Contact</Link>
+              <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/privacy" onClick={() => onOpenChange(false)}>Privacy</Link>
+              <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/terms" onClick={() => onOpenChange(false)}>Terms</Link>
+              <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/accessibility" onClick={() => onOpenChange(false)}>Accessibility</Link>
+              <PrivacyPreferencesButton className="min-h-12 rounded-md border border-[var(--app-border)] p-3 text-left" />
+            </div>
+            <p className="mt-3 px-1 text-xs text-[var(--app-subtle)]">© {new Date().getFullYear()} CutLab Studio</p>
           </div>
         </SheetContent>
       </Sheet>

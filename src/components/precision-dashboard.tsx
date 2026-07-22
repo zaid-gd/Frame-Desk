@@ -8,7 +8,6 @@ import {
   ArrowUpDown,
   CalendarClock,
   CheckCircle2,
-  CircleDollarSign,
   Clock3,
   Download,
   Edit3,
@@ -135,7 +134,11 @@ const statusOptions: Array<ProjectStatus | "All"> = [
   "Cancelled",
 ];
 
-const easing = [0.22, 1, 0.36, 1] as const;
+/** Minimalist motion: soft settle, never snappy SaaS bounce. */
+const easing = [0.16, 1, 0.3, 1] as const;
+
+const surface =
+  "rounded-[10px] border border-[var(--app-border)] bg-[var(--app-panel)] transition-[box-shadow,border-color,transform] duration-200 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]";
 
 function AnimatedNumber({
   value,
@@ -169,7 +172,7 @@ function AnimatedProgress({ value, className }: { value: number; className?: str
 
   return (
     <motion.div
-      className={cn("h-full origin-left rounded-full bg-[var(--app-accent)]", className)}
+      className={cn("h-full origin-left rounded-sm bg-[var(--app-ink)]", className)}
       initial={false}
       animate={{ scaleX: value / 100 }}
       transition={reduceMotion ? { duration: 0 } : { duration: 0.55, ease: easing }}
@@ -245,34 +248,49 @@ function relativeActivityTime(value: string) {
 }
 
 function projectColor(project: WorkItem) {
-  const palette = ["#dce8f7", "#e9e2d6", "#dce9df", "#e5e1ef", "#e8e8e8"];
+  const palette = ["#E1F3FE", "#EDF3EC", "#FBF3DB", "#FDEBEC", "#F0EEE9"];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
 }
 
+/** Muted pastel status chips — scarce color, uppercase meta. */
 function StatusBadge({ status }: { status: WorkItem["status"] }) {
   const tone = status === "Delivered"
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300"
+    ? "border-transparent bg-[#EDF3EC] text-[#346538] dark:bg-[var(--app-success-bg)] dark:text-[var(--app-success)]"
     : status === "Review" || status === "Revision" || status === "Client Review"
-      ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300"
+      ? "border-transparent bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
       : status === "Cancelled"
-        ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300"
+        ? "border-transparent bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
         : status === "In Progress"
-          ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300"
+          ? "border-transparent bg-[#E1F3FE] text-[#1F6C9F] dark:bg-[var(--app-active)] dark:text-[var(--app-highlight)]"
           : "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
 
-  return <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", tone)}>{status}</Badge>;
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "h-5 rounded-full border px-2 text-[10px] font-medium uppercase tracking-[0.05em]",
+        tone,
+      )}
+    >
+      {status}
+    </Badge>
+  );
 }
 
 function PriorityBadge({ project }: { project: WorkItem }) {
   const priority = priorityFor(project);
   const tone = priority === "Urgent" || priority === "High"
-    ? "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"
+    ? "bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
     : priority === "Medium"
-      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+      ? "bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
       : "bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-  return <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", tone)}>{priority}</span>;
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em]", tone)}>
+      {priority}
+    </span>
+  );
 }
 
 export function PrecisionDashboard(props: DashboardProps) {
@@ -310,6 +328,7 @@ export function PrecisionDashboard(props: DashboardProps) {
   const salarySize = Math.max(1, Number(props.settings.salaryBatchSize) || 20);
   const salaryProgress = props.stats.salaryBatchProgress || (props.stats.salaryEdits ? salarySize : 0);
   const salaryPercent = Math.min(100, Math.round((salaryProgress / salarySize) * 100));
+  const showSalaryBatch = props.projects.some((project) => project.workType.trim().toLowerCase() === props.settings.salaryWorkType.trim().toLowerCase());
   const activeFilterCount = [
     props.statusFilter !== "All",
     props.kindFilter !== "ALL",
@@ -326,16 +345,17 @@ export function PrecisionDashboard(props: DashboardProps) {
         return (
           <div className="flex min-w-[250px] items-center gap-3">
             <div
-              className="relative hidden h-10 w-14 shrink-0 overflow-hidden rounded-md border border-[var(--app-border)] sm:block"
+              className="relative hidden h-9 w-12 shrink-0 overflow-hidden rounded-md border border-[var(--app-border)] sm:block"
               style={{ background: projectColor(project) }}
             >
-              <span className="absolute inset-x-2 bottom-2 h-0.5 rounded bg-white/70" />
-              <span className="absolute bottom-2 left-2 h-0.5 w-6 rounded bg-[var(--app-accent)]" />
-              <FolderOpen className="absolute right-1.5 top-1.5 size-3.5 text-black/30" />
+              <span className="absolute inset-x-2 bottom-2 h-px rounded bg-[var(--app-ink)]/20" />
+              <FolderOpen className="absolute right-1.5 top-1.5 size-3 text-[var(--app-ink)]/25" strokeWidth={1.75} />
             </div>
             <span className="min-w-0">
-              <span className="block truncate text-[13px] font-semibold text-[var(--app-ink)]">{project.title}</span>
-              <span className="mt-0.5 block max-w-[260px] truncate text-[11px] text-[var(--app-muted)]">
+              <span className="block truncate text-[13px] font-medium tracking-[-0.01em] text-[var(--app-ink)]">
+                {project.title}
+              </span>
+              <span className="mt-0.5 block max-w-[260px] truncate text-[11px] leading-relaxed text-[var(--app-muted)]">
                 {project.client ? `${project.client} · ` : ""}{project.notes || "No notes"}
               </span>
             </span>
@@ -345,11 +365,15 @@ export function PrecisionDashboard(props: DashboardProps) {
     }),
     columnHelper.accessor("workType", {
       header: "Type",
-      cell: (info) => <span className="whitespace-nowrap text-xs font-medium">{info.getValue()}</span>,
+      cell: (info) => <span className="whitespace-nowrap text-xs text-[var(--app-muted)]">{info.getValue()}</span>,
     }),
     columnHelper.accessor("dueDate", {
       header: "Due date",
-      cell: (info) => <span className="whitespace-nowrap text-xs">{formatDate(info.getValue(), { month: "short", day: "numeric" })}</span>,
+      cell: (info) => (
+        <span className="whitespace-nowrap font-mono text-[11px] tabular-nums text-[var(--app-muted)]">
+          {formatDate(info.getValue(), { month: "short", day: "numeric" })}
+        </span>
+      ),
     }),
     columnHelper.accessor("status", {
       header: "Status",
@@ -362,11 +386,11 @@ export function PrecisionDashboard(props: DashboardProps) {
         const progress = progressFor(row.original);
         return (
           <div className="w-[132px]">
-            <div className="mb-1 flex items-center justify-between text-[10px]">
-              <span>{progress}%</span>
+            <div className="mb-1.5 flex items-center justify-between text-[10px]">
+              <span className="font-mono tabular-nums text-[var(--app-muted)]">{progress}%</span>
               <PriorityBadge project={row.original} />
             </div>
-            <div className="h-1 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
+            <div className="h-1 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
               <AnimatedProgress value={progress} />
             </div>
           </div>
@@ -387,20 +411,20 @@ export function PrecisionDashboard(props: DashboardProps) {
                 aria-label={`Actions for ${project.title}`}
                 onClick={(event) => event.stopPropagation()}
               >
-                <MoreHorizontal className="size-4" />
+                <MoreHorizontal className="size-4" strokeWidth={1.75} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => props.onViewProject(project)}>Open project</DropdownMenuItem>
               <DropdownMenuItem disabled={!props.canEditProjects && Boolean(project.teamId)} onSelect={() => props.onEditProject(project)}>
-                <Edit3 /> Edit project
+                <Edit3 strokeWidth={1.75} /> Edit project
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 disabled={!props.canDeleteProject(project)}
                 onSelect={() => props.onDeleteProject(project.id)}
               >
-                <Trash2 /> Delete project
+                <Trash2 strokeWidth={1.75} /> Delete project
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -462,7 +486,7 @@ export function PrecisionDashboard(props: DashboardProps) {
 
   const entry = reduceMotion
     ? { initial: false as const, animate: { opacity: 1 } }
-    : { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 } };
+    : { initial: { opacity: 0, y: 12 }, animate: { opacity: 1, y: 0 } };
 
   function handleRowKeyDown(event: React.KeyboardEvent<HTMLTableRowElement>, project: WorkItem, rowIndex: number) {
     if (event.target !== event.currentTarget) return;
@@ -491,41 +515,47 @@ export function PrecisionDashboard(props: DashboardProps) {
 
   return (
     <motion.div
-      className="mx-auto w-full max-w-[1580px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5"
+      className="mx-auto w-full max-w-[1480px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8"
       initial={entry.initial}
       animate={entry.animate}
-      transition={{ duration: reduceMotion ? 0 : 0.35, ease: easing }}
+      transition={{ duration: reduceMotion ? 0 : 0.5, ease: easing }}
     >
-      <motion.div
-        className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"
+      {/* Editorial header */}
+      <motion.header
+        className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"
         initial={entry.initial}
         animate={entry.animate}
-        transition={{ duration: reduceMotion ? 0 : 0.35, ease: easing }}
+        transition={{ duration: reduceMotion ? 0 : 0.5, ease: easing }}
       >
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-[22px] font-semibold tracking-[-0.01em]">Production overview</h1>
-            <Badge variant="outline" className="h-5 rounded border-[var(--app-border)] bg-[var(--app-panel)] text-[10px] text-[var(--app-muted)]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[28px] font-semibold leading-none tracking-[-0.03em] text-[var(--app-ink)] sm:text-[32px]">
+              Production overview
+            </h1>
+            <span className="rounded-full border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-muted)]">
               My work
-            </Badge>
+            </span>
           </div>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">
+          <p className="mt-3 font-mono text-[11px] tracking-[0.02em] text-[var(--app-muted)]">
             {new Intl.DateTimeFormat("en", { weekday: "long", month: "long", day: "numeric", year: "numeric" }).format(new Date())}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            className="h-8 border-[var(--app-border)] bg-[var(--app-panel)] text-xs transition-transform active:scale-[0.97]"
+            className="h-9 rounded-md border-[var(--app-border)] bg-[var(--app-panel)] text-xs shadow-none transition-transform active:scale-[0.98]"
             aria-expanded={showFilters}
             aria-controls="dashboard-filters"
             onClick={() => setShowFilters((value) => !value)}
           >
-            <ListFilter className="size-3.5" />
+            <ListFilter className="size-3.5" strokeWidth={1.75} />
             Filters{activeFilterCount ? ` · ${activeFilterCount}` : ""}
           </Button>
           <Select value={props.sortKey} onValueChange={(value) => props.setSortKey(value as SortKey)}>
-            <SelectTrigger aria-label="Sort dashboard projects" className="h-8 w-[132px] bg-[var(--app-panel)] text-xs">
+            <SelectTrigger
+              aria-label="Sort dashboard projects"
+              className="h-9 w-[140px] rounded-md border-[var(--app-border)] bg-[var(--app-panel)] text-xs shadow-none"
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -537,86 +567,89 @@ export function PrecisionDashboard(props: DashboardProps) {
             </SelectContent>
           </Select>
         </div>
-      </motion.div>
+      </motion.header>
 
       <AnimatePresence initial={false}>
         {showFilters ? (
-        <motion.div
-          id="dashboard-filters"
-          initial={reduceMotion ? { opacity: 1 } : { opacity: 0, height: 0, y: -6 }}
-          animate={{ opacity: 1, height: "auto", y: 0 }}
-          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, y: -6 }}
-          transition={{ duration: reduceMotion ? 0 : 0.22, ease: easing }}
-          className="mb-4 grid overflow-hidden gap-2 border-y border-[var(--app-border)] bg-[var(--app-panel)] p-3 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_repeat(5,minmax(120px,160px))_auto]"
-        >
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
-            <Input
-              value={props.query}
-              onChange={(event) => props.setQuery(event.target.value)}
-              placeholder="Search projects..."
-              aria-label="Search dashboard projects"
-              className="h-8 bg-[var(--app-control)] pl-8 text-xs"
-            />
-          </div>
-          <Select value={props.statusFilter} onValueChange={(value) => props.setStatusFilter(value as ProjectStatus | "All")}>
-            <SelectTrigger aria-label="Filter by project status" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>{statusOptions.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={props.kindFilter} onValueChange={props.setKindFilter}>
-            <SelectTrigger aria-label="Filter by project type" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue placeholder="All types" /></SelectTrigger>
-            <SelectContent>{props.projectTagOptions.map((value) => <SelectItem key={value} value={value}>{value === "ALL" ? "All types" : value}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={props.clientFilter} onValueChange={props.setClientFilter}>
-            <SelectTrigger aria-label="Filter by client" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue placeholder="All clients" /></SelectTrigger>
-            <SelectContent>{props.clientOptions.map((value) => <SelectItem key={value} value={value}>{value === "ALL" ? "All clients" : value}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={props.dueFilter} onValueChange={(value) => props.setDueFilter(value as DueFilter)}>
-            <SelectTrigger aria-label="Filter by due date" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Any date</SelectItem>
-              <SelectItem value="This Week">This week</SelectItem>
-              <SelectItem value="Overdue">Overdue</SelectItem>
-              <SelectItem value="Delivered">Delivered</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={props.billingFilter} onValueChange={(value) => props.setBillingFilter(value as "ALL" | "Paid" | "Unpaid")}>
-            <SelectTrigger aria-label="Filter by payment status" className="h-8 bg-[var(--app-control)] text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">All Payments</SelectItem>
-              <SelectItem value="Paid">Collected</SelectItem>
-              <SelectItem value="Unpaid">Needs action</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="ghost" size="sm" className="h-8 text-xs transition-transform active:scale-[0.97]" onClick={clearFilters}>Clear</Button>
-        </motion.div>
+          <motion.div
+            id="dashboard-filters"
+            initial={reduceMotion ? { opacity: 1 } : { opacity: 0, height: 0, y: -8 }}
+            animate={{ opacity: 1, height: "auto", y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0, y: -8 }}
+            transition={{ duration: reduceMotion ? 0 : 0.28, ease: easing }}
+            className={cn("mb-8 grid overflow-hidden gap-2 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_repeat(5,minmax(120px,160px))_auto]", surface)}
+          >
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" strokeWidth={1.75} />
+              <Input
+                value={props.query}
+                onChange={(event) => props.setQuery(event.target.value)}
+                placeholder="Search projects..."
+                aria-label="Search dashboard projects"
+                className="h-9 rounded-md border-[var(--app-border)] bg-[var(--app-control)] pl-8 text-xs shadow-none"
+              />
+            </div>
+            <Select value={props.statusFilter} onValueChange={(value) => props.setStatusFilter(value as ProjectStatus | "All")}>
+              <SelectTrigger aria-label="Filter by project status" className="h-9 rounded-md bg-[var(--app-control)] text-xs shadow-none"><SelectValue /></SelectTrigger>
+              <SelectContent>{statusOptions.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={props.kindFilter} onValueChange={props.setKindFilter}>
+              <SelectTrigger aria-label="Filter by project type" className="h-9 rounded-md bg-[var(--app-control)] text-xs shadow-none"><SelectValue placeholder="All types" /></SelectTrigger>
+              <SelectContent>{props.projectTagOptions.map((value) => <SelectItem key={value} value={value}>{value === "ALL" ? "All types" : value}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={props.clientFilter} onValueChange={props.setClientFilter}>
+              <SelectTrigger aria-label="Filter by client" className="h-9 rounded-md bg-[var(--app-control)] text-xs shadow-none"><SelectValue placeholder="All clients" /></SelectTrigger>
+              <SelectContent>{props.clientOptions.map((value) => <SelectItem key={value} value={value}>{value === "ALL" ? "All clients" : value}</SelectItem>)}</SelectContent>
+            </Select>
+            <Select value={props.dueFilter} onValueChange={(value) => props.setDueFilter(value as DueFilter)}>
+              <SelectTrigger aria-label="Filter by due date" className="h-9 rounded-md bg-[var(--app-control)] text-xs shadow-none"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Any date</SelectItem>
+                <SelectItem value="This Week">This week</SelectItem>
+                <SelectItem value="Overdue">Overdue</SelectItem>
+                <SelectItem value="Delivered">Delivered</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={props.billingFilter} onValueChange={(value) => props.setBillingFilter(value as "ALL" | "Paid" | "Unpaid")}>
+              <SelectTrigger aria-label="Filter by payment status" className="h-9 rounded-md bg-[var(--app-control)] text-xs shadow-none"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Payments</SelectItem>
+                <SelectItem value="Paid">Collected</SelectItem>
+                <SelectItem value="Unpaid">Needs action</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="ghost" size="sm" className="h-9 text-xs transition-transform active:scale-[0.98]" onClick={clearFilters}>
+              Clear
+            </Button>
+          </motion.div>
         ) : null}
       </AnimatePresence>
 
+      {/* Bento metrics — individual cards, scarce color */}
       <motion.section
-        className="mb-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]"
+        className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6"
         initial={entry.initial}
         animate={entry.animate}
-        transition={{ delay: reduceMotion ? 0 : 0.05, duration: reduceMotion ? 0 : 0.35, ease: easing }}
+        transition={{ delay: reduceMotion ? 0 : 0.04, duration: reduceMotion ? 0 : 0.5, ease: easing }}
+        aria-label="Operational pulse"
       >
-        <div className="grid grid-cols-2 divide-x divide-y divide-[var(--app-border)] sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-6">
-          <PulseMetric label="All Projects" value={props.stats.total} helper="Workspace total" />
-          <PulseMetric label="Active" value={props.stats.active} helper="Currently underway" accent />
-          <PulseMetric label="Overdue" value={overdue.length} helper="Needs attention" tone={overdue.length ? "danger" : "muted"} />
-          <PulseMetric label="Due today" value={dueToday.length} helper="Scheduled items" />
-          <PulseMetric label="Payment" value={props.stats.unpaid} helper="Needs payment" tone={props.stats.unpaid ? "warning" : "muted"} />
-          <PulseMetric label="Collected" value={formatMoney(props.stats.earned, props.settings.currencyCode)} helper="Delivered earnings" tone="success" />
-        </div>
+        <PulseMetric index={0} label="All Projects" value={props.stats.total} helper="Workspace total" />
+        <PulseMetric index={1} label="Active" value={props.stats.active} helper="Currently underway" accent />
+        <PulseMetric index={2} label="Overdue" value={overdue.length} helper="Needs attention" tone={overdue.length ? "danger" : "muted"} />
+        <PulseMetric index={3} label="Due today" value={dueToday.length} helper="Scheduled items" />
+        <PulseMetric index={4} label="Payment" value={props.stats.unpaid} helper="Needs payment" tone={props.stats.unpaid ? "warning" : "muted"} />
+        <PulseMetric index={5} label="Collected" value={formatMoney(props.stats.earned, props.settings.currencyCode)} helper="Delivered earnings" tone="success" />
       </motion.section>
 
       <motion.div
-        className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_310px]"
+        className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px]"
         initial={entry.initial}
         animate={entry.animate}
-        transition={{ delay: reduceMotion ? 0 : 0.1, duration: reduceMotion ? 0 : 0.4, ease: easing }}
+        transition={{ delay: reduceMotion ? 0 : 0.08, duration: reduceMotion ? 0 : 0.55, ease: easing }}
       >
-        <div className="min-w-0 space-y-4">
-          <div className="grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0 space-y-5">
+          {/* Asymmetric queue row */}
+          <div className="grid gap-5 lg:grid-cols-2">
             <WorkspaceSection title="Deadline queue" count={dueSoon.length} icon={CalendarClock}>
               {dueSoon.length ? (
                 <div className="divide-y divide-[var(--app-border)]">
@@ -624,17 +657,17 @@ export function PrecisionDashboard(props: DashboardProps) {
                     <button
                       key={project.id}
                       className={cn(
-                        "grid w-full grid-cols-[62px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left transition-[background-color,transform] hover:bg-[var(--app-hover)] active:scale-[0.995]",
-                        selected?.id === project.id && "bg-[var(--app-active)]",
+                        "grid w-full grid-cols-[68px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--app-hover)] active:scale-[0.995]",
+                        selected?.id === project.id && "bg-[var(--app-soft-panel)]",
                       )}
                       onClick={() => setSelectedId(project.id)}
                     >
-                      <span className="text-[11px] tabular-nums text-[var(--app-muted)]">
+                      <span className="font-mono text-[11px] tabular-nums text-[var(--app-muted)]">
                         {index === 0 && daysFromToday(project.dueDate) === 0 ? "Today" : formatDate(project.dueDate, { month: "short", day: "numeric" })}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-xs font-semibold">{project.title}</span>
-                        <span className="mt-0.5 block truncate text-[10px] text-[var(--app-muted)]">{project.client || project.workType}</span>
+                        <span className="block truncate text-[13px] font-medium tracking-[-0.01em]">{project.title}</span>
+                        <span className="mt-0.5 block truncate text-[11px] text-[var(--app-muted)]">{project.client || project.workType}</span>
                       </span>
                       <PriorityBadge project={project} />
                     </button>
@@ -654,18 +687,23 @@ export function PrecisionDashboard(props: DashboardProps) {
                       <button
                         key={project.id}
                         className={cn(
-                          "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2.5 text-left transition-[background-color,transform] hover:bg-[var(--app-hover)] active:scale-[0.995]",
-                          selected?.id === project.id && "bg-[var(--app-active)]",
+                          "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--app-hover)] active:scale-[0.995]",
+                          selected?.id === project.id && "bg-[var(--app-soft-panel)]",
                         )}
                         onClick={() => setSelectedId(project.id)}
                       >
                         <span className="min-w-0">
-                          <span className={cn("block truncate text-xs font-semibold", isOverdue ? "text-[var(--app-danger)]" : "text-[var(--app-ink)]")}>
+                          <span className={cn(
+                            "block truncate text-[13px] font-medium tracking-[-0.01em]",
+                            isOverdue ? "text-[#9F2F2D] dark:text-[var(--app-danger)]" : "text-[var(--app-ink)]",
+                          )}>
                             {isOverdue ? "Delivery overdue" : reviewProject(project) ? "Review pending" : "Action needed"}
                           </span>
-                          <span className="mt-0.5 block truncate text-[10px] text-[var(--app-muted)]">{project.title} · {project.client || project.workType}</span>
+                          <span className="mt-0.5 block truncate text-[11px] text-[var(--app-muted)]">
+                            {project.title} · {project.client || project.workType}
+                          </span>
                         </span>
-                        <span className="text-[10px] text-[var(--app-muted)]">
+                        <span className="font-mono text-[11px] tabular-nums text-[var(--app-muted)]">
                           {isOverdue ? `${Math.abs(daysFromToday(project.dueDate))}d late` : formatDate(project.dueDate, { month: "short", day: "numeric" })}
                         </span>
                       </button>
@@ -685,165 +723,185 @@ export function PrecisionDashboard(props: DashboardProps) {
           >
             {props.visibleProjects.length ? (
               <>
-              <div className="divide-y divide-[var(--app-border)] sm:hidden">
-                {table.getRowModel().rows.slice(0, 8).map((row, rowIndex) => {
-                  const project = row.original;
-                  const progress = progressFor(project);
-                  return (
-                    <motion.button
-                      key={row.id}
-                      type="button"
-                      data-testid="mobile-project-row"
-                      className={cn(
-                        "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 px-3 py-3 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
-                        selected?.id === project.id && "bg-[var(--app-active)]",
-                      )}
-                      initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: reduceMotion ? 0 : Math.min(rowIndex * 0.025, 0.14), duration: reduceMotion ? 0 : 0.2 }}
-                      onClick={() => {
-                        setSelectedId(project.id);
-                        setMobileInspectorOpen(true);
-                      }}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-xs font-semibold">{project.title}</span>
-                          <StatusBadge status={project.status} />
-                        </span>
-                        <span className="mt-1 block truncate text-[10px] text-[var(--app-muted)]">
-                          {project.client || project.workType} · {formatDate(project.dueDate, { month: "short", day: "numeric" })}
-                        </span>
-                        <span className="mt-2 block h-1 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
-                          <span className="block h-full rounded-full bg-[var(--app-accent)]" style={{ width: `${progress}%` }} />
-                        </span>
-                      </span>
-                      <span className="flex flex-col items-end justify-between">
-                        <PriorityBadge project={project} />
-                        <span className="text-[10px] font-semibold tabular-nums text-[var(--app-highlight)]">{progress}%</span>
-                      </span>
-                    </motion.button>
-                  );
-                })}
-              </div>
-              <div className="hidden overflow-x-auto sm:block">
-                <table className="w-full min-w-[850px] border-collapse">
-                  <thead>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                      <tr key={headerGroup.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]">
-                        {headerGroup.headers.map((header) => (
-                          <th
-                            key={header.id}
-                            aria-sort={header.column.getIsSorted() === "asc" ? "ascending" : header.column.getIsSorted() === "desc" ? "descending" : "none"}
-                            className="h-8 px-3 text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]"
-                          >
-                            {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                              <button
-                                type="button"
-                                className="group inline-flex items-center gap-1 rounded-sm py-1 text-left transition-colors hover:text-[var(--app-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]"
-                                onClick={header.column.getToggleSortingHandler()}
-                              >
-                                {flexRender(header.column.columnDef.header, header.getContext())}
-                                <SortIcon direction={header.column.getIsSorted()} />
-                              </button>
-                            ) : flexRender(header.column.columnDef.header, header.getContext())}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <motion.tbody
-                    key={`${props.query}-${props.statusFilter}-${props.kindFilter}-${props.clientFilter}-${props.dueFilter}-${props.billingFilter}-${props.sortKey}`}
-                    className="divide-y divide-[var(--app-border)]"
-                    initial={reduceMotion ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: reduceMotion ? 0 : 0.18 }}
-                  >
-                    {table.getRowModel().rows.slice(0, 8).map((row, rowIndex) => (
-                      <motion.tr
+                <div className="divide-y divide-[var(--app-border)] sm:hidden">
+                  {table.getRowModel().rows.slice(0, 8).map((row, rowIndex) => {
+                    const project = row.original;
+                    const progress = progressFor(project);
+                    return (
+                      <motion.button
                         key={row.id}
-                        role="button"
-                        tabIndex={0}
-                        data-testid="project-row"
-                        data-project-title={row.original.title}
-                        data-project-id={row.original.id}
-                        aria-selected={selected?.id === row.original.id}
+                        type="button"
+                        data-testid="mobile-project-row"
                         className={cn(
-                          "h-[var(--workspace-row-height,58px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
-                          selected?.id === row.original.id && "bg-[var(--app-active)]",
+                          "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3.5 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-ink)]/20",
+                          selected?.id === project.id && "bg-[var(--app-soft-panel)]",
                         )}
-                        initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: reduceMotion ? 0 : Math.min(rowIndex * 0.025, 0.14), duration: reduceMotion ? 0 : 0.2 }}
-                        whileHover={reduceMotion ? undefined : { x: 2 }}
-                        whileTap={reduceMotion ? undefined : { scale: 0.997 }}
+                        transition={{ delay: reduceMotion ? 0 : Math.min(rowIndex * 0.08, 0.4), duration: reduceMotion ? 0 : 0.4, ease: easing }}
                         onClick={() => {
-                          setSelectedId(row.original.id);
-                          if (window.matchMedia("(max-width: 1279px)").matches) {
-                            setMobileInspectorOpen(true);
-                          }
+                          setSelectedId(project.id);
+                          setMobileInspectorOpen(true);
                         }}
-                        onDoubleClick={() => props.onViewProject(row.original)}
-                        onKeyDown={(event) => handleRowKeyDown(event, row.original, rowIndex)}
                       >
-                        {row.getVisibleCells().map((cell) => (
-                          <td key={cell.id} className="px-3 py-2 text-xs text-[var(--app-ink)]">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </motion.tr>
-                    ))}
-                  </motion.tbody>
-                </table>
-              </div>
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-[13px] font-medium tracking-[-0.01em]">{project.title}</span>
+                            <StatusBadge status={project.status} />
+                          </span>
+                          <span className="mt-1 block truncate text-[11px] text-[var(--app-muted)]">
+                            {project.client || project.workType} · {formatDate(project.dueDate, { month: "short", day: "numeric" })}
+                          </span>
+                          <span className="mt-2.5 block h-1 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
+                            <span className="block h-full rounded-sm bg-[var(--app-ink)]" style={{ width: `${progress}%` }} />
+                          </span>
+                        </span>
+                        <span className="flex flex-col items-end justify-between">
+                          <PriorityBadge project={project} />
+                          <span className="font-mono text-[11px] font-medium tabular-nums text-[var(--app-muted)]">{progress}%</span>
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+                <div className="hidden overflow-x-auto sm:block">
+                  <table className="w-full min-w-[850px] border-collapse">
+                    <thead>
+                      {table.getHeaderGroups().map((headerGroup) => (
+                        <tr key={headerGroup.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]/60">
+                          {headerGroup.headers.map((header) => (
+                            <th
+                              key={header.id}
+                              aria-sort={header.column.getIsSorted() === "asc" ? "ascending" : header.column.getIsSorted() === "desc" ? "descending" : "none"}
+                              className="h-9 px-4 text-left text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-subtle)]"
+                            >
+                              {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                                <button
+                                  type="button"
+                                  className="group inline-flex items-center gap-1 rounded-sm py-1 text-left transition-colors hover:text-[var(--app-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-ink)]/20"
+                                  onClick={header.column.getToggleSortingHandler()}
+                                >
+                                  {flexRender(header.column.columnDef.header, header.getContext())}
+                                  <SortIcon direction={header.column.getIsSorted()} />
+                                </button>
+                              ) : flexRender(header.column.columnDef.header, header.getContext())}
+                            </th>
+                          ))}
+                        </tr>
+                      ))}
+                    </thead>
+                    <motion.tbody
+                      key={`${props.query}-${props.statusFilter}-${props.kindFilter}-${props.clientFilter}-${props.dueFilter}-${props.billingFilter}-${props.sortKey}`}
+                      className="divide-y divide-[var(--app-border)]"
+                      initial={reduceMotion ? false : { opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: reduceMotion ? 0 : 0.25 }}
+                    >
+                      {table.getRowModel().rows.slice(0, 8).map((row, rowIndex) => (
+                        <motion.tr
+                          key={row.id}
+                          role="button"
+                          tabIndex={0}
+                          data-testid="project-row"
+                          data-project-title={row.original.title}
+                          data-project-id={row.original.id}
+                          aria-selected={selected?.id === row.original.id}
+                          className={cn(
+                            "h-[62px] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-ink)]/20",
+                            selected?.id === row.original.id && "bg-[var(--app-soft-panel)]",
+                          )}
+                          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: reduceMotion ? 0 : Math.min(rowIndex * 0.08, 0.4), duration: reduceMotion ? 0 : 0.4, ease: easing }}
+                          whileTap={reduceMotion ? undefined : { scale: 0.998 }}
+                          onClick={() => {
+                            setSelectedId(row.original.id);
+                            if (window.matchMedia("(max-width: 1279px)").matches) {
+                              setMobileInspectorOpen(true);
+                            }
+                          }}
+                          onDoubleClick={() => props.onViewProject(row.original)}
+                          onKeyDown={(event) => handleRowKeyDown(event, row.original, rowIndex)}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <td key={cell.id} className="px-4 py-2.5 text-xs text-[var(--app-ink)]">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </motion.tr>
+                      ))}
+                    </motion.tbody>
+                  </table>
+                </div>
               </>
             ) : (
               <motion.div
-                className="grid min-h-48 place-items-center px-4 text-center"
-                initial={reduceMotion ? false : { opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: reduceMotion ? 0 : 0.25, ease: easing }}
+                className="grid min-h-52 place-items-center px-6 text-center"
+                initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.4, ease: easing }}
               >
                 <div>
-                  <FolderKanban className="mx-auto size-6 text-[var(--app-muted)]" />
-                  <p className="mt-2 text-sm font-semibold">No projects in this view</p>
-                  <p className="mt-1 text-xs text-[var(--app-muted)]">
+                  <div className="mx-auto grid size-10 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)]">
+                    <FolderKanban className="size-4 text-[var(--app-muted)]" strokeWidth={1.75} />
+                  </div>
+                  <p className="mt-4 text-sm font-medium tracking-[-0.01em]">No projects in this view</p>
+                  <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-[var(--app-muted)]">
                     {activeFilterCount || props.query ? "No projects match the current filters." : "Create the first project in your workspace."}
                   </p>
-                  <div className="mt-3 flex justify-center gap-2">
+                  <div className="mt-5 flex justify-center gap-2">
                     {activeFilterCount || props.query ? (
-                      <Button variant="outline" className="h-8 transition-transform active:scale-[0.97]" size="sm" onClick={clearFilters}>Clear filters</Button>
+                      <Button variant="outline" className="h-9 rounded-md shadow-none transition-transform active:scale-[0.98]" size="sm" onClick={clearFilters}>
+                        Clear filters
+                      </Button>
                     ) : null}
-                    <Button className="h-8 transition-transform active:scale-[0.97]" size="sm" onClick={props.onNewProject} disabled={!props.canCreateProjects}>Create project</Button>
+                    <Button
+                      className="h-9 rounded-md bg-[#111111] text-white shadow-none hover:bg-[#333333] dark:bg-[var(--app-ink)] dark:text-[var(--app-canvas)] dark:hover:opacity-90"
+                      size="sm"
+                      onClick={props.onNewProject}
+                      disabled={!props.canCreateProjects}
+                    >
+                      Create project
+                    </Button>
                   </div>
                 </div>
               </motion.div>
             )}
           </WorkspaceSection>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-2">
             <WorkspaceSection
               title="Activity"
               count={activity.length}
               icon={Clock3}
               action={
-                <div className="flex rounded-md bg-[var(--app-soft-panel)] p-0.5">
+                <div className="flex rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-0.5">
                   <button
                     type="button"
-                    className={cn("relative rounded px-2 py-1 text-[10px] font-medium transition-colors", activityMode === "recent" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]")}
+                    className={cn(
+                      "relative rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.04em] transition-colors",
+                      activityMode === "recent" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]",
+                    )}
                     aria-pressed={activityMode === "recent"}
                     onClick={() => setActivityMode("recent")}
                   >
-                    {activityMode === "recent" ? <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)] shadow-sm" /> : null}
+                    {activityMode === "recent" ? (
+                      <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)]" />
+                    ) : null}
                     <span className="relative">Recent Activity</span>
                   </button>
                   <button
                     type="button"
-                    className={cn("relative rounded px-2 py-1 text-[10px] font-medium transition-colors", activityMode === "team" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]")}
+                    className={cn(
+                      "relative rounded px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.04em] transition-colors",
+                      activityMode === "team" ? "text-[var(--app-ink)]" : "text-[var(--app-muted)]",
+                    )}
                     aria-pressed={activityMode === "team"}
                     onClick={() => setActivityMode("team")}
                   >
-                    {activityMode === "team" ? <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)] shadow-sm" /> : null}
+                    {activityMode === "team" ? (
+                      <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)]" />
+                    ) : null}
                     <span className="relative">Team Activity</span>
                   </button>
                 </div>
@@ -855,27 +913,33 @@ export function PrecisionDashboard(props: DashboardProps) {
                 <motion.div
                   key={activityMode}
                   className="divide-y divide-[var(--app-border)]"
-                  initial={reduceMotion ? false : { opacity: 0, x: activityMode === "team" ? 5 : -5 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.2, ease: easing }}
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.3, ease: easing }}
                 >
                   {activity.slice(0, 5).map((item, index) => (
                     <motion.div
                       key={item.id}
-                      className="flex items-start gap-2.5 px-3 py-2.5"
-                      initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+                      className="flex items-start gap-3 px-4 py-3.5"
+                      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: reduceMotion ? 0 : index * 0.025 }}
+                      transition={{ delay: reduceMotion ? 0 : index * 0.08, ease: easing }}
                     >
                       <span className={cn(
-                        "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full",
-                        item.kind === "delivered" ? "bg-[var(--app-success-bg)] text-[var(--app-success)]" : "bg-[var(--app-active)] text-[var(--app-highlight)]",
+                        "mt-0.5 grid size-6 shrink-0 place-items-center rounded-md",
+                        item.kind === "delivered"
+                          ? "bg-[#EDF3EC] text-[#346538] dark:bg-[var(--app-success-bg)] dark:text-[var(--app-success)]"
+                          : "bg-[var(--app-soft-panel)] text-[var(--app-muted)]",
                       )}>
-                        {item.kind === "delivered" ? <CheckCircle2 className="size-3" /> : <MessageSquareText className="size-3" />}
+                        {item.kind === "delivered"
+                          ? <CheckCircle2 className="size-3" strokeWidth={1.75} />
+                          : <MessageSquareText className="size-3" strokeWidth={1.75} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-medium">{item.message}</span>
-                        <span className="mt-0.5 block text-[10px] text-[var(--app-muted)]">{item.actor || "Workspace"} · {relativeActivityTime(item.createdAt)}</span>
+                        <span className="block text-[13px] font-medium tracking-[-0.01em] leading-snug">{item.message}</span>
+                        <span className="mt-1 block font-mono text-[10px] text-[var(--app-muted)]">
+                          {item.actor || "Workspace"} · {relativeActivityTime(item.createdAt)}
+                        </span>
                       </span>
                     </motion.div>
                   ))}
@@ -885,25 +949,30 @@ export function PrecisionDashboard(props: DashboardProps) {
               )}
             </WorkspaceSection>
 
-            <WorkspaceSection title="Salary batch - Batch progress" icon={Download}>
-              <div className="px-4 py-4">
-                <div className="flex items-end justify-between">
+            {showSalaryBatch ? <WorkspaceSection title="Salary batch - Batch progress" icon={Download}>
+              <div className="px-5 py-5">
+                <div className="flex items-end justify-between gap-4">
                   <div>
-                    <p className="text-3xl font-semibold tabular-nums"><AnimatedNumber value={salaryProgress} /><span className="text-base font-medium text-[var(--app-muted)]"> / {salarySize}</span></p>
-                    <p className="mt-1 text-xs text-[var(--app-muted)]">salary edits completed</p>
+                    <p className="text-[36px] font-semibold leading-none tracking-[-0.03em] tabular-nums">
+                      <AnimatedNumber value={salaryProgress} />
+                      <span className="text-base font-normal text-[var(--app-muted)]"> / {salarySize}</span>
+                    </p>
+                    <p className="mt-2 text-xs leading-relaxed text-[var(--app-muted)]">salary edits completed</p>
                   </div>
-                  <span className="text-sm font-semibold text-[var(--app-highlight)]"><AnimatedNumber value={salaryPercent} />%</span>
+                  <span className="font-mono text-sm tabular-nums text-[var(--app-muted)]">
+                    <AnimatedNumber value={salaryPercent} />%
+                  </span>
                 </div>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
+                <div className="mt-5 h-1.5 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
                   <AnimatedProgress value={salaryPercent} />
                 </div>
-                <div className="mt-4 border-t border-[var(--app-border)] pt-3">
-                  <span className="text-[11px] text-[var(--app-muted)]">
+                <div className="mt-5 border-t border-[var(--app-border)] pt-4">
+                  <span className="font-mono text-[11px] text-[var(--app-muted)]">
                     {formatMoney(Number(props.settings.salaryBatchAmount) || 0, props.settings.currencyCode)} per completed batch
                   </span>
                 </div>
               </div>
-            </WorkspaceSection>
+            </WorkspaceSection> : null}
           </div>
         </div>
 
@@ -936,43 +1005,45 @@ export function PrecisionDashboard(props: DashboardProps) {
 }
 
 function PulseMetric({
-  icon,
+  index = 0,
   label,
   value,
   helper,
   accent,
   tone = "default",
 }: {
-  icon?: React.ReactNode;
+  index?: number;
   label: string;
   value: string | number;
   helper: string;
   accent?: boolean;
   tone?: "default" | "muted" | "danger" | "warning" | "success";
 }) {
+  const reduceMotion = useHydratedReducedMotion();
   const valueTone = tone === "danger"
-    ? "text-[var(--app-danger)]"
+    ? "text-[#9F2F2D] dark:text-[var(--app-danger)]"
     : tone === "warning"
-      ? "text-[var(--app-warning)]"
+      ? "text-[#956400] dark:text-[var(--app-warning)]"
       : tone === "success"
-        ? "text-[var(--app-success)]"
+        ? "text-[#346538] dark:text-[var(--app-success)]"
         : accent
-          ? "text-[var(--app-highlight)]"
+          ? "text-[var(--app-ink)]"
           : "text-[var(--app-ink)]";
 
   return (
     <motion.div
-      className="flex min-h-[84px] items-center gap-2.5 px-3 py-3"
-      whileHover={{ backgroundColor: "var(--app-hover)" }}
-      transition={{ duration: 0.15 }}
+      className={cn("flex min-h-[100px] flex-col justify-between p-4", surface)}
+      style={{ ["--index" as string]: index }}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: reduceMotion ? 0 : index * 0.06, duration: reduceMotion ? 0 : 0.45, ease: easing }}
     >
-      {icon}
-      <div className="min-w-0">
-        <p className="truncate text-[10px] font-medium text-[var(--app-muted)]">{label}</p>
-        <p className={cn("mt-0.5 truncate text-xl font-semibold tabular-nums", valueTone)}>
+      <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-muted)]">{label}</p>
+      <div>
+        <p className={cn("mt-3 truncate text-[26px] font-semibold leading-none tracking-[-0.03em] tabular-nums", valueTone)}>
           {typeof value === "number" ? <AnimatedNumber value={value} /> : value}
         </p>
-        <p className="mt-0.5 truncate text-[10px] text-[var(--app-subtle)]">{helper}</p>
+        <p className="mt-2 truncate text-[11px] leading-relaxed text-[var(--app-subtle)]">{helper}</p>
       </div>
     </motion.div>
   );
@@ -992,12 +1063,14 @@ function WorkspaceSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-      <header className="flex h-11 items-center gap-2 px-3">
-        <Icon className="size-4 text-[var(--app-muted)]" />
-        <h2 className="text-[13px] font-semibold">{title}</h2>
+    <section className={cn("overflow-hidden", surface)}>
+      <header className="flex h-12 items-center gap-2.5 border-b border-[var(--app-border)] px-4">
+        <Icon className="size-3.5 text-[var(--app-muted)]" strokeWidth={1.75} />
+        <h2 className="text-[13px] font-medium tracking-[-0.01em]">{title}</h2>
         {typeof count === "number" ? (
-          <span className="grid min-w-5 place-items-center rounded-full bg-[var(--app-soft-panel)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--app-muted)]">{count}</span>
+          <span className="rounded-full bg-[var(--app-soft-panel)] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[var(--app-muted)]">
+            {count}
+          </span>
         ) : null}
         <div className="ml-auto">{action}</div>
       </header>
@@ -1010,7 +1083,7 @@ function EmptySection({ label }: { label: string }) {
   const reduceMotion = useHydratedReducedMotion();
   return (
     <motion.div
-      className="grid min-h-24 place-items-center px-4 text-center text-xs text-[var(--app-muted)]"
+      className="grid min-h-28 place-items-center px-6 text-center text-xs leading-relaxed text-[var(--app-muted)]"
       initial={reduceMotion ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
     >
@@ -1024,20 +1097,20 @@ function ActivitySkeleton() {
   return (
     <div className="divide-y divide-[var(--app-border)]" aria-label="Loading team activity" aria-busy="true">
       {[0, 1, 2].map((item) => (
-        <div key={item} className="flex items-start gap-2.5 px-3 py-3">
+        <div key={item} className="flex items-start gap-3 px-4 py-3.5">
           <motion.span
-            className="size-5 shrink-0 rounded-full bg-[var(--app-soft-panel)]"
+            className="size-6 shrink-0 rounded-md bg-[var(--app-soft-panel)]"
             animate={reduceMotion ? undefined : { opacity: [0.45, 0.8, 0.45] }}
             transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: item * 0.1 }}
           />
           <div className="flex-1 space-y-2">
             <motion.div
-              className="h-2.5 rounded bg-[var(--app-soft-panel)]"
+              className="h-2.5 rounded-sm bg-[var(--app-soft-panel)]"
               style={{ width: `${78 - item * 9}%` }}
               animate={reduceMotion ? undefined : { opacity: [0.45, 0.8, 0.45] }}
               transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut", delay: item * 0.1 }}
             />
-            <div className="h-2 w-24 rounded bg-[var(--app-soft-panel)] opacity-60" />
+            <div className="h-2 w-24 rounded-sm bg-[var(--app-soft-panel)] opacity-60" />
           </div>
         </div>
       ))}
@@ -1066,16 +1139,19 @@ function ProjectInspector({
     return (
       <motion.aside
         className={cn(
-          "min-h-[420px] rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]",
-          mobile ? "grid place-items-center rounded-none border-0" : "hidden xl:grid xl:place-items-center",
+          surface,
+          "min-h-[420px]",
+          mobile ? "grid place-items-center rounded-none border-0 shadow-none" : "hidden xl:grid xl:place-items-center",
         )}
         initial={reduceMotion ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
       >
-        <div className="px-6 text-center">
-          <FolderKanban className="mx-auto size-6 text-[var(--app-muted)]" />
-          <p className="mt-2 text-sm font-semibold">Select a project</p>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">Project context will stay visible here.</p>
+        <div className="px-8 text-center">
+          <div className="mx-auto grid size-10 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)]">
+            <FolderKanban className="size-4 text-[var(--app-muted)]" strokeWidth={1.75} />
+          </div>
+          <p className="mt-4 text-sm font-medium tracking-[-0.01em]">Select a project</p>
+          <p className="mt-1.5 text-xs leading-relaxed text-[var(--app-muted)]">Project context will stay visible here.</p>
         </div>
       </motion.aside>
     );
@@ -1085,112 +1161,124 @@ function ProjectInspector({
 
   return (
     <AnimatePresence mode="wait">
-    <motion.aside
-      key={project.id}
-      className={cn(
-        "overflow-y-auto border border-[var(--app-border)] bg-[var(--app-panel)]",
-        mobile
-          ? "min-h-dvh rounded-none border-0"
-          : "sticky top-[76px] hidden max-h-[calc(100dvh-96px)] rounded-lg xl:block",
-      )}
-      initial={reduceMotion ? false : { opacity: 0, x: 8 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -5 }}
-      transition={{ duration: reduceMotion ? 0 : 0.22, ease: easing }}
-    >
-      <motion.div
-        className="flex items-start gap-3 border-b border-[var(--app-border)] p-4"
-        layout
+      <motion.aside
+        key={project.id}
+        className={cn(
+          "overflow-y-auto border border-[var(--app-border)] bg-[var(--app-panel)]",
+          mobile
+            ? "min-h-dvh rounded-none border-0"
+            : "sticky top-[76px] hidden max-h-[calc(100dvh-96px)] rounded-[10px] xl:block",
+        )}
+        initial={reduceMotion ? false : { opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
+        transition={{ duration: reduceMotion ? 0 : 0.35, ease: easing }}
       >
-        <span className="mt-1 size-2 shrink-0 rounded-full bg-[var(--app-accent)]" />
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold">{project.title}</h2>
-          <div className="mt-2"><StatusBadge status={project.status} /></div>
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="Project actions"><MoreHorizontal /></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onOpen(project)}>Open project</DropdownMenuItem>
-            <DropdownMenuItem disabled={!canEdit && Boolean(project.teamId)} onSelect={() => onEdit(project)}>Edit project</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </motion.div>
-
-      <div className="grid grid-cols-5 border-b border-[var(--app-border)]" aria-label="Project sections">
-        {[
-          [FolderKanban, "Overview"],
-          [Download, "Files"],
-          [MessageSquareText, "Reviews"],
-          [UsersRound, "Client"],
-          [Clock3, "Activity"],
-        ].map(([Icon, label], index) => (
-          <div key={String(label)} className={cn("flex flex-col items-center gap-1 border-b-2 px-1 py-3 text-[9px]", index === 0 ? "border-[var(--app-accent)] text-[var(--app-highlight)]" : "border-transparent text-[var(--app-muted)]")}>
-            <Icon className="size-3.5" />
-            {String(label)}
+        <motion.div className="flex items-start gap-3 border-b border-[var(--app-border)] p-5" layout>
+          <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--app-ink)]" />
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-[15px] font-medium tracking-[-0.02em] leading-snug">{project.title}</h2>
+            <div className="mt-2.5"><StatusBadge status={project.status} /></div>
           </div>
-        ))}
-      </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="Project actions">
+                <MoreHorizontal strokeWidth={1.75} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onOpen(project)}>Open project</DropdownMenuItem>
+              <DropdownMenuItem disabled={!canEdit && Boolean(project.teamId)} onSelect={() => onEdit(project)}>
+                Edit project
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </motion.div>
 
-      <div className="space-y-5 p-4">
-        <InspectorField icon={UsersRound} label="Client" value={project.client || "No client"} />
-        <InspectorField icon={FolderKanban} label="Type" value={project.workType} />
-        <InspectorField icon={CalendarClock} label="Due date" value={formatDate(project.dueDate)} />
-        <InspectorField icon={AlertCircle} label="Priority" value={priorityFor(project)} />
-
-        <div className="border-t border-[var(--app-border)] pt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold">Progress</p>
-            <span className="text-xs font-semibold tabular-nums">{progress}%</span>
-          </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
-            <AnimatedProgress value={progress} />
-          </div>
-          <p className="mt-2 text-[10px] text-[var(--app-muted)]">
-            {progress === 100 ? "Delivery complete" : `${Math.max(1, Math.round((100 - progress) / 10))} production steps remaining`}
-          </p>
+        <div className="grid grid-cols-5 border-b border-[var(--app-border)]" aria-label="Project sections">
+          {[
+            [FolderKanban, "Overview"],
+            [Download, "Files"],
+            [MessageSquareText, "Reviews"],
+            [UsersRound, "Client"],
+            [Clock3, "Activity"],
+          ].map(([Icon, label], index) => (
+            <div
+              key={String(label)}
+              className={cn(
+                "flex flex-col items-center gap-1.5 border-b px-1 py-3.5 text-[9px] uppercase tracking-[0.04em]",
+                index === 0
+                  ? "border-[var(--app-ink)] text-[var(--app-ink)]"
+                  : "border-transparent text-[var(--app-muted)]",
+              )}
+            >
+              <Icon className="size-3.5" strokeWidth={1.75} />
+              {String(label)}
+            </div>
+          ))}
         </div>
 
-        {project.notes ? (
-          <div className="border-t border-[var(--app-border)] pt-4">
-            <p className="text-xs font-semibold">Project note</p>
-            <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">{project.notes}</p>
+        <div className="space-y-6 p-5">
+          <InspectorField icon={UsersRound} label="Client" value={project.client || "No client"} />
+          <InspectorField icon={FolderKanban} label="Type" value={project.workType} />
+          <InspectorField icon={CalendarClock} label="Due date" value={formatDate(project.dueDate)} />
+          <InspectorField icon={AlertCircle} label="Priority" value={priorityFor(project)} />
+
+          <div className="border-t border-[var(--app-border)] pt-5">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--app-muted)]">Progress</p>
+              <span className="font-mono text-xs tabular-nums text-[var(--app-muted)]">{progress}%</span>
+            </div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
+              <AnimatedProgress value={progress} />
+            </div>
+            <p className="mt-2.5 text-[11px] leading-relaxed text-[var(--app-muted)]">
+              {progress === 100 ? "Delivery complete" : `${Math.max(1, Math.round((100 - progress) / 10))} production steps remaining`}
+            </p>
           </div>
-        ) : null}
 
-        <div className="border-t border-[var(--app-border)] pt-4">
-          <p className="text-xs font-semibold">Value</p>
-          <p className="mt-1 text-lg font-semibold">
-            {project.workType === settings.salaryWorkType
-              ? "Batch tracked"
-              : formatMoney(project.earnings, settings.currencyCode)}
-          </p>
+          {project.notes ? (
+            <div className="border-t border-[var(--app-border)] pt-5">
+              <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--app-muted)]">Project note</p>
+              <p className="mt-2.5 text-[13px] leading-relaxed text-[var(--app-ink)]/80">{project.notes}</p>
+            </div>
+          ) : null}
+
+          <div className="border-t border-[var(--app-border)] pt-5">
+            <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--app-muted)]">Value</p>
+            <p className="mt-1.5 text-[22px] font-semibold tracking-[-0.02em] tabular-nums">
+              {project.workType === settings.salaryWorkType
+                ? "Batch tracked"
+                : formatMoney(project.earnings, settings.currencyCode)}
+            </p>
+          </div>
+
+          <Button
+            className="h-10 w-full rounded-md bg-[#111111] text-white shadow-none transition-transform hover:bg-[#333333] active:scale-[0.98] dark:bg-[var(--app-ink)] dark:text-[var(--app-canvas)] dark:hover:opacity-90"
+            onClick={() => onOpen(project)}
+          >
+            Open project <ArrowRight strokeWidth={1.75} />
+          </Button>
         </div>
-
-        <Button className="w-full transition-transform active:scale-[0.98]" onClick={() => onOpen(project)}>
-          Open project <ArrowRight />
-        </Button>
-      </div>
-    </motion.aside>
+      </motion.aside>
     </AnimatePresence>
   );
 }
 
 function InspectorField({ icon: Icon, label, value }: { icon: typeof UserRound; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <Icon className="mt-0.5 size-3.5 text-[var(--app-muted)]" />
+    <div className="flex items-start gap-3">
+      <Icon className="mt-0.5 size-3.5 text-[var(--app-muted)]" strokeWidth={1.75} />
       <div>
-        <p className="text-[9px] font-semibold uppercase text-[var(--app-subtle)]">{label}</p>
-        <p className="mt-0.5 text-xs font-medium">{value}</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-subtle)]">{label}</p>
+        <p className="mt-1 text-[13px] font-medium tracking-[-0.01em]">{value}</p>
       </div>
     </div>
   );
 }
 
 function SortIcon({ direction }: { direction: false | "asc" | "desc" }) {
-  if (direction === "asc") return <ArrowUp className="size-3 text-[var(--app-highlight)]" />;
-  if (direction === "desc") return <ArrowDown className="size-3 text-[var(--app-highlight)]" />;
-  return <ArrowUpDown className="size-3 opacity-0 transition-opacity group-hover:opacity-70 group-focus-visible:opacity-70" />;
+  if (direction === "asc") return <ArrowUp className="size-3 text-[var(--app-ink)]" strokeWidth={1.75} />;
+  if (direction === "desc") return <ArrowDown className="size-3 text-[var(--app-ink)]" strokeWidth={1.75} />;
+  return <ArrowUpDown className="size-3 opacity-0 transition-opacity group-hover:opacity-70 group-focus-visible:opacity-70" strokeWidth={1.75} />;
 }
