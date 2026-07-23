@@ -2,34 +2,37 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { Space_Grotesk } from "next/font/google";
 import { PrivacyControls } from "@/components/privacy-controls";
 import { siteUrl } from "@/lib/site";
 import { Providers } from "./providers";
 import "./globals.css";
 
-const siteTitle = "CutLab Studio | Video Production Workspace for Editors";
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk", weight: ["600", "700"] });
+
+const siteTitle = "Frame Desk | Video Production Workspace for Editors";
 const siteDescription = "Plan edits, track deadlines, manage client feedback, organize media, and monitor production work in one focused workspace built for video editors.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  applicationName: "CutLab Studio",
+  applicationName: "Frame Desk",
   title: siteTitle,
   description: siteDescription,
   keywords: ["video editing", "project tracker", "local-first", "editing workflow", "salary batch"],
-  authors: [{ name: "CutLab Studio" }],
-  creator: "CutLab Studio",
+  authors: [{ name: "Frame Desk" }],
+  creator: "Frame Desk",
   openGraph: {
     title: siteTitle,
     description: siteDescription,
     type: "website",
     url: "/",
-    siteName: "CutLab Studio",
+    siteName: "Frame Desk",
     images: [
       {
         url: "/og-image.png",
         width: 1600,
         height: 900,
-        alt: "CutLab Studio dashboard overview"
+        alt: "Frame Desk dashboard overview"
       }
     ]
   },
@@ -52,7 +55,7 @@ export const metadata: Metadata = {
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  name: "CutLab Studio",
+  name: "Frame Desk",
   url: siteUrl,
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
@@ -60,7 +63,7 @@ const structuredData = {
   image: `${siteUrl}/og-image.png`,
   publisher: {
     "@type": "Organization",
-    name: "CutLab Studio",
+    name: "Frame Desk",
     url: siteUrl,
     email: "Cutlab.Studios@gmail.com"
   }
@@ -81,37 +84,37 @@ const themeBootScript = `
   try {
     var raw = window.localStorage.getItem("video-editing-work-tracker:settings:v1");
     var settings = raw ? JSON.parse(raw) : {};
-    var theme = ["Light", "Dark", "System"].indexOf(settings.theme) >= 0 ? settings.theme : "Light";
+    var theme = ["Light", "Dark", "System"].indexOf(settings.theme) >= 0 ? settings.theme : "Dark";
     var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     var isDark = theme === "Dark" || (theme === "System" && prefersDark);
-    var accent = typeof settings.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(settings.accentColor) ? settings.accentColor : "#3478F6";
+    var accent = typeof settings.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(settings.accentColor) ? settings.accentColor : "#14B8A6";
     var root = document.documentElement;
     var vars = {
       "--app-accent": accent,
-      "--app-highlight": isDark ? "#81AAFF" : "#1F66E5",
-      "--app-canvas": isDark ? "#111318" : "#F7F8FA",
-      "--app-panel": isDark ? "#181B21" : "#FFFFFF",
-      "--app-sidebar": isDark ? "#14161B" : "#F5F6F8",
-      "--app-soft-panel": isDark ? "#1D2027" : "#F3F5F7",
-      "--app-header-panel": isDark ? "#22262E" : "#EEF1F5",
-      "--app-active": isDark ? "rgba(90,145,255,0.14)" : "rgba(52,120,246,0.10)",
-      "--app-hover": isDark ? "rgba(255,255,255,0.055)" : "rgba(31,41,55,0.05)",
-      "--app-ink": isDark ? "#F4F6F8" : "#171A21",
-      "--app-muted": isDark ? "#A0A7B4" : "#667085",
-      "--app-subtle": isDark ? "#858E9D" : "#7F8898",
-      "--app-border": isDark ? "#2D323B" : "#E1E5EB",
-      "--app-strong-border": isDark ? "#3B424D" : "#CBD1DA",
-      "--app-control": isDark ? "#15181E" : "#FFFFFF",
-      "--app-success": "#2D9B63",
-      "--app-warning": "#CC7A16",
-      "--app-danger": "#D14343",
-      "--app-success-bg": isDark ? "rgba(86,189,131,0.12)" : "rgba(45,155,99,0.10)",
-      "--app-warning-bg": isDark ? "rgba(225,162,75,0.12)" : "rgba(204,122,22,0.11)",
-      "--app-danger-bg": isDark ? "rgba(239,106,106,0.12)" : "rgba(209,67,67,0.10)",
-      "--app-progress-track": isDark ? "#2B3039" : "#E7EAF0",
-      "--app-chart-grid": isDark ? "#303640" : "#E5E8EE",
-      "--app-avatar-surface": isDark ? "#282D36" : "#E8EDF5",
-      "--app-thumb-icon": isDark ? "rgba(244,246,248,0.38)" : "rgba(23,26,33,0.36)",
+      "--app-highlight": isDark ? "#2DD4BF" : "#0F766E",
+      "--app-canvas": isDark ? "#0B0F14" : "#F8FAFC",
+      "--app-panel": isDark ? "#11161D" : "#FFFFFF",
+      "--app-sidebar": isDark ? "#0F141A" : "#F1F5F9",
+      "--app-soft-panel": isDark ? "#1A212B" : "#F1F5F9",
+      "--app-header-panel": isDark ? "#141B23" : "#FFFFFF",
+      "--app-active": isDark ? "rgba(20,184,166,0.16)" : "rgba(20,184,166,0.16)",
+      "--app-hover": isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.05)",
+      "--app-ink": isDark ? "#F1F5F9" : "#0F172A",
+      "--app-muted": isDark ? "#94A3B8" : "#64748B",
+      "--app-subtle": isDark ? "#64748B" : "#94A3B8",
+      "--app-border": isDark ? "#2A3340" : "#E2E8F0",
+      "--app-strong-border": isDark ? "#3B4756" : "#CBD5E1",
+      "--app-control": isDark ? "#0F141A" : "#FFFFFF",
+      "--app-success": isDark ? "#22C55E" : "#16A34A",
+      "--app-warning": isDark ? "#FBBF24" : "#D97706",
+      "--app-danger": isDark ? "#EF4444" : "#DC2626",
+      "--app-success-bg": isDark ? "rgba(34,197,94,0.14)" : "rgba(22,163,74,0.10)",
+      "--app-warning-bg": isDark ? "rgba(251,191,36,0.14)" : "rgba(217,119,6,0.10)",
+      "--app-danger-bg": isDark ? "rgba(239,68,68,0.14)" : "rgba(220,38,38,0.10)",
+      "--app-progress-track": isDark ? "#26313D" : "#E2E8F0",
+      "--app-chart-grid": isDark ? "#26313D" : "#E2E8F0",
+      "--app-avatar-surface": isDark ? "#1A212B" : "#E2E8F0",
+      "--app-thumb-icon": isDark ? "rgba(241,245,249,0.38)" : "rgba(15,23,42,0.36)",
       "--app-shadow-1": isDark ? "0 10px 30px rgba(0,0,0,0.16)" : "0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.04)",
       "--app-shadow-2": isDark ? "0 20px 56px rgba(0,0,0,0.30)" : "0 18px 50px rgba(16,24,40,0.12)"
     };
@@ -142,7 +145,7 @@ const clerkModalCenteringCss = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable} ${spaceGrotesk.variable}`}>
       <head>
         <script
           type="application/ld+json"
@@ -157,8 +160,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="antialiased"
         style={{
           margin: 0,
-          background: "var(--app-canvas, #F7F8FA)",
-          color: "var(--app-ink, #171A21)",
+          background: "var(--app-canvas, #0B0F14)",
+          color: "var(--app-ink, #F1F5F9)",
           fontFamily: "var(--font-geist-sans), Geist, sans-serif"
         }}
       >

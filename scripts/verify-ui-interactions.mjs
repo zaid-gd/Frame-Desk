@@ -48,12 +48,12 @@ async function withPage(viewport, run, { seedWorkspace = true } = {}) {
   if (seedWorkspace) await context.addInitScript(() => {
     localStorage.setItem("cutlab-studio:auth-mode:v1", "local");
     localStorage.setItem("video-editing-work-tracker:settings:v1", JSON.stringify({
-      studioName: "CutLab Studio",
+      studioName: "Frame Desk",
       profileName: "Jordan Lee",
       profileTitle: "Editor",
       profileImageUrl: "",
-      theme: "Light",
-      accentColor: "#3478F6",
+      theme: "Dark",
+      accentColor: "#14B8A6",
       density: "Comfortable",
       timeZone: "Asia/Dubai",
       weekStart: "Mon",
@@ -124,7 +124,7 @@ try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying first-value onboarding and sample isolation...");
     await page.goto(`${baseUrl}/?onboarding=v2`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    await page.getByRole("heading", { name: "See how a real project moves through Frame Desk" }).waitFor();
     const initialProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
     if (initialProjectData !== null) throw new Error("Fresh onboarding unexpectedly created project storage.");
     await page.getByRole("link", { name: "Explore a sample studio" }).click();
@@ -138,7 +138,7 @@ try {
     const sampleProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
     if (sampleProjectData !== null) throw new Error("The sample studio wrote project records to local storage.");
     await page.getByRole("link", { name: "Exit sample" }).click();
-    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    await page.getByRole("heading", { name: "See how a real project moves through Frame Desk" }).waitFor();
     await page.getByRole("button", { name: "Try on this device" }).click();
     await page.getByRole("heading", { name: "Turn one active edit into a clear production plan" }).waitFor();
     await page.getByRole("button", { name: "Show all tools" }).click();
@@ -150,7 +150,7 @@ try {
   await withPage({ width: 390, height: 844 }, async (page) => {
     console.log("Verifying mobile first-value onboarding...");
     await page.goto(`${baseUrl}/?onboarding=v2`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("heading", { name: "See how a real project moves through CutLab" }).waitFor();
+    await page.getByRole("heading", { name: "See how a real project moves through Frame Desk" }).waitFor();
     await page.getByRole("link", { name: "Explore a sample studio" }).click();
     await page.getByRole("complementary", { name: "Sample studio mode" }).waitFor();
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);

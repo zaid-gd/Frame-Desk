@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { LegalPage } from "../legal-page";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy | CutLab Studio",
-  description: "How CutLab Studio collects, uses, stores, and shares information.",
+  title: "Privacy Policy | Frame Desk",
+  description: "How Frame Desk collects, uses, stores, and shares information.",
   alternates: {
     canonical: "/privacy"
   }
@@ -14,7 +14,7 @@ export default function PrivacyPolicyRoute() {
     <LegalPage
       title="Privacy Policy"
       updatedAt="June 1, 2026"
-      intro="This Privacy Policy explains how CutLab Studio handles information when you use the website and app. CutLab Studio is designed to be local-first, with optional account-backed sync when Clerk and Convex are enabled."
+      intro="This Privacy Policy explains how Frame Desk handles information when you use the website and app. Frame Desk is designed to be local-first, with optional account-backed sync when Clerk and Convex are enabled."
       sections={[
         {
           title: "Information We Collect",
@@ -29,7 +29,7 @@ export default function PrivacyPolicyRoute() {
         {
           title: "Local-First Storage",
           body: (
-            <p>CutLab Studio works in local mode without requiring an account. In local mode, your tracker data is stored in your browser storage on the device you use. Clearing browser storage, changing browsers, or using another device may remove or separate that local data. When you choose account-backed sync, selected workspace records are copied to Convex so they can be restored for the signed-in account.</p>
+            <p>Frame Desk works in local mode without requiring an account. In local mode, your tracker data is stored in your browser storage on the device you use. Clearing browser storage, changing browsers, or using another device may remove or separate that local data. When you choose account-backed sync, selected workspace records are copied to Convex so they can be restored for the signed-in account.</p>
           )
         },
         {
@@ -42,7 +42,7 @@ export default function PrivacyPolicyRoute() {
           title: "Cookies And Similar Technologies",
           body: (
             <>
-              <p>CutLab Studio uses browser storage for local workspace data, app preferences, and your privacy choice. Account mode may use cookies, local storage, or similar technologies from Clerk to keep you signed in and protect sessions. We do not use these technologies to sell personal information.</p>
+              <p>Frame Desk uses browser storage for local workspace data, app preferences, and your privacy choice. Account mode may use cookies, local storage, or similar technologies from Clerk to keep you signed in and protect sessions. We do not use these technologies to sell personal information.</p>
               <p>With your permission, Vercel Analytics and Vercel Speed Insights may collect usage and performance information such as pages visited, device and browser characteristics, approximate location derived from network information, and page performance measurements. These optional tools remain disabled until you choose Allow analytics.</p>
             </>
           )
@@ -71,13 +71,13 @@ export default function PrivacyPolicyRoute() {
         {
           title: "Your Choices And Rights",
           body: (
-            <p>You can use CutLab Studio in local mode, update or delete project records, edit profile and organization settings, disconnect integrations, clear browser storage, or stop using account sync. You can withdraw analytics consent at any time through Privacy choices in the app footer or menu; optional measurement stops on subsequent page loads. Depending on where you live, you may have rights to access, correct, delete, export, restrict, object to, or appeal decisions about your personal information. California, other U.S. state, EEA, UK, and similar privacy rights can be exercised by contacting us.</p>
+            <p>You can use Frame Desk in local mode, update or delete project records, edit profile and organization settings, disconnect integrations, clear browser storage, or stop using account sync. You can withdraw analytics consent at any time through Privacy choices in the app footer or menu; optional measurement stops on subsequent page loads. Depending on where you live, you may have rights to access, correct, delete, export, restrict, object to, or appeal decisions about your personal information. California, other U.S. state, EEA, UK, and similar privacy rights can be exercised by contacting us.</p>
           )
         },
         {
           title: "Children",
           body: (
-            <p>CutLab Studio is not directed to children. We do not knowingly collect personal information from children under 13, or under 16 where that higher age applies. If you believe a child provided personal information, contact us so we can review and delete it where required.</p>
+              <p>Frame Desk is not directed to children. We do not knowingly collect personal information from children under 13, or under 16 where that higher age applies. If you believe a child provided personal information, contact us so we can review and delete it where required.</p>
           )
         },
         {
@@ -89,13 +89,13 @@ export default function PrivacyPolicyRoute() {
         {
           title: "International Use",
           body: (
-            <p>CutLab Studio and its providers may process information in the United States or other countries where infrastructure and support providers operate. Those countries may have data protection laws that differ from your location.</p>
+              <p>Frame Desk and its providers may process information in the United States or other countries where infrastructure and support providers operate. Those countries may have data protection laws that differ from your location.</p>
           )
         },
         {
           title: "Changes And Contact",
           body: (
-            <p>We may update this Privacy Policy as the product or legal requirements change. The updated date shows when it was last revised. For privacy requests, reports, or questions, contact CutLab Studio at Cutlab.Studios@gmail.com.</p>
+              <p>We may update this Privacy Policy as the product or legal requirements change. The updated date shows when it was last revised. For privacy requests, reports, or questions, contact Frame Desk at Cutlab.Studios@gmail.com.</p>
           )
         }
       ]}

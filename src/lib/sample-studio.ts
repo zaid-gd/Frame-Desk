@@ -33,8 +33,8 @@ export const sampleStudioSettings: SettingsState = {
   teamMembers: [],
   editorPermissions: {},
   rolePermissions: {},
-  theme: "Light",
-  accentColor: "#3478F6",
+    theme: "Dark",
+    accentColor: "#14B8A6",
   density: "Comfortable",
 };
 
@@ -97,7 +97,7 @@ export const sampleStudioResources: ResourceLink[] = [
     url: "/client-portal",
     category: "Review",
     projectId: "sample-founder-story",
-    notes: "Clients open a private editor-provided link and do not need a CutLab account.",
+    notes: "Clients open a private editor-provided link and do not need a Frame Desk account.",
     createdAt: "2026-07-21T09:00:00.000Z",
     updatedAt: "2026-07-21T09:00:00.000Z",
   },

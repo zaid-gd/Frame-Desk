@@ -4,8 +4,8 @@ import { siteUrl } from "@/lib/site";
 import { LegalPage } from "../legal-page";
 
 export const metadata: Metadata = {
-  title: "Contact | CutLab Studio",
-  description: "Contact CutLab Studio for product support, account help, privacy requests, or business inquiries.",
+  title: "Contact | Frame Desk",
+  description: "Contact Frame Desk for product support, account help, privacy requests, or business inquiries.",
   alternates: {
     canonical: "/contact"
   }
@@ -15,11 +15,11 @@ export default function ContactRoute() {
   const contactSchema = {
     "@context": "https://schema.org",
     "@type": "ContactPage",
-    name: "Contact CutLab Studio",
+    name: "Contact Frame Desk",
     url: `${siteUrl}/contact`,
     mainEntity: {
       "@type": "Organization",
-      name: "CutLab Studio",
+      name: "Frame Desk",
       email: "Cutlab.Studios@gmail.com",
       url: siteUrl
     }
@@ -29,7 +29,7 @@ export default function ContactRoute() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(contactSchema).replace(/</g, "\\u003c") }} />
       <LegalPage
-        title="Contact CutLab Studio"
+        title="Contact Frame Desk"
         updatedAt="July 22, 2026"
         intro="Get help with the product, your account, privacy requests, or a business inquiry. We review messages sent to the address below."
         sections={[

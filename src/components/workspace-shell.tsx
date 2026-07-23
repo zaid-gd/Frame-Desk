@@ -22,7 +22,6 @@ import {
   Workflow,
 } from "lucide-react";
 import { motion } from "motion/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -234,7 +233,7 @@ export function WorkspaceShell({
   }, [router]);
 
   const title = useMemo(
-    () => allRoutes.find((route) => route.page === page)?.label ?? "CutLab Studio",
+    () => allRoutes.find((route) => route.page === page)?.label ?? "Frame Desk",
     [page],
   );
 
@@ -256,15 +255,9 @@ export function WorkspaceShell({
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
             <div className="flex items-center gap-2 lg:hidden">
-              <Image
-                src="/brand/logo/cutlab-studio.png"
-                alt="CutLab Studio"
-                width={95}
-                height={36}
-                priority
-                sizes="95px"
-                className="h-7 w-auto object-contain brightness-0 dark:brightness-100"
-              />
+              <span className="font-display text-lg font-bold tracking-[-0.045em]">
+                Frame <span className="text-[var(--app-accent)]">Desk</span>
+              </span>
             </div>
             <p className="truncate text-sm font-semibold lg:hidden">{title}</p>
           </div>
@@ -380,14 +373,23 @@ function DesktopSidebar({
               collapsed ? "mx-auto" : "mr-auto",
             )}
           >
-            <Image
-              src="/brand/logo/cutlab-studio.png"
-              alt="CutLab Studio"
-              width={190}
-              height={72}
-              priority
-              sizes="(min-width: 1024px) 127px, 95px"
-              className="h-full w-full object-contain object-left brightness-0 dark:brightness-100"
+            <img
+              src={collapsed ? "/brand/favicon.png" : "/brand/logo-mark.png"}
+              alt="Frame Desk"
+              width={160}
+              height={160}
+              className={cn(
+                "brand-logo-light h-full w-full",
+                collapsed ? "object-contain" : "object-cover",
+              )}
+            />
+            <img
+              src="/brand/app-icon-dark.svg"
+              alt=""
+              aria-hidden="true"
+              width={160}
+              height={160}
+              className="brand-logo-dark h-full w-full object-contain"
             />
           </motion.div>
         </Link>
@@ -447,7 +449,7 @@ function DesktopSidebar({
               <Link className="hover:text-[var(--app-ink)]" href="/accessibility">Accessibility</Link>
               <PrivacyPreferencesButton className="text-left hover:text-[var(--app-ink)]" />
             </nav>
-            <p className="mt-1">© {new Date().getFullYear()} CutLab Studio</p>
+            <p className="mt-1">© {new Date().getFullYear()} Frame Desk</p>
           </footer>
         ) : null}
       </div>
@@ -784,7 +786,7 @@ function MobileNavigation({
               <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/accessibility" onClick={() => onOpenChange(false)}>Accessibility</Link>
               <PrivacyPreferencesButton className="min-h-12 rounded-md border border-[var(--app-border)] p-3 text-left" />
             </div>
-            <p className="mt-3 px-1 text-xs text-[var(--app-subtle)]">© {new Date().getFullYear()} CutLab Studio</p>
+            <p className="mt-3 px-1 text-xs text-[var(--app-subtle)]">© {new Date().getFullYear()} Frame Desk</p>
           </div>
         </SheetContent>
       </Sheet>

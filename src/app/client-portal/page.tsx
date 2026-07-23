@@ -22,7 +22,7 @@ export default function ClientPortalLandingPage() {
           No account required. Open the unique portal link shared by your editor to track progress, review deliverables, and submit revision requests.
         </Typography>
         <Button component={Link} href="/" variant="outlined" startIcon={<ArrowBackOutlinedIcon />} sx={{ mt: 3, borderColor: "var(--app-border, #2A3138)", color: "var(--app-accent, #2D8C97)" }}>
-          Back to CutLab
+          Back to Frame Desk
         </Button>
       </Paper>
     </Box>

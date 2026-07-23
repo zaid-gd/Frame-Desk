@@ -4,13 +4,13 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.985 0.003 255);
-  --foreground: oklch(0.205 0.012 255);
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.205 0.012 255);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.205 0.012 255);
-  --primary: oklch(0.62 0.205 255);
+  --primary: #14b8a6;
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.965 0.006 255);
   --secondary-foreground: oklch(0.28 0.014 255);
@@ -37,33 +37,33 @@
   --sidebar-border: oklch(0.9 0.009 255);
   --sidebar-ring: oklch(0.62 0.205 255);
 
-  --app-accent: #3478f6;
-  --app-highlight: #1f66e5;
-  --app-canvas: #f7f8fa;
+  --app-accent: #14b8a6;
+  --app-highlight: #0f766e;
+  --app-canvas: #f8fafc;
   --app-panel: #ffffff;
-  --app-sidebar: #f5f6f8;
-  --app-soft-panel: #f3f5f7;
-  --app-header-panel: #eef1f5;
-  --app-active: rgba(52, 120, 246, 0.1);
-  --app-hover: rgba(31, 41, 55, 0.05);
-  --app-ink: #171a21;
-  --app-muted: #667085;
-  --app-subtle: #7f8898;
-  --app-border: #e1e5eb;
-  --app-strong-border: #cbd1da;
+  --app-sidebar: #f1f5f9;
+  --app-soft-panel: #f1f5f9;
+  --app-header-panel: #ffffff;
+  --app-active: rgba(20, 184, 166, 0.16);
+  --app-hover: rgba(15, 23, 42, 0.05);
+  --app-ink: #0f172a;
+  --app-muted: #64748b;
+  --app-subtle: #94a3b8;
+  --app-border: #e2e8f0;
+  --app-strong-border: #cbd5e1;
   --app-control: #ffffff;
-  --app-success: #2d9b63;
-  --app-warning: #cc7a16;
-  --app-danger: #d14343;
-  --app-success-bg: rgba(45, 155, 99, 0.1);
-  --app-warning-bg: rgba(204, 122, 22, 0.11);
-  --app-danger-bg: rgba(209, 67, 67, 0.1);
-  --app-progress-track: #e7eaf0;
-  --app-chart-grid: #e5e8ee;
-  --app-avatar-surface: #e8edf5;
-  --app-thumb-icon: rgba(23, 26, 33, 0.36);
-  --app-shadow-1: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.04);
-  --app-shadow-2: 0 18px 50px rgba(16, 24, 40, 0.12);
+  --app-success: #16a34a;
+  --app-warning: #d97706;
+  --app-danger: #dc2626;
+  --app-success-bg: rgba(22, 163, 74, 0.1);
+  --app-warning-bg: rgba(217, 119, 6, 0.1);
+  --app-danger-bg: rgba(220, 38, 38, 0.1);
+  --app-progress-track: #e2e8f0;
+  --app-chart-grid: #e2e8f0;
+  --app-avatar-surface: #e2e8f0;
+  --app-thumb-icon: rgba(15, 23, 42, 0.36);
+  --app-shadow-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.04);
+  --app-shadow-2: 0 18px 50px rgba(15, 23, 42, 0.12);
   --motion-fast: 120ms;
   --motion-base: 180ms;
   --motion-slow: 280ms;
@@ -72,13 +72,13 @@
 }
 
 .dark {
-  --background: oklch(0.17 0.008 255);
-  --foreground: oklch(0.955 0.004 255);
-  --card: oklch(0.205 0.009 255);
-  --card-foreground: oklch(0.955 0.004 255);
+  --background: #0b0f14;
+  --foreground: #f1f5f9;
+  --card: #11161d;
+  --card-foreground: #f1f5f9;
   --popover: oklch(0.205 0.009 255);
   --popover-foreground: oklch(0.955 0.004 255);
-  --primary: oklch(0.68 0.19 255);
+  --primary: #14b8a6;
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.245 0.009 255);
   --secondary-foreground: oklch(0.94 0.005 255);
@@ -97,31 +97,31 @@
   --sidebar-border: oklch(0.27 0.01 255);
   --sidebar-ring: oklch(0.68 0.19 255);
 
-  --app-accent: #5a91ff;
-  --app-highlight: #81aaff;
-  --app-canvas: #111318;
-  --app-panel: #181b21;
-  --app-sidebar: #14161b;
-  --app-soft-panel: #1d2027;
-  --app-header-panel: #22262e;
-  --app-active: rgba(90, 145, 255, 0.14);
-  --app-hover: rgba(255, 255, 255, 0.055);
-  --app-ink: #f4f6f8;
-  --app-muted: #a0a7b4;
-  --app-subtle: #858e9d;
-  --app-border: #2d323b;
-  --app-strong-border: #3b424d;
-  --app-control: #15181e;
-  --app-success: #56bd83;
-  --app-warning: #e1a24b;
-  --app-danger: #ef6a6a;
-  --app-success-bg: rgba(86, 189, 131, 0.12);
-  --app-warning-bg: rgba(225, 162, 75, 0.12);
-  --app-danger-bg: rgba(239, 106, 106, 0.12);
-  --app-progress-track: #2b3039;
-  --app-chart-grid: #303640;
-  --app-avatar-surface: #282d36;
-  --app-thumb-icon: rgba(244, 246, 248, 0.38);
+  --app-accent: #14b8a6;
+  --app-highlight: #2dd4bf;
+  --app-canvas: #0b0f14;
+  --app-panel: #11161d;
+  --app-sidebar: #0f141a;
+  --app-soft-panel: #1a212b;
+  --app-header-panel: #141b23;
+  --app-active: rgba(20, 184, 166, 0.16);
+  --app-hover: rgba(148, 163, 184, 0.08);
+  --app-ink: #f1f5f9;
+  --app-muted: #94a3b8;
+  --app-subtle: #64748b;
+  --app-border: #2a3340;
+  --app-strong-border: #3b4756;
+  --app-control: #0f141a;
+  --app-success: #22c55e;
+  --app-warning: #fbbf24;
+  --app-danger: #ef4444;
+  --app-success-bg: rgba(34, 197, 94, 0.14);
+  --app-warning-bg: rgba(251, 191, 36, 0.14);
+  --app-danger-bg: rgba(239, 68, 68, 0.14);
+  --app-progress-track: #26313d;
+  --app-chart-grid: #26313d;
+  --app-avatar-surface: #1a212b;
+  --app-thumb-icon: rgba(241, 245, 249, 0.38);
   --app-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.2), 0 10px 30px rgba(0, 0, 0, 0.16);
   --app-shadow-2: 0 20px 56px rgba(0, 0, 0, 0.3);
 }
@@ -129,6 +129,7 @@
 @theme inline {
   --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  --font-display: "Space Grotesk", "Geist", ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -180,6 +181,18 @@ html {
 
 html.dark {
   color-scheme: dark;
+}
+
+.brand-logo-dark {
+  display: none !important;
+}
+
+.dark .brand-logo-light {
+  display: none !important;
+}
+
+.dark .brand-logo-dark {
+  display: block !important;
 }
 
 body {
@@ -407,6 +420,25 @@ button:not(:disabled):active,
   textarea {
     font-size: 16px !important;
   }
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Space Grotesk", "Geist", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.metric-value,
+.timecode,
+[data-timecode],
+[data-id],
+[data-stat] {
+  font-family: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

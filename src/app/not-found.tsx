@@ -11,7 +11,7 @@ export default function NotFound() {
           <Box>
             <Typography sx={{ fontFamily: "var(--font-space-grotesk)", fontSize: 26, fontWeight: 700 }}>Page not found</Typography>
             <Typography sx={{ mt: 0.8, color: "var(--app-muted, #A5ADB4)", fontSize: 14 }}>
-              This CutLab route does not exist. Return to the dashboard to keep tracking work.
+              This Frame Desk route does not exist. Return to the dashboard to keep tracking work.
             </Typography>
           </Box>
           <Button component={Link} href="/" variant="contained" sx={{ width: "fit-content", bgcolor: "var(--app-accent, #2D8C97)", color: "#fff" }}>

@@ -9,7 +9,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
       <Paper sx={{ width: "min(100%, 520px)", p: 3, borderRadius: "8px", border: "1px solid var(--app-border, #2A3138)", bgcolor: "var(--app-panel, #1A1F24)", boxShadow: "none" }}>
         <Stack gap={2}>
           <Box>
-            <Typography sx={{ fontFamily: "var(--font-space-grotesk)", fontSize: 26, fontWeight: 700 }}>CutLab needs a refresh</Typography>
+            <Typography sx={{ fontFamily: "var(--font-space-grotesk)", fontSize: 26, fontWeight: 700 }}>Frame Desk needs a refresh</Typography>
             <Typography sx={{ mt: 0.8, color: "var(--app-muted, #A5ADB4)", fontSize: 14 }}>
               The tracker hit an unexpected app error. Your saved projects stay in local browser storage.
             </Typography>

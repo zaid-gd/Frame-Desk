@@ -9,6 +9,7 @@
 ## Navigation Logo
 
 - `logo/cutlab-studio.png`: supplied CutLab Studio wordmark, tightly cropped and converted to transparent PNG for sidebar and page-header use.
+- `logo-mark.png`: supplied `assets/Logo mark.png`, used for the light-mode navigation logo.
 
 ## App Icon Exports
 

@@ -20,7 +20,7 @@ const routes = [
     expectedText: ["Reports", "Invoice drafts", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
   },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
-  { path: "/profile", label: "profile", expectedText: ["CutLab", "Share Profile"] },
+  { path: "/profile", label: "profile", expectedText: ["Frame Desk", "Share Profile"] },
 ];
 const startupTimeoutMs = 30_000;
 const outputDirectory = mkdtempSync(join(tmpdir(), "cutlab-browser-smoke-"));

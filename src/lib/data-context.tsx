@@ -36,7 +36,7 @@ const teamRoleOptions: StoredTeamRole[] = [
   ...LEGACY_TEAM_ROLE_VALUES,
 ];
 const LEGACY_DEMO_SETTINGS = {
-  studioName: "CutLab Studio",
+  studioName: "Frame Desk",
   profileName: "Jordan Lee",
   profileUsername: "jordanlee",
   profileTitle: "Video Editor & Storyteller",
@@ -128,8 +128,8 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false,
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Light",
-  accentColor: "#3478F6",
+  theme: "Dark",
+  accentColor: "#14B8A6",
   density: "Comfortable",
 };
 

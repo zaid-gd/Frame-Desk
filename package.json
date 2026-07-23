@@ -22,6 +22,8 @@
     "test:e2e:headed": "playwright test --headed",
     "verify:team:live": "node scripts/verify-team-live.mjs",
     "verify:browser": "node scripts/verify-browser-smoke.mjs",
+    "verify:light-highlights": "node scripts/verify-light-highlights.mjs",
+    "verify:light-logo": "node scripts/verify-light-logo.mjs",
     "verify:ui": "node scripts/verify-ui-interactions.mjs",
     "verify:prod": "node scripts/verify-production.mjs"
   },

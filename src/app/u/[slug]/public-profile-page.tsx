@@ -57,7 +57,7 @@ export function PublicProfilePage() {
       <PublicShell>
         <Paper sx={{ ...panelSx, p: { xs: 2.5, md: 4 }, mt: 3 }}>
           <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, fontFamily: headingFont }}>Profile not found</Typography>
-          <Typography sx={{ color: muted, fontSize: 14, mt: 1 }}>This public CutLab profile has not been published or the link is incorrect.</Typography>
+          <Typography sx={{ color: muted, fontSize: 14, mt: 1 }}>This public Frame Desk profile has not been published or the link is incorrect.</Typography>
         </Paper>
       </PublicShell>
     );
@@ -71,10 +71,10 @@ export function PublicProfilePage() {
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "170px minmax(0, 1fr) 560px" }, gap: 4, p: { xs: 2.5, md: 4 }, alignItems: "center" }}>
           <PublicAvatar name={profile.profileName} imageUrl={profile.profileImageUrl} />
           <Box>
-            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, lineHeight: 1.1 }}>{profile.profileName || "CutLab Editor"}</Typography>
+            <Typography sx={{ color: ink, fontSize: 34, fontWeight: 760, lineHeight: 1.1 }}>{profile.profileName || "Frame Desk Editor"}</Typography>
             {profile.profileUsername ? <Typography sx={{ color: accent, fontSize: 14, fontWeight: 720, mt: 0.6 }}>@{profile.profileUsername}</Typography> : null}
             <Typography sx={{ color: ink, fontSize: 15, mt: 0.8 }}>{profile.profileTitle || "Video Editor"}</Typography>
-            <Typography sx={{ color: muted, fontSize: 14, mt: 1.5, maxWidth: 420 }}>{profile.profileBio || "Portfolio profile published from CutLab Studio."}</Typography>
+            <Typography sx={{ color: muted, fontSize: 14, mt: 1.5, maxWidth: 420 }}>{profile.profileBio || "Portfolio profile published from Frame Desk."}</Typography>
             <Stack direction="row" gap={2} sx={{ mt: 2, flexWrap: "wrap", color: muted }}>
               {profile.profileLocation ? <InfoPill icon={<PlaceOutlinedIcon />} text={profile.profileLocation} /> : null}
               {profile.timeZone ? <InfoPill icon={<PublicOutlinedIcon />} text={profile.timeZone} /> : null}
@@ -90,7 +90,7 @@ export function PublicProfilePage() {
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "280px minmax(0, 1fr)" }, gap: 3, p: { xs: 2, md: 3 }, alignItems: "start" }}>
           <Box>
             <Typography sx={{ color: ink, fontSize: 28, fontWeight: 760, lineHeight: 1.05 }}>Portfolio timeline</Typography>
-            <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 260 }}>Recent public delivery context shared from CutLab Studio.</Typography>
+            <Typography sx={{ color: muted, fontSize: 13, mt: 1, maxWidth: 260 }}>Recent public delivery context shared from Frame Desk.</Typography>
             <Typography sx={{ color: muted, fontSize: 12, mt: 2 }}>Updated {formatPublicDate(profile.updatedAt.slice(0, 10))}</Typography>
           </Box>
           <Stack gap={1.2}>
@@ -113,7 +113,7 @@ export function PublicProfilePage() {
               <Box sx={{ p: 3, border: `1px solid ${border}`, borderRadius: "8px", bgcolor: softPanel, textAlign: "center" }}>
                 <Box component="img" src={emptyStateAssets.projects} alt="" aria-hidden="true" sx={{ width: 180, height: 126, objectFit: "contain", mx: "auto", mb: 1.5 }} />
                 <Typography sx={{ color: ink, fontSize: 14, fontWeight: 760 }}>No public projects shared yet</Typography>
-                <Typography sx={{ color: muted, fontSize: 12, mt: 0.4 }}>The editor can publish updated public work from their CutLab profile.</Typography>
+                <Typography sx={{ color: muted, fontSize: 12, mt: 0.4 }}>The editor can publish updated public work from their Frame Desk profile.</Typography>
               </Box>
             )}
           </Stack>

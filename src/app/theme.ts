@@ -5,8 +5,8 @@ export const theme = createTheme({
   palette: {
     mode: "light",
     background: {
-      default: "#F7F8FA",
-      paper: "#FFFFFF"
+      default: "#0B0F14",
+      paper: "#11161D"
     },
     primary: {
       main: cutlab.color.teal,
@@ -15,7 +15,7 @@ export const theme = createTheme({
       contrastText: cutlab.color.softWhite
     },
     secondary: {
-      main: cutlab.color.cyan
+      main: cutlab.color.sky
     },
     error: {
       main: cutlab.color.error
@@ -30,7 +30,7 @@ export const theme = createTheme({
       primary: "#171A21",
       secondary: "#667085"
     },
-    divider: "#E1E5EB"
+    divider: "#E2E8F0"
   },
   shape: {
     borderRadius: cutlab.radius.sm

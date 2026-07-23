@@ -93,7 +93,7 @@ export function LegalPage({ title, updatedAt, intro, sections }: LegalPageProps)
     <main style={pageStyle}>
       <div style={shellStyle}>
         <nav aria-label="Legal pages" style={navStyle}>
-          <Link href="/" style={linkStyle}>Back to CutLab Studio</Link>
+          <Link href="/" style={linkStyle}>Back to Frame Desk</Link>
           <Link href="/privacy" style={linkStyle}>Privacy Policy</Link>
           <Link href="/terms" style={linkStyle}>Terms of Service</Link>
           <Link href="/accessibility" style={linkStyle}>Accessibility</Link>
@@ -111,7 +111,7 @@ export function LegalPage({ title, updatedAt, intro, sections }: LegalPageProps)
           ))}
         </article>
         <footer style={{ marginTop: 28, color: "var(--app-muted, #A5ADB4)", fontSize: 14, lineHeight: 1.6 }}>
-          <p>© {new Date().getFullYear()} CutLab Studio. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Frame Desk. All rights reserved.</p>
         </footer>
       </div>
     </main>

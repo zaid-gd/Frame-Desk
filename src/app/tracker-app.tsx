@@ -68,7 +68,6 @@ import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
@@ -152,8 +151,7 @@ const TEAM_CHAT_MESSAGE_LIMIT = 800;
 const TEAM_PROJECT_COMMENT_LIMIT = 1000;
 const TEAM_INVITE_CODE_PATTERN = /^[A-Z0-9]{6}$/;
 const MIN_PUBLIC_SLUG_LENGTH = 2;
-const sidebarWidth = 248;
-const collapsedSidebarWidth = 76;
+const sidebarWidth = 76;
 const LOCAL_PROJECT_ACTIVITY_STORAGE_KEY = "cutlab-studio:project-activity:v1";
 const headingFont = cutlab.font.heading;
 const defaultAccent = cutlab.color.teal;
@@ -410,7 +408,7 @@ const defaultSettings: SettingsState = {
     "Manage app settings": false
   },
   rolePermissions: JSON.parse(JSON.stringify(defaultRolePermissions)),
-  theme: "Light",
+  theme: "Dark",
   accentColor: defaultAccent,
   density: "Comfortable"
 };
@@ -1075,19 +1073,16 @@ export function TrackerApp({ page, experienceMode = "workspace" }: { page: PageK
 
 function Sidebar({
   page,
-  settings,
-  collapsed,
-  onToggle
+  settings
 }: {
   page: PageKey;
   settings: SettingsState;
-  collapsed: boolean;
-  onToggle: () => void;
 }) {
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
   const profileMenuOpen = Boolean(profileMenuAnchor);
   const { isAuthEnabled } = useData();
-  const width = collapsed ? collapsedSidebarWidth : sidebarWidth;
+  const collapsed = true;
+  const width = sidebarWidth;
 
   return (
     <Box
@@ -1111,26 +1106,13 @@ function Sidebar({
             ? <Box component={Link} href="/" aria-label="Go to dashboard" sx={{ display: "block" }}><CutLabMark size={18} /></Box>
             : <CutLabLockup compact subtitle="Production workspace" sx={{ minWidth: 0, flex: 1 }} />}
         </Tooltip>
-        {!collapsed ? (
-          <Tooltip title="Collapse sidebar">
-            <Button aria-label="Collapse sidebar" onClick={onToggle} sx={{ minWidth: 32, width: 32, height: 32, p: 0, color: muted }}>
-              <ChevronLeftIcon sx={{ fontSize: 19 }} />
-            </Button>
-          </Tooltip>
-        ) : null}
       </Stack>
       {!collapsed ? (
         <Box sx={{ mt: 2.25, mb: 2.75, px: 1.25, py: 1.1, borderLeft: `2px solid ${accent}`, bgcolor: activeBg }}>
           <Typography sx={{ color: ink, fontSize: 12, fontWeight: 760 }}>{settings.studioName || "Personal workspace"}</Typography>
           <Typography sx={{ color: muted, fontSize: 10.5, mt: 0.2 }}>Editing operations</Typography>
         </Box>
-      ) : (
-        <Tooltip title="Expand sidebar" placement="right">
-          <Button aria-label="Expand sidebar" onClick={onToggle} sx={{ minWidth: 40, width: 40, height: 34, p: 0, color: muted, mx: "auto", my: 1.5, display: "flex" }}>
-            <ChevronRightIcon sx={{ fontSize: 19 }} />
-          </Button>
-        </Tooltip>
-      )}
+      ) : null}
       <Box
         sx={{
           maxHeight: collapsed ? "calc(100dvh - 170px)" : "calc(100dvh - 190px)",
@@ -1285,7 +1267,7 @@ function AccountSettingsPage() {
   const { isSignedIn, isLoaded, openSignIn, openSignUp } = useOptionalAuth();
 
   return (
-    <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public CutLab profile.">
+        <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public Frame Desk profile.">
       {!isLoaded ? (
         <Paper sx={{ ...panelSx, p: 3, display: "grid", placeItems: "center", minHeight: 280 }}>
           <Stack alignItems="center" gap={1.2}>
@@ -1492,7 +1474,7 @@ function WelcomeChoiceDialog({
         <DialogTitle sx={{ fontSize: 28, fontWeight: 760, pb: 1 }}>Choose how to start</DialogTitle>
         <DialogContent>
           <Stack gap={2} sx={{ pt: 1 }}>
-            <Typography sx={{ color: muted, fontSize: 14 }}>Use CutLab locally on this device, or create an account to sync supported workspace data.</Typography>
+            <Typography sx={{ color: muted, fontSize: 14 }}>Use Frame Desk locally on this device, or create an account to sync supported workspace data.</Typography>
             <Button variant="outlined" onClick={onChooseLocal} sx={outlineButtonSx}>Use locally</Button>
             <Button variant="contained" onClick={onCreateAccount} sx={{ bgcolor: accent, color: "#fff", "&:hover": { bgcolor: accent } }}>Create account</Button>
             <Button variant="text" onClick={onSignIn} sx={{ color: muted }}>Sign in</Button>
@@ -1511,7 +1493,7 @@ function WelcomeChoiceDialog({
       disableEscapeKeyDown
       PaperProps={{ sx: { bgcolor: panel, color: ink, border: `1px solid ${border}`, borderRadius: "10px" } }}
     >
-      <DialogTitle sx={{ fontSize: { xs: 24, sm: 28 }, fontWeight: 760, pb: 1 }}>See how a real project moves through CutLab</DialogTitle>
+      <DialogTitle sx={{ fontSize: { xs: 24, sm: 28 }, fontWeight: 760, pb: 1 }}>See how a real project moves through Frame Desk</DialogTitle>
       <DialogContent>
         <Stack gap={2} sx={{ pt: 1 }}>
           <Typography sx={{ color: muted, fontSize: 14 }}>
@@ -1626,7 +1608,7 @@ function DashboardPage(props: {
     <Box sx={{ width: "100%", maxWidth: 1680, mx: "auto", px: { xs: 2, md: 4, xl: 5 }, pt: { xs: 2.5, md: 3.5 }, pb: 5 }}>
       <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "stretch", sm: "flex-start" }} gap={1.5} sx={{ mb: 1.75 }}>
         <Box>
-          <SectionEyebrow>CutLab / Command center</SectionEyebrow>
+          <SectionEyebrow>Frame Desk / Command center</SectionEyebrow>
           <Typography sx={{ fontSize: { xs: 34, md: 44 }, color: ink, fontWeight: 660, lineHeight: 1.02, fontFamily: headingFont, mt: 0.7 }}>Production overview</Typography>
           <Typography sx={{ fontSize: 13.5, color: muted, mt: 0.7 }}>Deadlines, project flow, earnings, and team activity in one working view.</Typography>
         </Box>
@@ -3217,7 +3199,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
   const addProjectComment = useMutation(api.team.addProjectComment);
   const markNotificationRead = useMutation(api.team.markNotificationRead);
   const markAllNotificationsRead = useMutation(api.team.markAllNotificationsRead);
-  const [workspaceName, setWorkspaceName] = useState(settings.studioName || "CutLab Studio Team");
+  const [workspaceName, setWorkspaceName] = useState(settings.studioName || "Frame Desk Team");
   const [inviteCode, setInviteCode] = useState("");
   const [inviteForm, setInviteForm] = useState({ email: "", role: "Editor" });
   const [commentBody, setCommentBody] = useState("");
@@ -3770,7 +3752,7 @@ function IntegrationsDesignPage({
             <Box>
               <Typography sx={{ color: ink, fontSize: 18, fontWeight: 760 }}>Cloudflare R2 Storage</Typography>
               <Typography sx={{ color: muted, fontSize: 13, mt: 0.45, maxWidth: 720 }}>
-                Upcoming. Large-file storage through Cloudflare R2 is being prepared for a future release. Project uploads currently use CutLab&apos;s Convex Storage.
+                Upcoming. Large-file storage through Cloudflare R2 is being prepared for a future release. Project uploads currently use Frame Desk&apos;s Convex Storage.
               </Typography>
             </Box>
             <Chip label="Upcoming" size="small" sx={{ bgcolor: softPanel, color: muted, borderRadius: "5px", fontWeight: 760 }} />
@@ -3954,7 +3936,7 @@ function IntegrationLinkManager({
               placeholder="Optional context for this link"
             />
             {error ? <Typography sx={{ color: dangerColor, fontSize: 13 }}>{error}</Typography> : null}
-            <Typography sx={{ color: muted, fontSize: 12 }}>This stores a link only. CutLab will not authenticate, browse files, sync data, or call this service.</Typography>
+            <Typography sx={{ color: muted, fontSize: 12 }}>This stores a link only. Frame Desk will not authenticate, browse files, sync data, or call this service.</Typography>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -4201,13 +4183,13 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
           }}
         />
         </Box>
-        <SettingsPanel id="appearance" title="Appearance" subtitle="Customize how CutLab looks and feels for your tracker.">
+        <SettingsPanel id="appearance" title="Appearance" subtitle="Customize how Frame Desk looks and feels for your tracker.">
             <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr 1fr" }, gap: 2, alignItems: "end" }}>
               <SegmentedSetting label="Theme" options={["Light", "Dark", "System"]} active={settings.theme} onChange={(value) => setSettings({ ...settings, theme: value })} />
               <Box>
                 <Typography sx={{ color: muted, fontSize: 12, fontWeight: 680, mb: 1 }}>Accent Color</Typography>
                 <Stack direction="row" gap={1.2}>
-                  {[cutlab.color.teal, cutlab.color.cyan, cutlab.color.deepTeal, cutlab.color.aqua, cutlab.color.slate, cutlab.color.steel].map((color) => (
+                  {[cutlab.color.teal, cutlab.color.cyan, cutlab.color.sky, cutlab.color.indigo, cutlab.color.pink, cutlab.color.deepTeal].map((color) => (
                     <Box key={color} component="button" type="button" aria-label={`Use accent color ${color}`} onClick={() => setSettings({ ...settings, accentColor: color })} sx={{ width: 26, height: 26, borderRadius: "50%", bgcolor: color, cursor: "pointer", border: settings.accentColor === color ? `3px solid ${cutlab.color.softWhite}` : `1px solid ${border}`, p: 0 }} />
                   ))}
                 </Stack>
@@ -5946,7 +5928,7 @@ function ProjectActivityFeed({ project, localActivity }: { project: WorkItem; lo
             last={index === events.length - 1}
           />
         )) : (
-          <ActivityFeedItem actor="CutLab" message={`${project.title} is ready for its first update.`} createdAt={project.createdAt ?? new Date().toISOString()} last />
+          <ActivityFeedItem actor="Frame Desk" message={`${project.title} is ready for its first update.`} createdAt={project.createdAt ?? new Date().toISOString()} last />
         )}
       </Stack>
     </Box>
@@ -6367,7 +6349,7 @@ function providerLabel(provider: string) {
   if (provider === "google_drive") return "Google Drive";
   if (provider === "dropbox") return "Dropbox";
   if (provider === "frame_io") return "Frame.io";
-  if (provider === "convex") return "CutLab Upload";
+  if (provider === "convex") return "Frame Desk Upload";
   if (provider === "r2") return "Cloudflare R2";
   return "External Link";
 }
