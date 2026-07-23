@@ -27,12 +27,16 @@
     "@mui/icons-material": "^7.3.5",
     "@mui/material": "^7.3.5",
     "@mui/material-nextjs": "^7.3.5",
+    "@primer/octicons-react": "^19.29.2",
+    "@primer/primitives": "^11.9.0",
+    "@primer/react": "^38.33.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "convex": "^1.39.1",
     "next": "^16.0.4",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "styled-components": "^6.4.4"
   },
   "overrides": {
     "postcss": "^8.5.15",

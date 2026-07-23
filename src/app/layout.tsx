@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Providers } from "./providers";
+import "./globals.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://cutlab.studio"),
@@ -77,6 +78,11 @@ const themeBootScript = `
     Object.keys(vars).forEach(function (key) { root.style.setProperty(key, vars[key]); });
     root.style.colorScheme = isDark ? "dark" : "light";
     root.dataset.theme = isDark ? "dark" : "light";
+    // Keep Primer's design tokens (used by the shell + dashboard) in sync with
+    // the app's Light/Dark/System theme. Primer keys tokens off these attrs.
+    root.setAttribute("data-color-mode", isDark ? "dark" : "light");
+    root.setAttribute("data-light-theme", "light");
+    root.setAttribute("data-dark-theme", "dark");
   } catch {}
 })();
 `;
@@ -98,7 +104,7 @@ const clerkModalCenteringCss = `
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-color-mode="light" data-light-theme="light" data-dark-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <style data-clerk-modal-centering dangerouslySetInnerHTML={{ __html: clerkModalCenteringCss }} />

@@ -1,0 +1,24 @@
+/* Primer Primitives — design tokens (CSS custom properties).
+   These imports establish the token + theme baseline that every Primer
+   component and our own token-styled containers read from. Order matters:
+   base + functional tokens first, then the per-theme functional color sets.
+
+   NOTE: Only token definitions are imported here. We intentionally do NOT
+   apply Primer's global reset or body background/typography, because the
+   rest of the app still renders with Material UI and its own CSS-variable
+   theme (--app-*). Keeping this file to token declarations lets the Primer
+   shell + dashboard use --bgColor-*/--fgColor-* tokens without disturbing
+   the MUI pages. */
+@import "@primer/primitives/dist/css/base/size/size.css";
+@import "@primer/primitives/dist/css/base/typography/typography.css";
+@import "@primer/primitives/dist/css/base/motion/motion.css";
+@import "@primer/primitives/dist/css/functional/size/border.css";
+@import "@primer/primitives/dist/css/functional/size/breakpoints.css";
+@import "@primer/primitives/dist/css/functional/size/size-coarse.css";
+@import "@primer/primitives/dist/css/functional/size/size-fine.css";
+@import "@primer/primitives/dist/css/functional/size/size.css";
+@import "@primer/primitives/dist/css/functional/size/viewport.css";
+@import "@primer/primitives/dist/css/functional/typography/typography.css";
+
+@import "@primer/primitives/dist/css/functional/themes/light.css";
+@import "@primer/primitives/dist/css/functional/themes/dark.css";

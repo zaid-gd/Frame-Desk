@@ -63,6 +63,53 @@ import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import {
+  BaseStyles,
+  NavList,
+  ActionMenu,
+  ActionList,
+  Avatar as PrimerAvatar,
+  Button as PrimerButton,
+  IconButton as PrimerIconButton,
+  Label as PrimerLabel,
+  ProgressBar,
+  Flash as PrimerFlash,
+  Truncate,
+  Text as PrimerText,
+  Heading as PrimerHeading
+} from "@primer/react";
+import {
+  HomeIcon,
+  FileDirectoryIcon,
+  PeopleIcon,
+  MilestoneIcon,
+  CalendarIcon,
+  FileMediaIcon,
+  LinkExternalIcon,
+  CommentDiscussionIcon,
+  FileIcon,
+  GraphIcon,
+  PlugIcon,
+  OrganizationIcon,
+  CommentIcon,
+  GearIcon,
+  PersonIcon,
+  BellIcon,
+  PlusIcon,
+  SearchIcon as SearchOcticon,
+  PencilIcon,
+  TrashIcon,
+  SidebarCollapseIcon,
+  SidebarExpandIcon,
+  XIcon,
+  DeviceCameraVideoIcon,
+  SignOutIcon,
+  ChevronDownIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  StopwatchIcon,
+  ChecklistIcon
+} from "@primer/octicons-react";
 import { DEFAULT_PROFILE_ID, getProfile } from "@/lib/profiles";
 import type { WorkItem, WorkTypeConfig, IntegrationConfig, ResourceLink } from "@/lib/types";
 import type { IntegrationLink, IntegrationLinks, IntegrationServiceId } from "@/lib/integrations";
@@ -257,22 +304,24 @@ const integrationColors: Record<string, string> = {
   "Frame.io": "#8b5cf6"
 };
 
-const navigationItems: Array<{ key: PageKey; href: string; label: string; icon: React.ReactNode }> = [
-  { key: "dashboard", href: "/", label: "Dashboard", icon: <GridViewOutlinedIcon /> },
-  { key: "projects", href: "/projects", label: "Projects", icon: <FolderOpenOutlinedIcon /> },
-  { key: "clients", href: "/clients", label: "Clients", icon: <PeopleAltOutlinedIcon /> },
-  { key: "timeline", href: "/timeline", label: "Timeline", icon: <ViewTimelineOutlinedIcon /> },
-  { key: "calendar", href: "/calendar", label: "Calendar", icon: <CalendarMonthOutlinedIcon /> },
-  { key: "media", href: "/media", label: "Media", icon: <CollectionsOutlinedIcon /> },
-  { key: "resources", href: "/resources", label: "Resources", icon: <OpenInNewIcon /> },
-  { key: "feedback", href: "/feedback", label: "Feedback", icon: <ChatBubbleOutlineOutlinedIcon /> },
-  { key: "templates", href: "/templates", label: "Templates", icon: <InsertDriveFileOutlinedIcon /> },
-  { key: "reports", href: "/reports", label: "Reports", icon: <InsertChartOutlinedIcon /> },
-  { key: "integrations", href: "/integrations", label: "Integrations", icon: <OpenInNewIcon /> },
-  { key: "team", href: "/team", label: "Team", icon: <PeopleAltOutlinedIcon /> },
-  { key: "team-chat", href: "/team-chat", label: "Team Chat", icon: <ChatBubbleOutlineOutlinedIcon /> },
-  { key: "settings", href: "/settings", label: "Settings", icon: <SettingsOutlinedIcon /> },
-  { key: "account", href: "/account", label: "Account", icon: <PersonOutlineOutlinedIcon /> }
+type NavItem = { key: PageKey; href: string; label: string; icon: React.ComponentType<{ size?: number | "small" | "medium" | "large" }> };
+
+const navigationItems: NavItem[] = [
+  { key: "dashboard", href: "/", label: "Dashboard", icon: HomeIcon },
+  { key: "projects", href: "/projects", label: "Projects", icon: FileDirectoryIcon },
+  { key: "clients", href: "/clients", label: "Clients", icon: PeopleIcon },
+  { key: "timeline", href: "/timeline", label: "Timeline", icon: MilestoneIcon },
+  { key: "calendar", href: "/calendar", label: "Calendar", icon: CalendarIcon },
+  { key: "media", href: "/media", label: "Media", icon: FileMediaIcon },
+  { key: "resources", href: "/resources", label: "Resources", icon: LinkExternalIcon },
+  { key: "feedback", href: "/feedback", label: "Feedback", icon: CommentDiscussionIcon },
+  { key: "templates", href: "/templates", label: "Templates", icon: FileIcon },
+  { key: "reports", href: "/reports", label: "Reports", icon: GraphIcon },
+  { key: "integrations", href: "/integrations", label: "Integrations", icon: PlugIcon },
+  { key: "team", href: "/team", label: "Team", icon: OrganizationIcon },
+  { key: "team-chat", href: "/team-chat", label: "Team Chat", icon: CommentIcon },
+  { key: "settings", href: "/settings", label: "Settings", icon: GearIcon },
+  { key: "account", href: "/account", label: "Account", icon: PersonIcon }
 ];
 
 const defaultSettings: SettingsState = {
@@ -770,31 +819,33 @@ export function TrackerApp({ page }: { page: PageKey }) {
 }
 
   return (
-    <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink, display: "flex" }}>
-    <Sidebar
-      page={page}
-      settings={settings}
-      collapsed={sidebarCollapsed}
-      onToggle={() => {
-        const next = !sidebarCollapsed;
-        setSidebarCollapsed(next);
-        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
-      }}
-    />
-      <MobileNav page={page} settings={settings} />
-      <Box
-        component="main"
-        sx={{
-          ml: { xs: 0, lg: `${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px` },
-          width: { xs: "100%", lg: `calc(100% - ${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px)` },
-          minHeight: "100dvh",
-          pt: { xs: "88px", lg: 0 },
-          transition: "margin-left 180ms ease, width 180ms ease"
-        }}
-      >
-        <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
-      </Box>
-      <AppToast toast={toast} onClose={() => setToast(null)} />
+    <Box sx={{ ...appSurfaceSx(settings), minHeight: "100dvh", bgcolor: canvas, color: ink }}>
+      <BaseStyles style={{ minHeight: "100dvh", display: "flex", backgroundColor: "transparent", color: "var(--fgColor-default)" }}>
+        <Sidebar
+          page={page}
+          settings={settings}
+          collapsed={sidebarCollapsed}
+          onToggle={() => {
+            const next = !sidebarCollapsed;
+            setSidebarCollapsed(next);
+            window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+          }}
+        />
+        <MobileNav page={page} settings={settings} />
+        <Box
+          component="main"
+          sx={{
+            ml: { xs: 0, lg: `${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px` },
+            width: { xs: "100%", lg: `calc(100% - ${sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth}px)` },
+            minHeight: "100dvh",
+            pt: { xs: "104px", lg: 0 },
+            transition: "margin-left 180ms ease, width 180ms ease"
+          }}
+        >
+          <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
+        </Box>
+        <AppToast toast={toast} onClose={() => setToast(null)} />
+      </BaseStyles>
       {projectDialog}
       {deleteDialog}
       {detailDialog}
@@ -820,8 +871,6 @@ function Sidebar({
   collapsed: boolean;
   onToggle: () => void;
 }) {
-  const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
-  const profileMenuOpen = Boolean(profileMenuAnchor);
   const { isAuthEnabled } = useData();
   const width = collapsed ? collapsedSidebarWidth : sidebarWidth;
 
@@ -829,191 +878,197 @@ function Sidebar({
     <Box
       component="aside"
       sx={{
-        display: { xs: "none", lg: "block" },
+        display: { xs: "none", lg: "flex" },
+        flexDirection: "column",
         position: "fixed",
         zIndex: 15,
         inset: "0 auto 0 0",
         width,
-        bgcolor: panel,
-        borderRight: `1px solid ${border}`,
-        px: collapsed ? 1.25 : 2.5,
-        py: 2.5,
+        bgcolor: "var(--bgColor-default)",
+        borderRight: "1px solid var(--borderColor-default)",
+        px: collapsed ? "12px" : "16px",
+        py: "20px",
         transition: "width 180ms ease, padding 180ms ease"
       }}
     >
-      <Stack direction="row" alignItems="center" justifyContent={collapsed ? "center" : "space-between"} gap={1}>
-        <Tooltip title={collapsed ? "Dashboard" : ""} placement="right">
-          <Stack
-            component={Link}
-            href="/"
-            direction="row"
-            alignItems="center"
-            gap={1.2}
-            aria-label="Go to dashboard"
-            sx={{ minWidth: 0, color: "inherit", textDecoration: "none" }}
-          >
-            <Box sx={{ width: 34, height: 34, border: `2px solid ${ink}`, display: "grid", placeItems: "center", borderRadius: "4px", flexShrink: 0 }}>
-              <MovieCreationOutlinedIcon sx={{ fontSize: 20, color: ink }} />
-            </Box>
-            {!collapsed ? <Typography noWrap sx={{ fontSize: 24, color: ink, fontWeight: 760, lineHeight: 1, fontFamily: headingFont }}>{settings.studioName}</Typography> : null}
-          </Stack>
-        </Tooltip>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: "8px", mb: "12px" }}>
+        <Box
+          component={Link}
+          href="/"
+          aria-label="Go to dashboard"
+          sx={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, textDecoration: "none", color: "var(--fgColor-default)" }}
+        >
+          <Box sx={{ width: 32, height: 32, display: "grid", placeItems: "center", borderRadius: "6px", bgcolor: "var(--bgColor-accent-emphasis)", color: "var(--fgColor-onEmphasis)", flexShrink: 0 }}>
+            <DeviceCameraVideoIcon size={18} />
+          </Box>
+          {!collapsed ? (
+            <Truncate title={settings.studioName || "CutLab Studio"} maxWidth={148} sx={{ fontSize: "16px", fontWeight: 600, color: "var(--fgColor-default)" }}>
+              {settings.studioName || "CutLab Studio"}
+            </Truncate>
+          ) : null}
+        </Box>
         {!collapsed ? (
-          <Tooltip title="Collapse sidebar">
-            <Button aria-label="Collapse sidebar" onClick={onToggle} sx={{ minWidth: 32, width: 32, height: 32, p: 0, color: muted }}>
-              <ChevronLeftIcon sx={{ fontSize: 19 }} />
-            </Button>
-          </Tooltip>
+          <PrimerIconButton icon={SidebarCollapseIcon} aria-label="Collapse sidebar" variant="invisible" size="small" onClick={onToggle} />
         ) : null}
-      </Stack>
-      {!collapsed ? (
-        <Typography sx={{ fontSize: 11, color: muted, textTransform: "uppercase", letterSpacing: 0.6, mt: 0.6, mb: 4 }}>Video editing tracker</Typography>
-      ) : (
-        <Tooltip title="Expand sidebar" placement="right">
-          <Button aria-label="Expand sidebar" onClick={onToggle} sx={{ minWidth: 40, width: 40, height: 34, p: 0, color: muted, mx: "auto", my: 1.5, display: "flex" }}>
-            <ChevronRightIcon sx={{ fontSize: 19 }} />
-          </Button>
-        </Tooltip>
-      )}
-      <Box
-        sx={{
-          maxHeight: collapsed ? "calc(100dvh - 170px)" : "calc(100dvh - 190px)",
-          overflowY: "auto",
-          pb: 10,
-          scrollbarWidth: "thin"
-        }}
-      >
-        <Stack gap="8px">
-          {navigationItems.map((item) => (
-            <NavButton key={item.key} active={page === item.key} href={item.href} icon={item.icon} collapsed={collapsed}>{item.label}</NavButton>
-          ))}
-        </Stack>
       </Box>
-      <Box sx={{ position: "absolute", left: collapsed ? 10 : 24, right: collapsed ? 10 : 24, bottom: 24, pt: 2, borderTop: `1px solid ${border}` }}>
-        {!collapsed ? <Stack direction="row" gap={1.2} sx={{ mb: 1.2 }}>
-          <Link href="/privacy" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Privacy</Link>
-          <Typography component="span" sx={{ color: muted, fontSize: 12 }}>·</Typography>
-          <Link href="/terms" style={{ color: "var(--app-muted, #6f6a78)", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Terms</Link>
-        </Stack> : null}
-        <Button
-          fullWidth={!collapsed}
-          aria-label="Open profile menu"
-          aria-haspopup="menu"
-          aria-expanded={profileMenuOpen ? "true" : undefined}
-          onClick={(event) => setProfileMenuAnchor(event.currentTarget)}
-          sx={{
-            justifyContent: collapsed ? "center" : "space-between",
-            p: 0.75,
-            minWidth: collapsed ? 44 : undefined,
-            width: collapsed ? 44 : "100%",
-            borderRadius: "8px",
-            color: ink,
-            textAlign: "left",
-            "&:hover": { bgcolor: hoverBg }
-          }}
-        >
-          <Stack direction="row" alignItems="center" gap={1.1} sx={{ minWidth: 0 }}>
-            <ProfileAvatar settings={settings} size={34} fontSize={12} />
-            {!collapsed ? <Box sx={{ minWidth: 0, flex: 1 }}>
-              <Typography noWrap sx={{ color: ink, fontSize: 13, fontWeight: 720 }}>{profileDisplayName(settings)}</Typography>
-              <Typography noWrap sx={{ color: muted, fontSize: 12, mt: 0.2 }}>{displayUsername(settings) || settings.teamRole}</Typography>
-            </Box> : null}
-          </Stack>
-          {!collapsed ? <ExpandMoreIcon sx={{ color: muted, fontSize: 18, flexShrink: 0 }} /> : null}
-        </Button>
-        <Menu
-          anchorEl={profileMenuAnchor}
-          open={profileMenuOpen}
-          onClose={() => setProfileMenuAnchor(null)}
-          PaperProps={{ sx: { minWidth: 238, bgcolor: panel, color: ink, border: `1px solid ${border}`, boxShadow: "none" } }}
-        >
-          <MenuItem component={Link} href="/profile" selected={page === "profile"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
-            <PersonOutlineOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Public profile</Typography>
-              <Typography sx={{ color: muted, fontSize: 12 }}>What clients can review</Typography>
-            </Box>
-          </MenuItem>
-          <MenuItem component={Link} href="/organization" selected={page === "organization-profile"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
-            <PeopleAltOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Organization profile</Typography>
-              <Typography sx={{ color: muted, fontSize: 12 }}>{settings.studioName}</Typography>
-            </Box>
-          </MenuItem>
-          <MenuItem component={Link} href="/profile/edit" selected={page === "profile-edit"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
-            <EditOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Edit Profile</Typography>
-              <Typography sx={{ color: muted, fontSize: 12 }}>Customize your public profile</Typography>
-            </Box>
-          </MenuItem>
-          <MenuItem component={Link} href="/account" selected={page === "account"} onClick={() => setProfileMenuAnchor(null)} sx={{ gap: 1.2, color: ink }}>
-            <SettingsOutlinedIcon sx={{ color: accent, fontSize: 19 }} />
-            <Box>
-              <Typography sx={{ fontSize: 13, fontWeight: 760 }}>Account Settings</Typography>
-              <Typography sx={{ color: muted, fontSize: 12 }}>Email, password, security</Typography>
-            </Box>
-          </MenuItem>
-          <Divider sx={{ borderColor: border, my: 0.5 }} />
-          {isAuthEnabled ? (
-            <CloudProfileActions onClose={() => setProfileMenuAnchor(null)} />
-          ) : (
-            <Box sx={{ px: 1.5, py: 1 }}>
-              <Typography sx={{ color: muted, fontSize: 12, lineHeight: 1.45 }}>Local mode is active. Add Clerk and Convex environment variables to enable account sync.</Typography>
-            </Box>
-          )}
-        </Menu>
+
+      {collapsed ? (
+        <Box sx={{ display: "flex", justifyContent: "center", mb: "8px" }}>
+          <PrimerIconButton icon={SidebarExpandIcon} aria-label="Expand sidebar" variant="invisible" size="small" onClick={onToggle} />
+        </Box>
+      ) : (
+        <PrimerText sx={{ display: "block", fontSize: "11px", fontWeight: 600, letterSpacing: "0.6px", textTransform: "uppercase", color: "var(--fgColor-muted)", mb: "8px", px: "8px" }}>
+          Video editing tracker
+        </PrimerText>
+      )}
+
+      <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", scrollbarWidth: "thin" }}>
+        {collapsed ? (
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+            {navigationItems.map((item) => (
+              <PrimerIconButton
+                key={item.key}
+                as={Link}
+                href={item.href}
+                icon={item.icon}
+                aria-label={item.label}
+                variant={page === item.key ? "primary" : "invisible"}
+              />
+            ))}
+          </Box>
+        ) : (
+          <NavList aria-label="Primary">
+            {navigationItems.map((item) => {
+              const ItemIcon = item.icon;
+              return (
+                <NavList.Item key={item.key} as={Link} href={item.href} aria-current={page === item.key ? "page" : undefined}>
+                  <NavList.LeadingVisual>
+                    <ItemIcon />
+                  </NavList.LeadingVisual>
+                  {item.label}
+                </NavList.Item>
+              );
+            })}
+          </NavList>
+        )}
+      </Box>
+
+      <Box sx={{ pt: "16px", mt: "8px", borderTop: "1px solid var(--borderColor-muted)" }}>
+        {!collapsed ? (
+          <Box sx={{ display: "flex", gap: "10px", mb: "10px", px: "8px" }}>
+            <PrimerText as={Link} href="/privacy" sx={{ fontSize: "12px", fontWeight: 600, color: "var(--fgColor-muted)", textDecoration: "none" }}>Privacy</PrimerText>
+            <PrimerText sx={{ fontSize: "12px", color: "var(--fgColor-muted)" }}>·</PrimerText>
+            <PrimerText as={Link} href="/terms" sx={{ fontSize: "12px", fontWeight: 600, color: "var(--fgColor-muted)", textDecoration: "none" }}>Terms</PrimerText>
+          </Box>
+        ) : null}
+        <ProfileMenu page={page} settings={settings} collapsed={collapsed} isAuthEnabled={isAuthEnabled} />
       </Box>
     </Box>
   );
 }
 
-function CloudProfileActions({ onClose }: { onClose: () => void }) {
+function ProfileMenu({ page, settings, collapsed, isAuthEnabled }: { page: PageKey; settings: SettingsState; collapsed: boolean; isAuthEnabled: boolean }) {
+  return (
+    <ActionMenu>
+      <ActionMenu.Anchor>
+        <Box
+          role="button"
+          tabIndex={0}
+          aria-label="Open profile menu"
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: collapsed ? "center" : "space-between",
+            gap: "10px",
+            width: "100%",
+            p: "6px",
+            borderRadius: "6px",
+            cursor: "pointer",
+            color: "var(--fgColor-default)",
+            "&:hover": { bgcolor: "var(--bgColor-muted)" },
+            "&:focus-visible": { outline: "2px solid var(--fgColor-accent)", outlineOffset: "-2px" }
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+            <ProfileAvatar settings={settings} size={32} fontSize={12} />
+            {!collapsed ? (
+              <Box sx={{ minWidth: 0 }}>
+                <Truncate title={profileDisplayName(settings)} maxWidth={126} sx={{ display: "block", fontSize: "13px", fontWeight: 600, color: "var(--fgColor-default)" }}>
+                  {profileDisplayName(settings)}
+                </Truncate>
+                <Truncate title={displayUsername(settings) || settings.teamRole || "Local mode"} maxWidth={126} sx={{ display: "block", fontSize: "12px", color: "var(--fgColor-muted)" }}>
+                  {displayUsername(settings) || settings.teamRole || "Local mode"}
+                </Truncate>
+              </Box>
+            ) : null}
+          </Box>
+          {!collapsed ? <Box sx={{ color: "var(--fgColor-muted)", display: "flex", flexShrink: 0 }}><ChevronDownIcon size={16} /></Box> : null}
+        </Box>
+      </ActionMenu.Anchor>
+      <ActionMenu.Overlay align="start" width="medium">
+        <ActionList>
+          <ActionList.LinkItem as={Link} href="/profile" active={page === "profile"}>
+            <ActionList.LeadingVisual><PersonIcon /></ActionList.LeadingVisual>
+            Public profile
+            <ActionList.Description variant="block">What clients can review</ActionList.Description>
+          </ActionList.LinkItem>
+          <ActionList.LinkItem as={Link} href="/organization" active={page === "organization-profile"}>
+            <ActionList.LeadingVisual><OrganizationIcon /></ActionList.LeadingVisual>
+            Organization profile
+            <ActionList.Description variant="block">{settings.studioName || "Your studio"}</ActionList.Description>
+          </ActionList.LinkItem>
+          <ActionList.LinkItem as={Link} href="/profile/edit" active={page === "profile-edit"}>
+            <ActionList.LeadingVisual><PencilIcon /></ActionList.LeadingVisual>
+            Edit profile
+            <ActionList.Description variant="block">Customize your public profile</ActionList.Description>
+          </ActionList.LinkItem>
+          <ActionList.LinkItem as={Link} href="/account" active={page === "account"}>
+            <ActionList.LeadingVisual><GearIcon /></ActionList.LeadingVisual>
+            Account settings
+            <ActionList.Description variant="block">Email, password, security</ActionList.Description>
+          </ActionList.LinkItem>
+          <ActionList.Divider />
+          <CloudProfileActions isAuthEnabled={isAuthEnabled} />
+        </ActionList>
+      </ActionMenu.Overlay>
+    </ActionMenu>
+  );
+}
+
+function CloudProfileActions({ isAuthEnabled }: { isAuthEnabled: boolean }) {
   const { isSignedIn } = useUser();
   const { openSignIn, openSignUp, signOut } = useClerk();
 
+  if (!isAuthEnabled) {
+    return (
+      <ActionList.Item disabled>
+        <PrimerText sx={{ fontSize: "12px", lineHeight: 1.45, color: "var(--fgColor-muted)", whiteSpace: "normal" }}>
+          Local mode is active. Add Clerk and Convex environment variables to enable account sync.
+        </PrimerText>
+      </ActionList.Item>
+    );
+  }
+
   if (isSignedIn) {
     return (
-      <MenuItem
-        onClick={() => {
-          onClose();
-          signOut();
-        }}
-        sx={{ gap: 1.2, color: ink }}
-      >
-        <Button fullWidth variant="outlined" sx={{ borderColor: border, color: "#bd3f37", fontSize: 13, fontWeight: 720 }}>
-          Sign Out
-        </Button>
-      </MenuItem>
+      <ActionList.Item variant="danger" onSelect={() => signOut()}>
+        <ActionList.LeadingVisual><SignOutIcon /></ActionList.LeadingVisual>
+        Sign out
+      </ActionList.Item>
     );
   }
 
   return (
-    <Stack sx={{ px: 1, py: 0.75, gap: 0.8 }}>
-      <Button
-        fullWidth
-        variant="contained"
-        onClick={() => {
-          onClose();
-          openSignUp();
-        }}
-        sx={{ bgcolor: accent, color: "#fff", fontSize: 13, fontWeight: 720, "&:hover": { bgcolor: accent } }}
-      >
-        Create Account
-      </Button>
-      <Button
-        fullWidth
-        variant="outlined"
-        onClick={() => {
-          onClose();
-          openSignIn();
-        }}
-        sx={{ borderColor: border, color: accent, fontSize: 13, fontWeight: 720 }}
-      >
-        Sign In
-      </Button>
-    </Stack>
+    <>
+      <ActionList.Item onSelect={() => openSignUp()}>
+        <ActionList.LeadingVisual><PersonIcon /></ActionList.LeadingVisual>
+        Create account
+      </ActionList.Item>
+      <ActionList.Item onSelect={() => openSignIn()}>
+        <ActionList.LeadingVisual><SignOutIcon /></ActionList.LeadingVisual>
+        Sign in
+      </ActionList.Item>
+    </>
   );
 }
 
@@ -4858,6 +4913,9 @@ function applyRootThemeVariables(settings: SettingsState) {
   Object.entries(vars).forEach(([key, value]) => root.style.setProperty(key, value));
   root.style.colorScheme = isDark ? "dark" : "light";
   root.dataset.theme = isDark ? "dark" : "light";
+  root.setAttribute("data-color-mode", isDark ? "dark" : "light");
+  root.setAttribute("data-light-theme", "light");
+  root.setAttribute("data-dark-theme", "dark");
 }
 
 function themeVariables(settings: SettingsState) {
