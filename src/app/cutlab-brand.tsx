@@ -1,82 +1,75 @@
-import { Box, Stack, Typography } from "@mui/material";
-import type { SxProps, Theme } from "@mui/material/styles";
+import type { CSSProperties } from "react";
 import Link from "next/link";
 
-export function CutLabMark({ size = 36, sx }: { size?: number; sx?: SxProps<Theme> }) {
+import { cn } from "@/lib/utils";
+
+type BrandStyleProps = {
+  className?: string;
+  style?: CSSProperties;
+  /**
+   * Temporary compatibility for the legacy tracker call sites that still pass
+   * plain CSS through MUI's `sx` prop.
+   */
+  sx?: CSSProperties;
+};
+
+export function CutLabMark({
+  size = 36,
+  className,
+  style,
+  sx,
+}: { size?: number } & BrandStyleProps) {
   return (
-    <Box
-      sx={{
-        position: "relative",
-        width: size,
-        height: size,
-        flexShrink: 0,
-        ...sx,
-      }}
+    <span
+      className={cn("relative block shrink-0", className)}
+      style={{ width: size, height: size, ...sx, ...style }}
     >
-      <Box
-        component="img"
+      <img
         src="/brand/favicon.png"
         alt="Frame Desk"
-        className="brand-logo-light"
-        sx={{
-          position: "absolute",
-          inset: 0,
-          display: "block",
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
+        className="brand-logo-light absolute inset-0 block size-full object-contain"
       />
-      <Box
-        component="img"
+      <img
         src="/brand/app-icon-dark.svg"
         alt=""
         aria-hidden="true"
-        className="brand-logo-dark"
-        sx={{
-          position: "absolute",
-          inset: 0,
-          display: "block",
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
+        className="brand-logo-dark absolute inset-0 block size-full object-contain"
       />
-    </Box>
+    </span>
   );
 }
 
 export function CutLabLockup({
   compact = false,
   subtitle,
-  sx
+  className,
+  style,
+  sx,
 }: {
   compact?: boolean;
   subtitle?: string;
-  sx?: SxProps<Theme>;
-}) {
+} & BrandStyleProps) {
   return (
-    <Stack
-      component={Link}
+    <Link
       href="/"
       aria-label="Go to dashboard"
-      alignItems="flex-start"
-      gap={0.35}
-      sx={{ width: "fit-content", color: "inherit", textDecoration: "none", ...sx }}
+      className={cn("flex w-fit flex-col items-start gap-1 text-inherit no-underline", className)}
+      style={{ ...sx, ...style }}
     >
-      <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.65, minHeight: compact ? 34 : 42 }}>
-        <Typography sx={{ color: "var(--app-ink)", fontFamily: "var(--font-space-grotesk), 'Space Grotesk', sans-serif", fontSize: compact ? 26 : 34, fontWeight: 700, letterSpacing: "-0.055em", lineHeight: 1 }}>
-          Frame
-        </Typography>
-        <Typography sx={{ color: "var(--app-accent)", fontFamily: "var(--font-space-grotesk), 'Space Grotesk', sans-serif", fontSize: compact ? 26 : 34, fontWeight: 700, letterSpacing: "-0.055em", lineHeight: 1 }}>
-          Desk
-        </Typography>
-      </Box>
+      <span
+        className={cn(
+          "flex items-baseline gap-1.5 font-[family-name:var(--font-space-grotesk)] font-bold leading-none tracking-[-0.055em]",
+          compact ? "min-h-8 text-[26px]" : "min-h-10 text-[34px]",
+        )}
+      >
+        <span className="text-[var(--app-ink)]">Frame</span>
+        <span className="text-[var(--app-accent)]">Desk</span>
+      </span>
       {subtitle ? (
-        <Typography sx={{ color: "var(--app-muted)", fontSize: 10, fontWeight: 600, letterSpacing: "0.11em", pl: 0.2, textTransform: "uppercase" }}>
+        <span className="pl-0.5 text-[10px] font-semibold uppercase tracking-[0.11em] text-[var(--app-muted)]">
           {subtitle}
-        </Typography>
+        </span>
       ) : null}
-    </Stack>
+    </Link>
   );
 }

@@ -3,10 +3,6 @@
 import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
-import CssBaseline from "@mui/material/CssBaseline";
-import { ThemeProvider } from "@mui/material/styles";
-import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
-import { theme } from "./theme";
 import { DataProvider } from "@/lib/data-context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
@@ -42,25 +38,20 @@ const clerkAppearance = {
 export function Providers({ children }: { children: React.ReactNode }) {
   const app = (
     <DataProvider mode={convex && clerkPublishableKey ? "cloud" : "local"}>
-      <AppRouterCacheProvider>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <TooltipProvider delayDuration={250}>
-            {children}
-            <Toaster
-              className="cutlab-sonner"
-              position="bottom-right"
-              toastOptions={{
-                style: {
-                  background: "var(--app-panel)",
-                  border: "1px solid var(--app-border)",
-                  color: "var(--app-ink)",
-                },
-              }}
-            />
-          </TooltipProvider>
-        </ThemeProvider>
-      </AppRouterCacheProvider>
+      <TooltipProvider delayDuration={250}>
+        {children}
+        <Toaster
+          className="cutlab-sonner"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--app-panel)",
+              border: "1px solid var(--app-border)",
+              color: "var(--app-ink)",
+            },
+          }}
+        />
+      </TooltipProvider>
     </DataProvider>
   );
 

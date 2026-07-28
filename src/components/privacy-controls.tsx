@@ -86,12 +86,16 @@ export function PrivacyControls() {
   );
 }
 
+export function openPrivacyPreferences() {
+  window.dispatchEvent(new Event(preferencesEvent));
+}
+
 export function PrivacyPreferencesButton({ className = "" }: { className?: string }) {
   return (
     <button
       type="button"
       className={className}
-      onClick={() => window.dispatchEvent(new Event(preferencesEvent))}
+      onClick={openPrivacyPreferences}
     >
       Privacy choices
     </button>

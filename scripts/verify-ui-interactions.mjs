@@ -130,9 +130,9 @@ try {
     await page.getByRole("link", { name: "Explore a sample studio" }).click();
     await page.waitForURL(/\/sample-studio$/);
     await page.getByRole("complementary", { name: "Sample studio mode" }).waitFor();
-    await page.getByRole("heading", { name: "Production overview" }).waitFor();
+    await page.getByRole("heading", { name: "Good to see you, Maya." }).waitFor();
     await page.getByTestId("project-row").first().click();
-    await page.getByRole("button", { name: "Open project" }).click();
+    await page.getByRole("button", { name: /^Open project / }).click();
     await page.getByRole("dialog", { name: "Project details" }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     const sampleProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
@@ -161,8 +161,9 @@ try {
     console.log("Verifying dashboard and command palette...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     await chooseEssentialPrivacy(page);
-    await page.getByRole("heading", { name: "Production overview" }).waitFor();
-    await page.getByRole("button", { name: "Privacy choices" }).click();
+    await page.getByRole("heading", { name: "Good to see you, Jordan." }).waitFor();
+    await page.getByRole("button", { name: "Open profile menu" }).click();
+    await page.getByRole("menuitem", { name: "Privacy choices" }).click();
     const privacyRegion = page.getByRole("region", { name: "Privacy preferences" });
     await privacyRegion.waitFor({ state: "visible" });
     await privacyRegion.getByRole("button", { name: "Allow analytics" }).click();
@@ -170,7 +171,7 @@ try {
     const consentChoice = await page.evaluate(() => window.localStorage.getItem("cutlab-studio:privacy-consent:v1"));
     if (consentChoice !== "analytics") throw new Error(`Expected analytics consent to persist, received ${consentChoice}`);
     await page.getByRole("button", { name: /filters/i }).click();
-    await page.getByPlaceholder("Search projects...").fill("Interaction");
+    await page.getByPlaceholder("Search the project ledger").fill("Interaction");
     await page.getByTestId("project-row").first().click();
 
     await page.keyboard.press("Control+K");
@@ -195,7 +196,7 @@ try {
     console.log("Verifying mobile navigation and project inspector...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     await chooseEssentialPrivacy(page);
-    await page.getByRole("heading", { name: "Production overview" }).waitFor();
+    await page.getByRole("heading", { name: "Good to see you, Jordan." }).waitFor();
     await page.getByRole("button", { name: "New project" }).click();
     await page.getByRole("heading", { name: "Create Project" }).waitFor({ state: "visible" });
     await page.keyboard.press("Escape");

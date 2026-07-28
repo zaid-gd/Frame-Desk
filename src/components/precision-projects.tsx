@@ -271,6 +271,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
           <p className="mt-1 max-w-xl text-xs leading-5 text-[var(--app-muted)]">A focused index for every tracked edit, handoff, review, and salary batch item.</p>
         </div>
         <Button
+          aria-label={scope === "team" ? "New Team Project" : "New Project"}
           className="h-9 self-start transition-transform active:scale-[0.98] sm:self-auto"
           onClick={() => props.onNewProject(scope)}
           disabled={scope === "personal" ? !props.canCreateProjects : !hasTeam || !props.canCreateTeamProjects}

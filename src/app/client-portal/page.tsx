@@ -1,30 +1,44 @@
 "use client";
 
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { Box, Button, Paper, Stack, Typography } from "@mui/material";
-import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
-import { CutLabLockup } from "../cutlab-brand";
+
+import { Button } from "@/components/ui/button";
+
 import { emptyStateAssets } from "../brand-assets";
-import { cutlab, cutlabPanelSx } from "../design-system";
+import { CutLabLockup } from "../cutlab-brand";
 
 export default function ClientPortalLandingPage() {
   return (
-    <Box sx={{ minHeight: "100dvh", bgcolor: `var(--app-canvas, ${cutlab.color.charcoal})`, color: `var(--app-ink, ${cutlab.color.softWhite})`, display: "grid", placeItems: "center", px: 2 }}>
-      <Paper sx={{ ...cutlabPanelSx, width: "min(100%, 680px)", p: { xs: 3, md: 5 }, textAlign: "center" }}>
-        <Box sx={{ display: "flex", justifyContent: "center", mb: 3 }}>
+    <main className="grid min-h-dvh place-items-center bg-background px-4 text-foreground">
+      <section className="w-full max-w-[680px] rounded-lg border border-border bg-card p-6 text-center text-card-foreground md:p-10">
+        <div className="mb-6 flex justify-center">
           <CutLabLockup subtitle="Client Portal" />
-        </Box>
-        <Box component="img" src={emptyStateAssets.projects} alt="" aria-hidden="true" sx={{ width: 210, maxWidth: "70%", mb: 2 }} />
-        <Typography sx={{ fontFamily: cutlab.font.heading, fontSize: { xs: 28, md: 36 }, fontWeight: 760 }}>
+        </div>
+        <img
+          src={emptyStateAssets.projects}
+          alt=""
+          aria-hidden="true"
+          className="mx-auto mb-4 w-[210px] max-w-[70%]"
+        />
+        <h1 className="font-[family-name:var(--font-space-grotesk)] text-[28px] font-bold md:text-4xl">
           A project link is required
-        </Typography>
-        <Typography sx={{ color: "var(--app-muted, #A5ADB4)", fontSize: 14, lineHeight: 1.65, maxWidth: 500, mx: "auto", mt: 1 }}>
-          No account required. Open the unique portal link shared by your editor to track progress, review deliverables, and submit revision requests.
-        </Typography>
-        <Button component={Link} href="/" variant="outlined" startIcon={<ArrowBackOutlinedIcon />} sx={{ mt: 3, borderColor: "var(--app-border, #2A3138)", color: "var(--app-accent, #2D8C97)" }}>
-          Back to Frame Desk
+        </h1>
+        <p className="mx-auto mt-2 max-w-[500px] text-sm leading-relaxed text-muted-foreground">
+          No account required. Open the unique portal link shared by your editor to track progress, review
+          deliverables, and submit revision requests.
+        </p>
+        <Button
+          asChild
+          variant="outline"
+          className="mt-6 border-[var(--app-border)] text-[var(--app-highlight)]"
+        >
+          <Link href="/">
+            <ArrowLeft aria-hidden="true" />
+            Back to Frame Desk
+          </Link>
         </Button>
-      </Paper>
-    </Box>
+      </section>
+    </main>
   );
 }

@@ -29,7 +29,7 @@ import { useData } from "@/lib/data-context";
 import { useOptionalAuth } from "@/lib/optional-auth";
 import type { SettingsState } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
-import { PrivacyPreferencesButton } from "@/components/privacy-controls";
+import { openPrivacyPreferences, PrivacyPreferencesButton } from "@/components/privacy-controls";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -285,7 +285,8 @@ export function WorkspaceShell({
               className="hidden sm:block"
             >
               <Button
-                className="h-9 bg-[var(--app-accent)] px-3.5 text-white shadow-none hover:bg-[var(--app-highlight)]"
+                aria-label="New Project"
+                className="h-9 bg-[var(--app-accent)] px-3.5 text-[var(--app-accent-foreground)] shadow-none hover:bg-[var(--app-highlight)]"
                 onClick={onNewProject}
                 disabled={!canCreateProject}
               >
@@ -311,8 +312,9 @@ export function WorkspaceShell({
       {(page === "dashboard" || page === "projects") && canCreateProject ? (
         <motion.button
           type="button"
+          aria-label="New Project"
           whileTap={reduceMotion ? undefined : { scale: 0.97 }}
-          className="fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-4 z-40 flex min-h-12 items-center gap-2 rounded-md bg-[var(--app-accent)] px-4 text-sm font-semibold text-white shadow-[var(--app-shadow-2)] outline-none hover:bg-[var(--app-highlight)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-canvas)] sm:hidden"
+          className="fixed bottom-[calc(80px+env(safe-area-inset-bottom))] right-4 z-40 flex min-h-12 items-center gap-2 rounded-md bg-[var(--app-accent)] px-4 text-sm font-semibold text-[var(--app-accent-foreground)] shadow-[var(--app-shadow-2)] outline-none hover:bg-[var(--app-highlight)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-canvas)] sm:hidden"
           onClick={onNewProject}
         >
           <Plus className="size-4" />
@@ -605,6 +607,14 @@ function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; c
           >
             <Settings /> Account settings
           </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            setOpen(false);
+            window.setTimeout(openPrivacyPreferences, 0);
+          }}
+        >
+          Privacy choices
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isAuthEnabled ? (

@@ -24,7 +24,7 @@ export async function chooseLocalMode(page: Page) {
 }
 
 export async function createProject(page: Page, title: string, client = "E2E Client") {
-  await page.getByRole("button", { name: /New (?:Personal |Team )?Project/ }).click();
+  await page.getByRole("button", { name: /New (?:Personal |Team )?Project/ }).first().click();
   await page.getByRole("button", { name: "Blank project" }).click();
   const dialog = page.getByRole("dialog", { name: "New Project" });
   await dialog.getByLabel("Project name").fill(title);

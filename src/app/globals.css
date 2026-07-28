@@ -4,40 +4,41 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.012 255);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.012 255);
-  --primary: #14b8a6;
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.965 0.006 255);
-  --secondary-foreground: oklch(0.28 0.014 255);
-  --muted: oklch(0.962 0.005 255);
-  --muted-foreground: oklch(0.51 0.018 255);
-  --accent: oklch(0.952 0.025 255);
-  --accent-foreground: oklch(0.48 0.19 255);
-  --destructive: oklch(0.61 0.21 25);
-  --border: oklch(0.9 0.009 255);
-  --input: oklch(0.9 0.009 255);
-  --ring: oklch(0.62 0.205 255);
-  --chart-1: oklch(0.62 0.205 255);
-  --chart-2: oklch(0.68 0.15 160);
-  --chart-3: oklch(0.72 0.16 75);
-  --chart-4: oklch(0.63 0.18 25);
-  --chart-5: oklch(0.62 0.12 300);
-  --radius: 0.5rem;
-  --sidebar: oklch(0.975 0.004 255);
-  --sidebar-foreground: oklch(0.27 0.012 255);
-  --sidebar-primary: oklch(0.62 0.205 255);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.945 0.023 255);
-  --sidebar-accent-foreground: oklch(0.48 0.19 255);
-  --sidebar-border: oklch(0.9 0.009 255);
-  --sidebar-ring: oklch(0.62 0.205 255);
+  --background: var(--app-canvas);
+  --foreground: var(--app-ink);
+  --card: var(--app-panel);
+  --card-foreground: var(--app-ink);
+  --popover: var(--app-panel);
+  --popover-foreground: var(--app-ink);
+  --primary: var(--app-accent);
+  --primary-foreground: var(--app-accent-foreground);
+  --secondary: var(--app-soft-panel);
+  --secondary-foreground: var(--app-ink);
+  --muted: var(--app-soft-panel);
+  --muted-foreground: var(--app-muted);
+  --accent: var(--app-soft-panel);
+  --accent-foreground: var(--app-ink);
+  --destructive: var(--app-danger);
+  --border: var(--app-border);
+  --input: var(--app-border);
+  --ring: var(--app-accent);
+  --chart-1: var(--app-accent);
+  --chart-2: var(--app-highlight);
+  --chart-3: var(--app-warning);
+  --chart-4: var(--app-danger);
+  --chart-5: var(--app-muted);
+  --radius: 0.625rem;
+  --sidebar: var(--app-sidebar);
+  --sidebar-foreground: var(--app-ink);
+  --sidebar-primary: var(--app-accent);
+  --sidebar-primary-foreground: var(--app-accent-foreground);
+  --sidebar-accent: var(--app-active);
+  --sidebar-accent-foreground: var(--app-highlight);
+  --sidebar-border: var(--app-border);
+  --sidebar-ring: var(--app-accent);
 
   --app-accent: #14b8a6;
+  --app-accent-foreground: #042f2e;
   --app-highlight: #0f766e;
   --app-canvas: #f8fafc;
   --app-panel: #ffffff;
@@ -72,32 +73,8 @@
 }
 
 .dark {
-  --background: #0b0f14;
-  --foreground: #f1f5f9;
-  --card: #11161d;
-  --card-foreground: #f1f5f9;
-  --popover: oklch(0.205 0.009 255);
-  --popover-foreground: oklch(0.955 0.004 255);
-  --primary: #14b8a6;
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.245 0.009 255);
-  --secondary-foreground: oklch(0.94 0.005 255);
-  --muted: oklch(0.245 0.009 255);
-  --muted-foreground: oklch(0.68 0.014 255);
-  --accent: oklch(0.27 0.035 255);
-  --accent-foreground: oklch(0.78 0.14 255);
-  --destructive: oklch(0.68 0.18 25);
-  --border: oklch(0.29 0.01 255);
-  --input: oklch(0.29 0.01 255);
-  --ring: oklch(0.68 0.19 255);
-  --sidebar: oklch(0.145 0.007 255);
-  --sidebar-foreground: oklch(0.9 0.007 255);
-  --sidebar-accent: oklch(0.255 0.035 255);
-  --sidebar-accent-foreground: oklch(0.78 0.14 255);
-  --sidebar-border: oklch(0.27 0.01 255);
-  --sidebar-ring: oklch(0.68 0.19 255);
-
   --app-accent: #14b8a6;
+  --app-accent-foreground: #042f2e;
   --app-highlight: #2dd4bf;
   --app-canvas: #0b0f14;
   --app-panel: #11161d;
@@ -161,6 +138,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --radius-xs: calc(var(--radius) * 0.5);
   --radius-sm: calc(var(--radius) * 0.75);
   --radius-md: calc(var(--radius) * 0.875);
   --radius-lg: var(--radius);
@@ -342,51 +320,6 @@ button:not(:disabled):active,
   --workspace-section-gap: 24px;
 }
 
-/* Keep legacy MUI behavior while moving its surfaces into the new system. */
-.MuiPaper-root {
-  background-color: var(--app-panel) !important;
-  background-image: none !important;
-  border-color: var(--app-border) !important;
-  box-shadow: none !important;
-}
-
-.MuiButton-root,
-.MuiOutlinedInput-root,
-.MuiChip-root,
-.MuiTab-root {
-  font-family: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif !important;
-  letter-spacing: 0 !important;
-}
-
-.MuiButton-root {
-  transition:
-    background-color var(--motion-fast) var(--motion-ease-standard),
-    border-color var(--motion-fast) var(--motion-ease-standard),
-    color var(--motion-fast) var(--motion-ease-standard),
-    box-shadow var(--motion-fast) var(--motion-ease-standard),
-    transform var(--motion-fast) var(--motion-ease-out) !important;
-}
-
-.MuiButton-root:active {
-  transform: translateY(1px) scale(0.985);
-}
-
-.MuiOutlinedInput-root {
-  background: var(--app-control) !important;
-  border-radius: 7px !important;
-}
-
-.MuiDialog-paper,
-.MuiPopover-paper,
-.MuiMenu-paper {
-  border-radius: 10px !important;
-  box-shadow: var(--app-shadow-2) !important;
-}
-
-.MuiTabs-indicator {
-  background: var(--app-accent) !important;
-}
-
 * {
   scrollbar-color: var(--app-strong-border) transparent;
   scrollbar-width: thin;
@@ -428,8 +361,12 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Space Grotesk", "Geist", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-space-grotesk), "Space Grotesk", "Geist", ui-sans-serif, system-ui, sans-serif;
   font-weight: 600;
+}
+
+.font-display {
+  font-family: var(--font-space-grotesk), "Space Grotesk", "Geist", ui-sans-serif, system-ui, sans-serif;
 }
 
 .metric-value,
@@ -458,8 +395,7 @@ h6 {
   }
 
   button:not(:disabled):active,
-  [role="button"]:not([aria-disabled="true"]):active,
-  .MuiButton-root:active {
+  [role="button"]:not([aria-disabled="true"]):active {
     transform: none;
   }
 }

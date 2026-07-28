@@ -88,9 +88,23 @@ const themeBootScript = `
     var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
     var isDark = theme === "Dark" || (theme === "System" && prefersDark);
     var accent = typeof settings.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(settings.accentColor) ? settings.accentColor : "#14B8A6";
+    var accentValue = parseInt(accent.slice(1), 16);
+    var toLinear = function (channel) {
+      var normalized = channel / 255;
+      return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    var luminance = function (red, green, blue) {
+      return toLinear(red) * 0.2126 + toLinear(green) * 0.7152 + toLinear(blue) * 0.0722;
+    };
+    var accentLuminance = luminance((accentValue >> 16) & 255, (accentValue >> 8) & 255, accentValue & 255);
+    var inkLuminance = luminance(4, 47, 46);
+    var whiteContrast = 1.05 / (accentLuminance + 0.05);
+    var inkContrast = (Math.max(accentLuminance, inkLuminance) + 0.05) / (Math.min(accentLuminance, inkLuminance) + 0.05);
+    var accentForeground = inkContrast >= whiteContrast ? "#042F2E" : "#FFFFFF";
     var root = document.documentElement;
     var vars = {
       "--app-accent": accent,
+      "--app-accent-foreground": accentForeground,
       "--app-highlight": isDark ? "#2DD4BF" : "#0F766E",
       "--app-canvas": isDark ? "#0B0F14" : "#F8FAFC",
       "--app-panel": isDark ? "#11161D" : "#FFFFFF",

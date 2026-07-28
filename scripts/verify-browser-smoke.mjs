@@ -21,6 +21,22 @@ const routes = [
   },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
   { path: "/profile", label: "profile", expectedText: ["Frame Desk", "Share Profile"] },
+  {
+    path: "/client-portal",
+    label: "client-portal",
+    expectedText: ["Client Portal", "A project link is required"],
+  },
+  {
+    path: "/u/frame-desk-smoke-profile",
+    label: "public-profile",
+    expectedText: ["Loading public profile"],
+  },
+  {
+    path: "/route-that-does-not-exist",
+    label: "not-found",
+    expectedStatus: 404,
+    expectedText: ["Page not found", "Back to Dashboard"],
+  },
 ];
 const startupTimeoutMs = 30_000;
 const outputDirectory = mkdtempSync(join(tmpdir(), "cutlab-browser-smoke-"));
@@ -54,8 +70,9 @@ try {
 
   for (const route of routes) {
     const pageResponse = await fetch(`${baseUrl}${route.path}`, { signal: AbortSignal.timeout(5_000) });
-    if (!pageResponse.ok) {
-      throw new Error(`Browser smoke route ${route.path} returned ${pageResponse.status}.`);
+    const expectedStatus = route.expectedStatus ?? 200;
+    if (pageResponse.status !== expectedStatus) {
+      throw new Error(`Browser smoke route ${route.path} returned ${pageResponse.status}; expected ${expectedStatus}.`);
     }
     const pageHtml = await pageResponse.text();
     for (const text of route.expectedText) {

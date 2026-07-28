@@ -1,5 +1,3 @@
-import type { SxProps, Theme } from "@mui/material/styles";
-
 export const cutlab = {
   color: {
     charcoal: "#0B0F14",
@@ -51,43 +49,32 @@ export const cutlab = {
   }
 } as const;
 
-export const cutlabPanelSx: SxProps<Theme> = {
-  bgcolor: "var(--app-panel)",
-  border: "1px solid var(--app-border)",
-  borderRadius: `${cutlab.radius.sm}px`,
-  boxShadow: cutlab.shadow[0],
-  backgroundImage: "none",
-  overflow: "hidden"
-};
-
-export const cutlabOutlineButtonSx: SxProps<Theme> = {
-  minHeight: 40,
-  px: 2,
-  borderRadius: `${cutlab.radius.sm}px`,
-  borderColor: "var(--app-accent)",
-  color: "var(--app-highlight)",
-  bgcolor: "transparent",
-  fontSize: 14,
-  fontWeight: 600,
-  letterSpacing: "0.01em",
-  whiteSpace: "nowrap",
-  transition: "background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease",
-  "&:hover": {
-    borderColor: "var(--app-highlight)",
-    bgcolor: "var(--app-active)"
-  },
-  "&:active": {
-    transform: "translateY(1px)"
-  },
-  "&:focus-visible": {
-    outline: "2px solid var(--app-highlight)",
-    outlineOffset: 2
-  }
-};
+function accentForeground(accent: string) {
+  const match = /^#([0-9a-f]{6})$/i.exec(accent);
+  if (!match) return "#042F2E";
+  const value = Number.parseInt(match[1], 16);
+  const luminance = (red: number, green: number, blue: number) => {
+    const linear = [red, green, blue].map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.03928
+        ? normalized / 12.92
+        : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
+  };
+  const accentLuminance = luminance((value >> 16) & 255, (value >> 8) & 255, value & 255);
+  const inkLuminance = luminance(4, 47, 46);
+  const whiteContrast = 1.05 / (accentLuminance + 0.05);
+  const inkContrast =
+    (Math.max(accentLuminance, inkLuminance) + 0.05)
+    / (Math.min(accentLuminance, inkLuminance) + 0.05);
+  return inkContrast >= whiteContrast ? "#042F2E" : "#FFFFFF";
+}
 
 export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.color.teal) {
   return {
     "--app-accent": accent,
+    "--app-accent-foreground": accentForeground(accent),
     "--app-highlight": isDark ? cutlab.color.cyan : "#0F766E",
     "--app-canvas": isDark ? cutlab.color.charcoal : "#F8FAFC",
     "--app-panel": isDark ? cutlab.color.graphite : "#FFFFFF",
@@ -113,6 +100,24 @@ export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.co
     "--app-avatar-surface": isDark ? cutlab.color.slate : "#E2E8F0",
     "--app-thumb-icon": isDark ? "rgba(244,246,248,0.38)" : "rgba(23,26,33,0.36)",
     "--app-shadow-1": cutlab.shadow[1],
-    "--app-shadow-2": cutlab.shadow[2]
+    "--app-shadow-2": cutlab.shadow[2],
+    "--background": "var(--app-canvas)",
+    "--foreground": "var(--app-ink)",
+    "--card": "var(--app-panel)",
+    "--card-foreground": "var(--app-ink)",
+    "--popover": "var(--app-panel)",
+    "--popover-foreground": "var(--app-ink)",
+    "--primary": "var(--app-accent)",
+    "--primary-foreground": "var(--app-accent-foreground)",
+    "--secondary": "var(--app-soft-panel)",
+    "--secondary-foreground": "var(--app-ink)",
+    "--muted": "var(--app-soft-panel)",
+    "--muted-foreground": "var(--app-muted)",
+    "--accent": "var(--app-soft-panel)",
+    "--accent-foreground": "var(--app-ink)",
+    "--destructive": "var(--app-danger)",
+    "--border": "var(--app-border)",
+    "--input": "var(--app-border)",
+    "--ring": "var(--app-accent)"
   } as Record<string, string>;
 }
