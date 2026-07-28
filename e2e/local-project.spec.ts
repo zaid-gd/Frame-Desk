@@ -29,3 +29,22 @@ test("dismisses the project launcher with Escape and restores focus", async ({ p
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
 });
+
+test("opens the Privacy Policy and Terms of Service from the profile menu", async ({ page }) => {
+  await chooseLocalMode(page);
+  await openApp(page, "/projects");
+
+  await page.getByRole("button", { name: "Open profile menu" }).click();
+  const privacyLink = page.getByRole("menuitem", { name: "Privacy Policy" });
+  const termsLink = page.getByRole("menuitem", { name: "Terms of Service" });
+  await expect(privacyLink).toHaveAttribute("href", "/privacy");
+  await expect(termsLink).toHaveAttribute("href", "/terms");
+
+  await privacyLink.click();
+  await expect(page.getByRole("heading", { name: "Privacy Policy", level: 1 })).toBeVisible();
+
+  await page.goto("/projects");
+  await page.getByRole("button", { name: "Open profile menu" }).click();
+  await page.getByRole("menuitem", { name: "Terms of Service" }).click();
+  await expect(page.getByRole("heading", { name: "Terms of Service", level: 1 })).toBeVisible();
+});

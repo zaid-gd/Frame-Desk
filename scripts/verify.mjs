@@ -208,6 +208,8 @@ const sourceChecks = [
   ["src/app/tracker-app.tsx", "Profile Bio", "focused profile edit panel"],
   ["src/components/workspace-shell.tsx", "Public profile", "bottom identity public profile menu"],
   ["src/components/workspace-shell.tsx", "Organization profile", "bottom identity organization profile menu"],
+  ["src/components/workspace-shell.tsx", "<ShieldCheck /> Privacy Policy", "profile menu Privacy Policy destination"],
+  ["src/components/workspace-shell.tsx", "<FileText /> Terms of Service", "profile menu Terms of Service destination"],
   ["src/components/workspace-shell.tsx", "label: \"Overview\"", "workspace overview navigation group"],
   ["src/components/workspace-shell.tsx", "label: \"Work\"", "workspace work navigation group"],
   ["src/components/workspace-shell.tsx", "page: \"projects\", label: \"Projects\"", "projects navigation destination"],

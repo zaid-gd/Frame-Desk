@@ -7,6 +7,7 @@ import {
   CheckSquare2,
   ChevronDown,
   CircleUserRound,
+  FileText,
   FolderKanban,
   Images,
   LayoutDashboard,
@@ -16,6 +17,8 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Users,
   UsersRound,
@@ -608,13 +611,27 @@ function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; c
             <Settings /> Account settings
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground">
+          Legal and privacy
+        </DropdownMenuLabel>
+        <DropdownMenuItem asChild>
+          <Link href="/privacy">
+            <ShieldCheck /> Privacy Policy
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/terms">
+            <FileText /> Terms of Service
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
             setOpen(false);
             window.setTimeout(openPrivacyPreferences, 0);
           }}
         >
-          Privacy choices
+          <SlidersHorizontal /> Privacy choices
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isAuthEnabled ? (
