@@ -58,9 +58,20 @@ import { cutlab, cutlabThemeVariables } from "./design-system";
 import { CutLabLockup } from "./cutlab-brand";
 import { emptyStateAssetFor, emptyStateAssets } from "./brand-assets";
 import { WorkspaceShell } from "@/components/workspace-shell";
+import {
+  ContentSection,
+  FillViewport,
+  MasterDetail,
+  MetricItem,
+  MetricStrip,
+  PageContent,
+  PageEmptyState,
+  PageHeader,
+  PageToolbar,
+  SplitPane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 import { PrecisionDashboard } from "@/components/precision-dashboard";
-import { DashboardPrototypeGate } from "@/components/prototype/dashboard-prototype";
-import type { PrototypeVariant } from "@/components/prototype/prototype-variant-switcher";
 import { PrecisionProjects } from "@/components/precision-projects";
 import { PrecisionCalendar, PrecisionTimeline } from "@/components/precision-schedule";
 import { PrecisionClients, PrecisionFeedback, PrecisionReports } from "@/components/precision-workspaces";
@@ -380,7 +391,6 @@ const defaultSettings: SettingsState = {
 };
 
 const SettingsContext = createContext<SettingsState>(defaultSettings);
-const PageContext = createContext<PageKey>("dashboard");
 
 function useTrackerSettings() {
   return useContext(SettingsContext);
@@ -403,11 +413,9 @@ const emptyForm = (): WorkItem => ({
 export function TrackerApp({
   page,
   experienceMode = "workspace",
-  dashboardVariant,
 }: {
   page: PageKey;
   experienceMode?: "workspace" | "sample";
-  dashboardVariant?: PrototypeVariant;
 }) {
   const {
     items,
@@ -844,21 +852,9 @@ export function TrackerApp({
     notify(`Client "${canonical}" added.`);
   }
 
-  const pageContent = page === "dashboard" && personalProjects.length === 0 && !isSample && !dashboardVariant ? (
+  const pageContent = page === "dashboard" && personalProjects.length === 0 && !isSample ? (
     <FirstRunChecklist mode={isSignedIn ? "account" : "local"} onCreateProject={() => openNewProject("personal")} />
   ) : page === "dashboard" ? (
-    <DashboardPrototypeGate
-      data={{
-        settings,
-        stats,
-        projects: personalProjects,
-        sessionActivity: dashboardActivity,
-        teamActivity: teamData?.activity ?? [],
-        teamName: teamData?.workspace?.name,
-        teamLoading: teamDataLoading,
-      }}
-      variant={dashboardVariant}
-    >
       <PrecisionDashboard
         settings={settings}
         stats={stats}
@@ -897,7 +893,6 @@ export function TrackerApp({
         canEditProjects={canEditProjects}
         canDeleteProject={canDeleteProject}
       />
-    </DashboardPrototypeGate>
   ) : page === "projects" ? (
     <PrecisionProjects
       settings={settings}
@@ -1026,9 +1021,7 @@ export function TrackerApp({
         }`}
         style={{ backgroundColor: canvas, color: ink }}
       >
-        <PageContext.Provider value={page}>
-          <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
-        </PageContext.Provider>
+        <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
         {projectDialog}
         {deleteDialog}
         {detailDialog}
@@ -1056,16 +1049,14 @@ export function TrackerApp({
       >
         {isSample ? <SampleModeBar /> : null}
         <div
-          className={`min-h-[calc(100dvh-56px)] transition-colors ${
+          className={`min-h-full transition-colors lg:h-full ${
             settings.density === "Compact"
               ? "[&_[data-density-panel]]:!p-3 [&_[data-density-row]]:!py-2"
               : ""
           }`}
           style={{ backgroundColor: canvas, color: ink }}
         >
-          <PageContext.Provider value={page}>
-            <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
-          </PageContext.Provider>
+          <SettingsContext.Provider value={settings}>{pageContent}</SettingsContext.Provider>
         </div>
       </WorkspaceShell>
       <AppToast toast={toast} onClose={() => setToast(null)} />
@@ -1088,7 +1079,14 @@ function AccountSettingsPage() {
   const { isSignedIn, isLoaded, openSignIn, openSignUp } = useOptionalAuth();
 
   return (
-    <PageFrame title="Account Settings" subtitle="Manage your private login details separately from your public Frame Desk profile.">
+    <WorkspacePage family="administration">
+      <PageHeader
+        eyebrow="Workspace / Account"
+        title="Account Settings"
+        description="Manage your private login details separately from your public Frame Desk profile."
+      />
+      <PageContent>
+      <ContentSection title="Private account controls">
       {!isLoaded ? (
         <div role="status" className="grid min-h-[280px] place-items-center rounded-lg border bg-card p-6 text-card-foreground">
           <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
@@ -1124,7 +1122,9 @@ function AccountSettingsPage() {
           </OwnedButton>
         </div>
       )}
-    </PageFrame>
+      </ContentSection>
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -1380,41 +1380,49 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
   }
 
   return (
-    <PageFrame
-      title="Resources"
-      subtitle="Store asset folders, reference links, review pages, and handoff resources."
-      action={
+    <WorkspacePage family="library">
+      <PageHeader
+        eyebrow="Workspace / Resources"
+        title="Resources"
+        description="Store asset folders, reference links, review pages, and handoff resources."
+        actions={
         <OwnedButton type="button" variant="outline" onClick={openNewResource}>
           <Plus aria-hidden="true" />
           New Resource
         </OwnedButton>
       }
-    >
-      <dl className="mb-6 grid gap-3 sm:grid-cols-3">
-        {[
-          { label: "Resources", value: resources.length, helper: "Saved asset and reference links" },
-          { label: "Project Linked", value: linkedToProjects, helper: "Attached to tracked projects" },
-          { label: "Categories", value: new Set(resources.map((resource) => resource.category)).size, helper: "Resource groups in use" },
-        ].map((metric) => (
-          <div key={metric.label} className="border-t-2 border-border py-4">
-            <dt className="text-sm font-semibold text-muted-foreground">{metric.label}</dt>
-            <dd className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{metric.value}</dd>
-            <p className="mt-2 text-xs text-muted-foreground">{metric.helper}</p>
-          </div>
-        ))}
-      </dl>
+      />
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
-        <header className="flex flex-col justify-between gap-3 px-4 py-5 sm:flex-row sm:items-center">
-          <div>
-            <h2 className="text-xl font-semibold">Resource Library</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Manual links for now; this can later map to cloud storage APIs or OAuth providers.</p>
-          </div>
+      <PageContent>
+      <MetricStrip columns={3}>
+        <MetricItem
+          label="Resources"
+          value={resources.length}
+          supporting="Saved asset and reference links"
+        />
+        <MetricItem
+          label="Project Linked"
+          value={linkedToProjects}
+          supporting="Attached to tracked projects"
+        />
+        <MetricItem
+          label="Categories"
+          value={new Set(resources.map((resource) => resource.category)).size}
+          supporting="Resource groups in use"
+        />
+      </MetricStrip>
+
+      <ContentSection
+        title="Resource Library"
+        description="Manual links for now; this can later map to cloud storage APIs or OAuth providers."
+        metadata={
           <OwnedBadge variant="secondary" className="self-start rounded-md bg-primary/15 text-primary sm:self-auto">
             {resources.length} saved
           </OwnedBadge>
-        </header>
-        <div className="divide-y divide-border border-t border-border">
+        }
+        bodyMode="flush"
+      >
+        <div className="divide-y divide-border">
           {sortedResources.length ? sortedResources.map((resource) => (
             <article key={resource.id} className="grid items-center gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.4fr)_160px_minmax(0,1fr)_140px]">
               <div className="min-w-0">
@@ -1465,13 +1473,14 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
               </div>
             </article>
           )) : (
-            <div className="px-5 py-12 text-center">
-              <h3 className="font-semibold">No resources yet</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Add asset folders, reference docs, cloud links, review URLs, or handoff resources.</p>
-            </div>
+            <PageEmptyState
+              title="No resources yet"
+              description="Add asset folders, reference docs, cloud links, review URLs, or handoff resources."
+            />
           )}
         </div>
-      </section>
+      </ContentSection>
+      </PageContent>
 
       <OwnedDialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <OwnedDialogContent className="sm:max-w-xl">
@@ -1551,7 +1560,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
           </form>
         </OwnedDialogContent>
       </OwnedDialog>
-    </PageFrame>
+    </WorkspacePage>
   );
 }
 
@@ -1665,10 +1674,12 @@ function TemplatesDesignPage({
   }
 
   return (
-    <PageFrame
-      title="Templates"
-      subtitle="Start with a practical editing workflow, or save your own recurring setup for the next project."
-      action={
+    <WorkspacePage family="library">
+      <PageHeader
+        eyebrow="Workspace / Templates"
+        title="Templates"
+        description="Start with a practical editing workflow, or save your own recurring setup for the next project."
+        actions={
         <div className="flex flex-wrap justify-end gap-2">
           <OwnedButton type="button" variant="outline" onClick={() => openBuilder()}>
             <Plus aria-hidden="true" />
@@ -1680,10 +1691,13 @@ function TemplatesDesignPage({
           </OwnedButton>
         </div>
       }
-    >
-      <section
+      />
+      <PageContent>
+      <ContentSection
+        title="Template library"
+        metadata={<OwnedBadge variant="secondary">{templates.length} templates</OwnedBadge>}
         aria-label="Project templates"
-        className={`grid md:grid-cols-2 xl:grid-cols-3 ${settings.density === "Compact" ? "gap-3" : "gap-4"}`}
+        bodyClassName={`grid md:grid-cols-2 xl:grid-cols-3 ${settings.density === "Compact" ? "gap-3" : "gap-4"}`}
       >
         {templates.map((template) => (
           <article
@@ -1766,7 +1780,8 @@ function TemplatesDesignPage({
             </footer>
           </article>
         ))}
-      </section>
+      </ContentSection>
+      </PageContent>
 
       <OwnedDialog open={builderOpen} onOpenChange={setBuilderOpen}>
         <OwnedDialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
@@ -1866,9 +1881,11 @@ function TemplatesDesignPage({
           </form>
         </OwnedDialogContent>
       </OwnedDialog>
-    </PageFrame>
+    </WorkspacePage>
   );
-}function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
+}
+
+function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings: SettingsState; setSettings: (settings: SettingsState) => void }) {
   const { isSignedIn, isLoaded: isUserLoaded, openSignIn, openSignUp } = useOptionalAuth();
   const { isAuthenticated: isConvexAuthenticated, isLoading: isConvexAuthLoading } = useConvexAuth();
   const teamData = useQuery(api.team.getMyWorkspace, isConvexAuthenticated ? {} : "skip");
@@ -1959,11 +1976,14 @@ function TemplatesDesignPage({
   }
 
   return (
-    <PageFrame
+    <WorkspacePage family="administration">
+      <PageHeader
+      eyebrow="Workspace / Team"
       title="Team"
-      subtitle="Manage members, shared project comments, notifications, and workspace activity."
-    >
-      <dl className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      description="Manage members, shared project comments, notifications, and workspace activity."
+      />
+      <PageContent>
+      <MetricStrip columns={4}>
         {[
           {
             label: "Active members",
@@ -1978,21 +1998,20 @@ function TemplatesDesignPage({
         ].map((metric) => {
           const Icon = metric.icon;
           return (
-            <div key={metric.label} className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{metric.label}</dt>
-                  <dd className="mt-2 text-3xl font-semibold tabular-nums">{metric.value}</dd>
-                </div>
+            <MetricItem
+              key={metric.label}
+              label={metric.label}
+              value={metric.value}
+              supporting={metric.helper}
+              action={
                 <span className={metric.highlighted ? "rounded-md bg-primary/15 p-2 text-primary" : "rounded-md bg-muted p-2 text-muted-foreground"}>
                   <Icon aria-hidden="true" className="size-5" />
                 </span>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">{metric.helper}</p>
-            </div>
+              }
+            />
           );
         })}
-      </dl>
+      </MetricStrip>
 
       {teamError ? (
         <div role="alert" className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
@@ -2080,7 +2099,9 @@ function TemplatesDesignPage({
           </section>
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,7fr)_minmax(340px,5fr)]">
+        <SplitPane
+          ratio="supporting"
+          primary={(
           <div className="grid min-w-0 content-start gap-4">
             <section className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
               <header className="flex flex-col justify-between gap-4 p-5 md:flex-row md:items-center">
@@ -2273,7 +2294,8 @@ function TemplatesDesignPage({
               ) : <EmptyPanel title="No team projects yet" body="Create a team project to start leaving shared comments." />}
             </section>
           </div>
-
+          )}
+          secondary={(
           <aside className="grid min-w-0 content-start gap-4">
             <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
               <header className="flex items-center justify-between gap-3">
@@ -2347,9 +2369,11 @@ function TemplatesDesignPage({
               </div>
             </section>
           </aside>
-        </div>
+          )}
+        />
       )}
-    </PageFrame>
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -2386,10 +2410,14 @@ function TeamChatPage() {
   }
 
   return (
-    <PageFrame
+    <WorkspacePage family="conversation" mode="fill">
+      <PageHeader
+      eyebrow="Workspace / Team Chat"
       title="Team Chat"
-      subtitle="Quick handoffs, production updates, and Manage Team access for your current workspace."
-    >
+      description="Quick handoffs, production updates, and Manage Team access for your current workspace."
+      />
+      <PageContent mode="fill">
+      <FillViewport bodyLabel="Team chat workspace" bodyClassName="overflow-auto lg:overflow-hidden">
       {!isUserLoaded ? (
         <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
           <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -2436,7 +2464,7 @@ function TeamChatPage() {
           <p className="mt-2 text-sm text-muted-foreground">Your current role can access the workspace but does not have permission to view or send chat messages.</p>
         </section>
       ) : (
-        <section className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm md:min-h-[calc(100dvh-170px)]">
+        <section className="flex h-full min-h-[560px] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm lg:min-h-0">
           <header className="flex flex-col justify-between gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-lg font-semibold">{teamData.workspace.name}</h2>
@@ -2508,7 +2536,9 @@ function TeamChatPage() {
           </form>
         </section>
       )}
-    </PageFrame>
+      </FillViewport>
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -2600,24 +2630,23 @@ function IntegrationsDesignPage({
   }
 
   return (
-    <PageFrame
+    <WorkspacePage family="library">
+      <PageHeader
+      eyebrow="Workspace / Integrations"
       title="Integrations"
-      subtitle="Manage local service records and save external links for your workspace and individual projects."
-    >
-      <div className="grid gap-4">
-        <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-              <h2 className="text-xl font-semibold">Connected Services</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Save the account and workspace details your studio uses. These are local records and do not grant API access.
-              </p>
-            </div>
+      description="Manage local service records and save external links for your workspace and individual projects."
+      />
+      <PageContent>
+        <ContentSection
+          title="Connected Services"
+          description="Save the account and workspace details your studio uses. These are local records and do not grant API access."
+          actions={
             <OwnedBadge variant={connectedCount ? "default" : "secondary"}>
               <Plug aria-hidden="true" />
               {connectedCount} connected
             </OwnedBadge>
-          </div>
+          }
+        >
 
           <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
             {integrationNames.map((name) => {
@@ -2675,7 +2704,7 @@ function IntegrationsDesignPage({
               );
             })}
           </ul>
-        </section>
+        </ContentSection>
 
         <IntegrationLinkManager
           title="Global Integrations"
@@ -2689,32 +2718,24 @@ function IntegrationsDesignPage({
           }}
         />
 
-        <section className="flex flex-col justify-between gap-3 rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm sm:flex-row sm:items-center">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-              <Cloud aria-hidden="true" className="size-4" />
-            </span>
-            <div>
-              <h2 className="text-lg font-semibold">Cloudflare R2 Storage</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-                Upcoming. Large-file storage through Cloudflare R2 is being prepared for a future release. Project uploads currently use Frame Desk&apos;s Convex Storage.
-              </p>
-            </div>
-          </div>
-          <OwnedBadge variant="secondary">Upcoming</OwnedBadge>
-        </section>
+        <ContentSection
+          title="Cloudflare R2 Storage"
+          description="Upcoming. Large-file storage through Cloudflare R2 is being prepared for a future release. Project uploads currently use Frame Desk's Convex Storage."
+          metadata={<Cloud aria-hidden="true" className="size-4 text-muted-foreground" />}
+          actions={<OwnedBadge variant="secondary">Upcoming</OwnedBadge>}
+          bodyMode="flush"
+        />
 
-        <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-          <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-            <div>
-              <h2 className="text-xl font-semibold">Project Integrations</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Project-specific links stay attached to each project record.</p>
-            </div>
+        <ContentSection
+          title="Project Integrations"
+          description="Project-specific links stay attached to each project record."
+          actions={
             <OwnedBadge variant={projectLinks.length ? "default" : "secondary"}>
               <Link2 aria-hidden="true" />
               {projectLinks.length} projects linked
             </OwnedBadge>
-          </div>
+          }
+        >
           {projectLinks.length ? (
             <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
               {projectLinks.map((project) => (
@@ -2747,8 +2768,8 @@ function IntegrationsDesignPage({
               <EmptyPanel title="No project integration links" body="Open a project and add service links for folders, review pages, channels, or calendar events." />
             </div>
           )}
-        </section>
-      </div>
+        </ContentSection>
+      </PageContent>
 
       <OwnedDialog
         open={Boolean(integrationDialog)}
@@ -2847,7 +2868,7 @@ function IntegrationsDesignPage({
           </OwnedAlertDialogFooter>
         </OwnedAlertDialogContent>
       </OwnedAlertDialog>
-    </PageFrame>
+    </WorkspacePage>
   );
 }
 
@@ -2905,17 +2926,16 @@ function IntegrationLinkManager({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
-        <div>
-          <h2 className="text-xl font-semibold">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        </div>
+    <ContentSection
+      title={title}
+      description={subtitle}
+      actions={
         <OwnedBadge variant={configuredCount ? "default" : "secondary"}>
           <Link2 aria-hidden="true" />
           {configuredCount} configured
         </OwnedBadge>
-      </div>
+      }
+    >
       {!configuredCount ? (
         <div className="mt-4 rounded-lg border border-dashed border-border">
           <EmptyPanel title={emptyTitle} body={emptyBody} />
@@ -3059,7 +3079,7 @@ function IntegrationLinkManager({
           </form>
         </OwnedDialogContent>
       </OwnedDialog>
-    </section>
+    </ContentSection>
   );
 }
 
@@ -3129,10 +3149,12 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   }
 
   return (
-    <PageFrame
-      title="Settings"
-      subtitle="Manage profile, workflow, notifications, and display preferences."
-      action={
+    <WorkspacePage family="administration">
+      <PageHeader
+        eyebrow="Workspace / Settings"
+        title="Settings"
+        description="Manage profile, workflow, notifications, and display preferences."
+        actions={
         <div className="flex flex-wrap justify-end gap-2">
           <OwnedButton type="button" variant="outline" onClick={resetSettings} className="text-destructive hover:text-destructive">Reset</OwnedButton>
           <OwnedButton type="button" variant="outline" onClick={onNewProject}>
@@ -3141,9 +3163,11 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
           </OwnedButton>
         </div>
       }
-    >
-      <div className="grid items-start gap-4 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-7">
-        <nav aria-label="Settings sections" className="hidden rounded-lg border bg-card p-3 text-card-foreground lg:sticky lg:top-[76px] lg:block">
+      />
+      <PageContent>
+      <MasterDetail
+        master={(
+        <nav aria-label="Settings sections" className="hidden rounded-lg border bg-card p-3 text-card-foreground lg:sticky lg:top-4 lg:block">
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--app-accent)]">Settings index</p>
           <div className="mt-2 grid">
             {[
@@ -3162,6 +3186,8 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
           </div>
           <p className="mt-4 pr-2 text-[11px] leading-5 text-muted-foreground">Changes save automatically to the active workspace.</p>
         </nav>
+        )}
+        detail={(
         <div className={`grid min-w-0 ${settings.density === "Compact" ? "gap-2" : "gap-3"}`}>
           <SettingsPanel id="project-rules" title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
             <div className="grid gap-3">
@@ -3351,8 +3377,10 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
             </div>
           </SettingsPanel>
         </div>
-      </div>
-    </PageFrame>
+        )}
+      />
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -3364,18 +3392,23 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
   const activeProjects = projects.filter((project) => !isDoneStatus(project.status)).slice(0, 6);
 
   return (
-    <PageFrame
+    <WorkspacePage family="administration">
+      <PageHeader
+      eyebrow="Workspace / Organization"
       title="Organization Profile"
-      subtitle="Studio-level view for team ownership, delivery context, and active work."
-    >
-      <dl aria-label="Organization metrics" className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={<Building2 aria-hidden="true" />} label="Studio" value={settings.studioName} helper="Local tracker" />
-        <StatCard icon={<Users aria-hidden="true" />} label="Team Members" value={String(settings.teamMembers.length)} helper={`${Object.keys(membersByRole).length} active roles`} />
-        <StatCard icon={<FolderKanban aria-hidden="true" />} label="Active Work" value={String(stats.active)} helper={`${stats.delivered} delivered`} />
-        <StatCard icon={<BadgeDollarSign aria-hidden="true" />} label="Tracked Value" value={money(stats.earned, settings.currencyCode)} helper={`${stats.salaryEdits} salary edits`} />
-      </dl>
+      description="Studio-level view for team ownership, delivery context, and active work."
+      />
+      <PageContent>
+      <MetricStrip columns={4} aria-label="Organization metrics">
+        <MetricItem icon={<Building2 aria-hidden="true" />} label="Studio" value={settings.studioName} supporting="Local tracker" />
+        <MetricItem icon={<Users aria-hidden="true" />} label="Team Members" value={String(settings.teamMembers.length)} supporting={`${Object.keys(membersByRole).length} active roles`} />
+        <MetricItem icon={<FolderKanban aria-hidden="true" />} label="Active Work" value={String(stats.active)} supporting={`${stats.delivered} delivered`} />
+        <MetricItem icon={<BadgeDollarSign aria-hidden="true" />} label="Tracked Value" value={money(stats.earned, settings.currencyCode)} supporting={`${stats.salaryEdits} salary edits`} />
+      </MetricStrip>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_420px]">
+      <SplitPane
+        ratio="balanced"
+        primary={(
         <section aria-labelledby="organization-team-heading" className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
           <div className="flex items-center gap-2">
             <Users className="size-5 text-primary" aria-hidden="true" />
@@ -3405,8 +3438,9 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
             />
           )}
         </section>
-
-        <section aria-labelledby="organization-work-heading" className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm xl:col-span-2">
+        )}
+        secondary={(
+        <section aria-labelledby="organization-work-heading" className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
           <div className="flex items-center gap-2">
             <FolderKanban className="size-5 text-primary" aria-hidden="true" />
             <div>
@@ -3437,8 +3471,10 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
             />
           )}
         </section>
-      </div>
-    </PageFrame>
+        )}
+      />
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -3627,13 +3663,16 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
   }
 
   return (
-    <section aria-labelledby="profile-edit-heading" className="mx-auto w-full max-w-[1560px] px-4 pb-12 pt-6 text-foreground md:px-8 md:pt-9 xl:px-10">
-      <header className="mb-6">
-        <h1 id="profile-edit-heading" className="text-4xl font-bold leading-none tracking-tight">Edit Profile</h1>
-        <p className="mt-2 text-[15px] text-muted-foreground">Update the identity shown on your public profile.</p>
-      </header>
+    <WorkspacePage family="administration">
+      <PageHeader
+        eyebrow="Workspace / Profile"
+        title="Edit Profile"
+        description="Update the identity shown on your public profile."
+      />
 
-      <div className="grid gap-6 md:grid-cols-[300px_minmax(0,1fr)]">
+      <PageContent>
+      <MasterDetail
+        master={(
         <aside aria-label="Profile photo">
           <div className="grid place-items-center">
             <ProfileEditAvatar settings={settings} />
@@ -3664,7 +3703,8 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
             Upload an image or paste an image URL below. The latest saved photo will appear anywhere your profile is shown.
           </p>
         </aside>
-
+        )}
+        detail={(
         <div className="grid gap-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <FieldLayout label="Profile Name">
@@ -3719,11 +3759,10 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
             />
           </FieldLayout>
 
-          <section aria-labelledby="public-profile-stats-heading" className="rounded-lg border border-border bg-card p-4 text-card-foreground shadow-sm">
-            <h2 id="public-profile-stats-heading" className="text-lg font-bold">Public Profile Stats</h2>
-            <p className="mb-4 mt-1 text-[13px] text-muted-foreground">
-              These are portfolio-facing numbers. They do not need to match your private tracker totals.
-            </p>
+          <ContentSection
+            title="Public Profile Stats"
+            description="These are portfolio-facing numbers. They do not need to match your private tracker totals."
+          >
             <div className="grid gap-3 sm:grid-cols-3">
               <FieldLayout label="Active Projects">
                 <OwnedInput
@@ -3753,7 +3792,7 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
                 />
               </FieldLayout>
             </div>
-          </section>
+          </ContentSection>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <ProfileEditSelect
@@ -3788,8 +3827,10 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
             </div>
           </fieldset>
         </div>
-      </div>
-    </section>
+        )}
+      />
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -3821,35 +3862,6 @@ function ProfileEditSelect<T extends string>({ label, value, options, onChange }
         ))}
       </OwnedSelectContent>
     </OwnedSelect>
-  );
-}
-
-function PageFrame({ title, subtitle, action, children }: { title: string; subtitle: string; action?: React.ReactNode; children: React.ReactNode }) {
-  const settings = useTrackerSettings();
-  const page = useContext(PageContext);
-  const reduceMotion = useHydratedReducedMotion();
-  return (
-    <motion.div
-      key={page}
-      initial={reduceMotion ? false : { opacity: 0, y: 7 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
-    >
-      <div className="mx-auto w-full max-w-[1580px] px-3 pt-4 pb-12 sm:px-5 md:pt-5 lg:px-6">
-        <header className="mb-5 flex flex-col items-stretch justify-between gap-4 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--app-accent)]">Workspace / {title}</p>
-            <h1 className="mt-2 text-[22px] leading-[1.15] font-semibold tracking-[-0.01em] text-[var(--app-ink)] md:text-2xl" style={{ fontFamily: headingFont }}>{title}</h1>
-            <p className="mt-1.5 max-w-[700px] text-xs leading-normal text-[var(--app-muted)]">{subtitle}</p>
-          </div>
-          <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-            {action}
-            <NotificationBell settings={settings} />
-          </div>
-        </header>
-        {children}
-      </div>
-    </motion.div>
   );
 }
 
@@ -3983,15 +3995,15 @@ function SettingsPanel({ id, title, subtitle, children }: { id?: string; title: 
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: reduceMotion ? 0 : 0.24, ease: [0.16, 1, 0.3, 1] }}
     >
-      <section id={id} className="min-w-0 scroll-mt-[76px] rounded-lg border bg-card p-4 text-card-foreground md:p-5">
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(180px,0.3fr)_minmax(0,1fr)] xl:gap-8">
-          <header>
-            <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
-            <p className="mt-1 max-w-[330px] text-xs leading-5 text-muted-foreground">{subtitle}</p>
-          </header>
-          <div className="grid min-w-0 gap-3.5">{children}</div>
-        </div>
-      </section>
+      <ContentSection
+        id={id}
+        title={title}
+        description={subtitle}
+        className="scroll-mt-[76px]"
+        bodyClassName="grid min-w-0 gap-3.5"
+      >
+        {children}
+      </ContentSection>
     </motion.div>
   );
 }

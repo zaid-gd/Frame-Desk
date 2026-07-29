@@ -1,22 +1,37 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "@playwright/test";
 
 const startupTimeoutMs = 30_000;
 const configuredBaseUrl = process.env.CUTLAB_UI_URL;
+const workspaceRoutes = [
+  ["/", "Good to see you, Jordan.", "data-index"],
+  ["/projects", "Projects", "data-index"],
+  ["/calendar", "Calendar", "canvas"],
+  ["/timeline", "Delivery timeline", "data-index"],
+  ["/clients", "Clients", "master-detail"],
+  ["/feedback", "Feedback", "master-detail"],
+  ["/media", "Media", "master-detail"],
+  ["/resources", "Resources", "library"],
+  ["/templates", "Templates", "library"],
+  ["/integrations", "Integrations", "library"],
+  ["/reports", "Reports", "data-index"],
+  ["/team", "Team", "administration"],
+  ["/team-chat", "Team Chat", "conversation"],
+  ["/settings", "Settings", "administration"],
+  ["/account", "Account Settings", "administration"],
+  ["/organization", "Organization Profile", "administration"],
+  ["/profile/edit", "Edit Profile", "administration"],
+];
 let server;
 let baseUrl = configuredBaseUrl;
 
 if (!baseUrl) {
   const port = await getOpenPort();
   baseUrl = `http://127.0.0.1:${port}`;
-  const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
-  const serverArgs = process.platform === "win32"
-    ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
-    : ["run", "start", "--", "-p", String(port)];
-
-  server = spawn(serverCommand, serverArgs, {
+  server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "-p", String(port)], {
     env: { ...process.env, PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
@@ -120,6 +135,65 @@ async function chooseEssentialPrivacy(page) {
   await privacyRegion.waitFor({ state: "hidden" });
 }
 
+async function assertWorkspaceGeometry(page, route, expectedFamily) {
+  const geometry = await page.evaluate(() => {
+    const main = document.getElementById("main-content");
+    const pageRoot = document.querySelector('[data-slot="workspace-page"]');
+    const header = document.querySelector('[data-slot="page-header"]');
+    const pageContent = document.querySelector('[data-slot="page-content"]');
+    const fillBody = document.querySelector(
+      '[data-slot="fill-viewport-body"][aria-label], [data-slot="data-table-frame-body"][aria-label]',
+    );
+    const rect = (element) => element ? {
+      left: Math.round(element.getBoundingClientRect().left),
+      right: Math.round(element.getBoundingClientRect().right),
+      width: Math.round(element.getBoundingClientRect().width),
+    } : null;
+    return {
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      main: rect(main),
+      pageRoot: rect(pageRoot),
+      header: rect(header),
+      family: pageRoot?.getAttribute("data-family") ?? "",
+      mode: pageRoot?.getAttribute("data-mode") ?? "",
+      hasPageContent: Boolean(pageContent),
+      hasFillBody: Boolean(fillBody),
+      rootOverflowY: pageRoot ? getComputedStyle(pageRoot).overflowY : "",
+      mainOverflowY: main ? getComputedStyle(main).overflowY : "",
+    };
+  });
+
+  if (!geometry.main || !geometry.pageRoot || !geometry.header || !geometry.hasPageContent) {
+    throw new Error(`${route} is missing shared workspace geometry.`);
+  }
+  if (geometry.family !== expectedFamily) {
+    throw new Error(`${route} declares ${geometry.family || "no family"} instead of ${expectedFamily}.`);
+  }
+  if (geometry.documentWidth > geometry.viewportWidth + 1) {
+    throw new Error(`${route} has document-level horizontal overflow.`);
+  }
+  const expectedWidth = Math.min(geometry.main.width, 1920);
+  const expectedLeft = geometry.main.left + ((geometry.main.width - expectedWidth) / 2);
+  if (Math.abs(geometry.pageRoot.width - expectedWidth) > 1 || Math.abs(geometry.pageRoot.left - expectedLeft) > 1) {
+    throw new Error(`${route} does not follow the shared 1920px workspace width contract.`);
+  }
+  const leftGutter = geometry.header.left - geometry.pageRoot.left;
+  const rightGutter = geometry.pageRoot.right - geometry.header.right;
+  if (leftGutter < 12 || leftGutter > 32 || rightGutter < 12 || rightGutter > 32) {
+    throw new Error(`${route} has inconsistent workspace gutters: ${leftGutter}px / ${rightGutter}px.`);
+  }
+  if (!["auto", "scroll"].includes(geometry.mainOverflowY)) {
+    throw new Error(`${route} is not using the shell-owned primary scroll viewport.`);
+  }
+  if (geometry.mode === "fill" && !geometry.hasFillBody) {
+    throw new Error(`${route} declares fill mode without a named fill viewport body.`);
+  }
+  if (geometry.mode === "document" && ["auto", "scroll"].includes(geometry.rootOverflowY)) {
+    throw new Error(`${route} introduces a page-owned primary scroll container.`);
+  }
+}
+
 try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying first-value onboarding and sample isolation...");
@@ -133,7 +207,7 @@ try {
     await page.getByRole("heading", { name: "Good to see you, Maya." }).waitFor();
     await page.getByTestId("project-row").first().click();
     await page.getByRole("button", { name: /^Open project / }).click();
-    await page.getByRole("dialog", { name: "Project details" }).waitFor({ state: "visible" });
+    await page.getByTestId("project-detail-dialog").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     const sampleProjectData = await page.evaluate(() => localStorage.getItem("video-editing-work-tracker:v1"));
     if (sampleProjectData !== null) throw new Error("The sample studio wrote project records to local storage.");
@@ -151,7 +225,7 @@ try {
     console.log("Verifying mobile first-value onboarding...");
     await page.goto(`${baseUrl}/?onboarding=v2`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "See how a real project moves through Frame Desk" }).waitFor();
-    await page.getByRole("link", { name: "Explore a sample studio" }).click();
+    await page.getByRole("link", { name: "Explore a sample studio" }).click({ force: true });
     await page.getByRole("complementary", { name: "Sample studio mode" }).waitFor();
     const hasOverflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
     if (hasOverflow) throw new Error("Mobile sample studio has document-level horizontal overflow.");
@@ -206,7 +280,7 @@ try {
     await page.getByRole("button", { name: /more workspace pages/i }).click();
     await page.getByRole("dialog").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
-    await page.getByRole("link", { name: "Projects" }).click();
+    await page.getByRole("link", { name: "Projects", exact: true }).click();
     await page.waitForURL("**/projects");
   });
 
@@ -220,10 +294,43 @@ try {
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForFunction(() => document.documentElement.classList.contains("dark"));
   });
-  console.log("UI interactions verified across desktop, mobile, calendar, media, settings, and reduced-motion states.");
+
+  await withPage({ width: 1280, height: 900 }, async (page) => {
+    console.log("Verifying every authenticated workspace route uses shared geometry...");
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await chooseEssentialPrivacy(page);
+    for (const [route, heading, family] of workspaceRoutes) {
+      await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
+      await page.getByRole("heading", { level: 1, name: heading }).waitFor();
+      await assertWorkspaceGeometry(page, route, family);
+    }
+  });
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 900 },
+    { width: 1920, height: 1080 },
+    { width: 2560, height: 1440 },
+  ]) {
+    await withPage(viewport, async (page) => {
+      console.log(`Verifying representative layout families at ${viewport.width}px...`);
+      await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+      await chooseEssentialPrivacy(page);
+      for (const [route, heading, family] of [
+        ["/projects", "Projects", "data-index"],
+        ["/calendar", "Calendar", "canvas"],
+        ["/settings", "Settings", "administration"],
+      ]) {
+        await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
+        await page.getByRole("heading", { level: 1, name: heading }).waitFor();
+        await assertWorkspaceGeometry(page, route, family);
+      }
+    });
+  }
+  console.log("UI interactions and shared workspace geometry verified across all authenticated routes and responsive acceptance widths.");
 } finally {
   await browser.close();
-  if (server && !server.killed) stopServer(server);
+  if (server && !server.killed) await stopServer(server);
 }
 
 async function getOpenPort() {
@@ -259,10 +366,14 @@ async function waitForServer(url, getOutput) {
   throw new Error(`Production server did not start within ${startupTimeoutMs / 1000}s.\n${getOutput()}`);
 }
 
-function stopServer(child) {
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
-    return;
-  }
+async function stopServer(child) {
+  if (child.exitCode !== null) return;
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  child.stdout?.destroy();
+  child.stderr?.destroy();
   child.kill("SIGTERM");
+  await Promise.race([exited, delay(2_000)]);
+  if (child.exitCode === null && process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", timeout: 5_000 });
+  }
 }

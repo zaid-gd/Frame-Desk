@@ -9,13 +9,23 @@ import {
   Clock3,
   Milestone,
 } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  ContentSection,
+  FillViewport,
+  PageContent,
+  PageHeader,
+  PageToolbar,
+  PageEmptyState,
+  SplitPane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 
 function parseDate(value: string) {
   const date = new Date(`${value}T00:00:00`);
@@ -151,22 +161,27 @@ export function PrecisionCalendar({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1580px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="mb-5 flex flex-col gap-3 border-b border-[var(--app-border)] pb-5 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-[28px] font-semibold tracking-[-0.02em] sm:text-[32px]">Calendar</h1>
-          <p className="mt-1.5 text-sm text-[var(--app-muted)]">A delivery-date calendar for planned, active, and delivered work.</p>
-        </div>
-        <Button variant="outline" className="h-10 border-[var(--app-highlight)] px-4 text-[var(--app-highlight)] hover:bg-[var(--app-active)]" onClick={jumpToToday}>
-          <CalendarDays className="size-4" />
-          Today
-        </Button>
-      </div>
+    <WorkspacePage family="canvas" mode="fill">
+      <PageHeader
+        title="Calendar"
+        description="A delivery-date calendar for planned, active, and delivered work."
+        actions={(
+          <Button variant="outline" className="h-10 border-[var(--app-highlight)] px-4 text-[var(--app-highlight)] hover:bg-[var(--app-active)]" onClick={jumpToToday}>
+            <CalendarDays className="size-4" />
+            Today
+          </Button>
+        )}
+      />
 
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-          <div className="flex items-center justify-between gap-3 px-4 py-4">
+      <PageContent mode="fill">
+      <FillViewport bodyLabel="Calendar workspace" className="min-h-0" bodyClassName="overflow-auto">
+        <SplitPane
+          ratio="inspector"
+          className="min-h-full"
+          primary={(
+            <ContentSection bodyMode="flush" className="h-full">
+              <>
+              <div className="flex items-center justify-between gap-3 border-b border-[var(--app-border)] px-4 py-4">
             <div className="flex min-w-0 items-center gap-2">
               <Button variant="outline" size="icon" aria-label="Previous month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(-1)}>
                 <ChevronLeft className="size-4" />
@@ -179,7 +194,7 @@ export function PrecisionCalendar({
             <span className="rounded-md bg-[var(--app-active)] px-2 py-1 text-xs font-semibold text-[var(--app-highlight)]">{monthProjectCount} in month</span>
           </div>
 
-          <div className="grid grid-cols-7 border-l border-t border-[var(--app-border)]">
+              <div className="grid grid-cols-7 border-l border-t border-[var(--app-border)]">
             {weekdays.map((day) => (
               <div key={day} className="border-b border-r border-[var(--app-border)] px-2 py-2 text-[11px] font-semibold uppercase text-[var(--app-muted)]">
                 {day}
@@ -200,7 +215,7 @@ export function PrecisionCalendar({
                   aria-label={`Select ${formatDate(key, { month: "long", day: "numeric", year: "numeric" })} with ${dayProjects.length} scheduled ${dayProjects.length === 1 ? "delivery" : "deliveries"}`}
                   onClick={() => setSelectedDate(key)}
                   className={cn(
-                    "min-h-[84px] border-b border-r border-[var(--app-border)] p-2 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] md:min-h-[clamp(72px,calc((100dvh-470px)/6),96px)]",
+                    "min-h-[84px] border-b border-r border-[var(--app-border)] p-2 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)]",
                     isSelected ? "bg-[var(--app-active)]" : isCurrentMonth ? "bg-[var(--app-panel)]" : "bg-[var(--app-soft-panel)] opacity-55",
                     isToday && !isSelected && "shadow-[inset_0_0_0_2px_var(--app-highlight)]",
                   )}
@@ -223,13 +238,12 @@ export function PrecisionCalendar({
                 </motion.button>
               );
             })}
-          </div>
-        </section>
-
-        <aside className="rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] p-4">
-          <h2 className="text-xl font-semibold">{formatLongDate(selectedDate)}</h2>
-          <p className="mt-1 text-sm text-[var(--app-muted)]">{selectedProjects.length} scheduled deliveries</p>
-
+              </div>
+              </>
+            </ContentSection>
+          )}
+          secondary={(
+            <ContentSection title={formatLongDate(selectedDate)} description={`${selectedProjects.length} scheduled deliveries`} className="h-full" bodyClassName="h-full">
           <div className="mt-8 space-y-3">
             {selectedProjects.length ? selectedProjects.map((project) => {
               const palette = statusPalette(project.status);
@@ -257,20 +271,20 @@ export function PrecisionCalendar({
                 </motion.div>
               );
             }) : (
-              <div className="grid min-h-[520px] place-items-center px-6 text-center">
-                <div>
-                  <div className="mx-auto grid size-20 place-items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]">
-                    <CalendarDays className="size-8" />
-                  </div>
-                  <p className="mt-5 text-base font-semibold">Nothing scheduled</p>
-                  <p className="mx-auto mt-2 max-w-[260px] text-sm leading-6 text-[var(--app-muted)]">Select a date with project deliveries or add a project due date.</p>
-                </div>
-              </div>
+              <PageEmptyState
+                icon={<CalendarDays className="size-5" />}
+                title="Nothing scheduled"
+                description="Select a date with project deliveries or add a project due date."
+                className="min-h-[20rem]"
+              />
             )}
           </div>
-        </aside>
-      </div>
-    </div>
+            </ContentSection>
+          )}
+        />
+      </FillViewport>
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -321,21 +335,24 @@ export function PrecisionTimeline({
   const review = projects.filter((project) => ["Review", "Revision", "Client Review"].includes(project.status)).length;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Delivery planning</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Delivery timeline</h1>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">A chronological view of project milestones, reviews, and completed deliveries.</p>
-        </div>
-        <div className="flex gap-4 text-xs" aria-label="Timeline summary">
+    <WorkspacePage family="data-index">
+      <PageHeader
+        eyebrow="Delivery planning"
+        title="Delivery timeline"
+        description="A chronological view of project milestones, reviews, and completed deliveries."
+        actions={(
+          <div className="flex gap-4 text-xs" aria-label="Timeline summary">
           <span><strong className="text-base tabular-nums">{active}</strong><span className="ml-1 text-[var(--app-muted)]">active</span></span>
           <span><strong className="text-base tabular-nums">{review}</strong><span className="ml-1 text-[var(--app-muted)]">in review</span></span>
           <span><strong className="text-base tabular-nums">{projects.filter(isDelivered).length}</strong><span className="ml-1 text-[var(--app-muted)]">delivered</span></span>
-        </div>
-      </div>
+          </div>
+        )}
+      />
 
-      <div className="mt-4 flex flex-wrap items-center gap-1" role="group" aria-label="Filter timeline">
+      <PageContent>
+      <PageToolbar
+        primary={(
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter timeline">
         {(["All", "Active", "Review", "Delivered"] as const).map((option) => (
           <button
             key={option}
@@ -350,8 +367,10 @@ export function PrecisionTimeline({
             {option}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-[var(--app-muted)]" aria-live="polite">{visibleProjects.length} milestones shown</span>
-      </div>
+          </div>
+        )}
+        secondary={<span className="text-[10px] text-[var(--app-muted)]" aria-live="polite">{visibleProjects.length} milestones shown</span>}
+      />
 
       {groups.length ? (
         <motion.div
@@ -367,14 +386,16 @@ export function PrecisionTimeline({
               initial={reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { ...revealTransition, delay: groupIndex * 0.035 }}
-              className="grid gap-4 md:grid-cols-[150px_minmax(0,1fr)]"
+              className="grid gap-4"
             >
-              <div className="md:pt-1">
-                <p className="text-sm font-semibold">{group.label}</p>
-                <p className="mt-1 text-[11px] text-[var(--app-muted)]">{group.projects.length} milestone{group.projects.length === 1 ? "" : "s"}</p>
-              </div>
               <div className="relative border-l border-[var(--app-strong-border)] pl-6">
-                <div className="divide-y divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
+                <ContentSection
+                  title={group.label}
+                  description={`${group.projects.length} milestone${group.projects.length === 1 ? "" : "s"}`}
+                  bodyMode="flush"
+                  className="overflow-visible"
+                >
+                  <div className="divide-y divide-[var(--app-border)]">
                   {group.projects.map((project, projectIndex) => (
                     <motion.button
                       key={project.id}
@@ -402,16 +423,18 @@ export function PrecisionTimeline({
                       </span>
                     </motion.button>
                   ))}
-                </div>
+                  </div>
+                </ContentSection>
               </div>
             </motion.section>
           ))}
         </motion.div>
       ) : (
-        <div className="mt-6 grid min-h-80 place-items-center rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] px-5 text-center">
-          <div><Milestone className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">No timeline milestones yet</p><p className="mt-1 text-xs text-[var(--app-muted)]">Projects with due dates will appear here.</p></div>
-        </div>
+        <ContentSection className="mt-6">
+          <PageEmptyState icon={<Milestone className="size-5" />} title="No timeline milestones yet" description="Projects with due dates will appear here." />
+        </ContentSection>
       )}
-    </div>
+      </PageContent>
+    </WorkspacePage>
   );
 }

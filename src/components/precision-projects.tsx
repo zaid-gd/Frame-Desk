@@ -50,6 +50,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  DataTableFrame,
+  MetricItem,
+  MetricStrip,
+  PageContent,
+  PageHeader,
+  PageToolbar,
+  SplitPane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 
 type WorkspaceScope = "personal" | "team";
 
@@ -159,7 +169,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
     columnHelper.accessor("title", {
       header: "Project",
       cell: ({ row }) => (
-        <div className="flex min-w-[280px] items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md border border-[var(--app-border)]" style={{ background: projectColor(row.original) }}>
             <FolderOpen className="absolute right-1.5 top-1.5 size-3.5 text-black/30" />
             <span className="absolute inset-x-2 bottom-2 h-0.5 rounded bg-white/70" />
@@ -253,39 +263,32 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
 
   return (
     <MotionConfig reducedMotion="user" transition={springTransition}>
+      <WorkspacePage family="data-index" mode="fill" className="lg:min-h-full">
       <motion.div
         initial={reduceMotion ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={contentTransition}
-        className="mx-auto w-full max-w-[1580px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5"
+        className="contents"
       >
-      <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...contentTransition, delay: reduceMotion ? 0 : 0.02 }}
-        className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end sm:justify-between"
-      >
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Production workspace</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Projects</h1>
-          <p className="mt-1 max-w-xl text-xs leading-5 text-[var(--app-muted)]">A focused index for every tracked edit, handoff, review, and salary batch item.</p>
-        </div>
-        <Button
-          aria-label={scope === "team" ? "New Team Project" : "New Project"}
-          className="h-9 self-start transition-transform active:scale-[0.98] sm:self-auto"
-          onClick={() => props.onNewProject(scope)}
-          disabled={scope === "personal" ? !props.canCreateProjects : !hasTeam || !props.canCreateTeamProjects}
-        >
-          <Plus /> {scope === "team" ? "New team project" : "New project"}
-        </Button>
-      </motion.div>
+      <PageHeader
+        eyebrow="Production workspace"
+        title="Projects"
+        description="A focused index for every tracked edit, handoff, review, and salary batch item."
+        actions={
+          <Button
+            aria-label={scope === "team" ? "New Team Project" : "New Project"}
+            className="h-9 self-start transition-transform active:scale-[0.98] sm:self-auto"
+            onClick={() => props.onNewProject(scope)}
+            disabled={scope === "personal" ? !props.canCreateProjects : !hasTeam || !props.canCreateTeamProjects}
+          >
+            <Plus /> {scope === "team" ? "New team project" : "New project"}
+          </Button>
+        }
+      />
 
-      <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...contentTransition, delay: reduceMotion ? 0 : 0.06 }}
-        className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"
-      >
+      <PageContent mode="fill">
+      <PageToolbar
+        primary={
         <div className="relative inline-flex w-fit rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] p-0.5">
           <button
             aria-pressed={scope === "personal"}
@@ -305,47 +308,44 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
             <span className="relative">Team Projects <span className="ml-1 text-[10px]">{props.teamProjects.length}</span></span>
           </button>
         </div>
-        <div className="flex flex-1 flex-col gap-2 sm:flex-row lg:max-w-[680px]">
+        }
+        secondary={
+        <div className="flex w-full flex-1 flex-col gap-2 sm:flex-row lg:max-w-[680px]">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, client, or notes..."
-              aria-label="Search projects"
-              className="h-9 bg-[var(--app-panel)] pl-8 text-xs transition-shadow focus-visible:ring-2"
-            />
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, client, or notes..." aria-label="Search projects" className="h-9 bg-[var(--app-panel)] pl-8 text-xs transition-shadow focus-visible:ring-2" />
           </div>
           <Select value={status} onValueChange={setStatus}>
             <SelectTrigger aria-label="Filter projects by status" className="h-9 w-full bg-[var(--app-panel)] text-xs transition-colors sm:w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {["All", "Planned", "In Progress", "Review", "Client Review", "Revision", "Delivered", "Cancelled"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
-            </SelectContent>
+            <SelectContent>{["All", "Planned", "In Progress", "Review", "Client Review", "Revision", "Delivered", "Cancelled"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
           </Select>
         </div>
-      </motion.div>
+        }
+      />
 
-      <motion.div
-        initial={reduceMotion ? false : { opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...contentTransition, delay: reduceMotion ? 0 : 0.1 }}
-        className="mt-4 grid grid-cols-2 divide-x divide-y divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] sm:grid-cols-4 sm:divide-y-0"
-      >
-        <Metric icon={FolderKanban} label="All projects" value={source.length} reduceMotion={reduceMotion} />
-        <Metric icon={CalendarDays} label="Active" value={summary.active} reduceMotion={reduceMotion} />
-        <Metric icon={UsersRound} label="In review" value={summary.review} reduceMotion={reduceMotion} />
-        <Metric icon={CheckCircle2} label="Delivered" value={summary.delivered} reduceMotion={reduceMotion} />
-      </motion.div>
+      <MetricStrip columns={4}>
+        <MetricItem icon={<FolderKanban className="size-3.5" />} label="All projects" value={source.length} />
+        <MetricItem icon={<CalendarDays className="size-3.5" />} label="Active" value={summary.active} />
+        <MetricItem icon={<UsersRound className="size-3.5" />} label="In review" value={summary.review} />
+        <MetricItem icon={<CheckCircle2 className="size-3.5" />} label="Delivered" value={summary.delivered} />
+      </MetricStrip>
 
       <motion.div
         initial={reduceMotion ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ ...contentTransition, delay: reduceMotion ? 0 : 0.14 }}
-        className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"
+        className="min-h-0 flex-1"
       >
-        <section
+        <SplitPane
+          ratio="inspector"
+          className="h-full min-h-0"
+          primary={(
+        <DataTableFrame
           aria-busy={isUpdating}
-          className="relative flex min-w-0 flex-col overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]"
+          bounded
+          bodyLabel="Scrollable project library"
+          className="relative h-full min-h-0 border-[var(--app-border)] bg-[var(--app-panel)]"
+          bodyClassName="min-h-0 flex flex-col overflow-x-hidden max-lg:flex-none max-lg:overflow-visible"
         >
           <AnimatePresence>
             {isUpdating ? (
@@ -385,14 +385,52 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
           </header>
 
           {projects.length ? (
+            <>
+            <div className="divide-y divide-[var(--app-border)] lg:hidden">
+              {table.getRowModel().rows.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  data-testid="mobile-project-row"
+                  data-project-title={row.original.title}
+                  aria-label={`Open ${row.original.title} project details`}
+                  className={cn(
+                    "grid w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 px-3 py-3 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
+                    selected?.id === row.original.id && "bg-[var(--app-active)]",
+                  )}
+                  onClick={() => {
+                    setSelectedId(row.original.id);
+                    setMobileInspectorOpen(true);
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-12 rounded-md border border-[var(--app-border)]"
+                    style={{ backgroundColor: projectColor(row.original) }}
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{row.original.title}</span>
+                    <span className="mt-1 block truncate text-xs text-[var(--app-muted)]">
+                      {row.original.client || row.original.workType}
+                    </span>
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(row.original.status))}
+                  >
+                    {row.original.status}
+                  </Badge>
+                </button>
+              ))}
+            </div>
             <motion.div
               animate={{ opacity: isUpdating ? 0.62 : 1 }}
               transition={contentTransition}
-              className="min-h-0 flex-1 overflow-auto overscroll-contain"
+              className="hidden min-h-0 flex-1 overflow-y-auto overscroll-contain lg:block"
               tabIndex={0}
               aria-label="Scrollable project library"
             >
-              <table className="w-full min-w-[980px] border-collapse">
+              <table className="w-full table-fixed border-collapse">
                 <thead>
                   {table.getHeaderGroups().map((group) => (
                     <tr key={group.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]">
@@ -436,7 +474,6 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                       transition={contentTransition}
                       onClick={() => {
                         setSelectedId(row.original.id);
-                        if (window.innerWidth < 1280) setMobileInspectorOpen(true);
                       }}
                       onDoubleClick={() => props.onViewProject(row.original)}
                       onKeyDown={(event) => {
@@ -467,7 +504,6 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                         } else if (event.key === " ") {
                           event.preventDefault();
                           setSelectedId(row.original.id);
-                          if (window.innerWidth < 1280) setMobileInspectorOpen(true);
                         }
                       }}
                       data-project-id={row.original.id}
@@ -478,6 +514,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                 </tbody>
               </table>
             </motion.div>
+            </>
           ) : isUpdating ? (
             <ProjectTableSkeleton reduceMotion={reduceMotion} />
           ) : (
@@ -509,8 +546,9 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
               </div>
             </motion.div>
           )}
-        </section>
-
+        </DataTableFrame>
+          )}
+          secondary={(
         <AnimatePresence mode="wait" initial={false}>
           <ProjectInspector
             key={selected?.id ?? "empty"}
@@ -523,10 +561,12 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
             className="hidden xl:block"
           />
         </AnimatePresence>
+          )}
+        />
       </motion.div>
-
+      </PageContent>
       <Sheet open={mobileInspectorOpen} onOpenChange={setMobileInspectorOpen}>
-        <SheetContent side="right" className="w-[min(92vw,380px)] p-0">
+        <SheetContent side="right" className="w-[min(92vw,380px)] p-0 xl:hidden">
           <SheetHeader className="sr-only">
             <SheetTitle>Project details</SheetTitle>
             <SheetDescription>Review the selected project and open or edit its workspace.</SheetDescription>
@@ -546,6 +586,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         </SheetContent>
       </Sheet>
       </motion.div>
+      </WorkspacePage>
     </MotionConfig>
   );
 }

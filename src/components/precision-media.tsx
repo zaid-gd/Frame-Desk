@@ -18,6 +18,14 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  FillViewport,
+  PageContent,
+  PageHeader,
+  PageToolbar,
+  ThreePane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 
 function delivered(project: WorkItem) {
   return project.status === "Delivered";
@@ -85,21 +93,27 @@ export function PrecisionMedia({
 
   return (
     <MotionConfig reducedMotion="user">
+      <WorkspacePage family="master-detail" mode="fill">
       <motion.div
-        className="mx-auto w-full max-w-[1580px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5"
+        className="flex min-h-0 min-w-0 flex-1 flex-col gap-4"
         initial={reduceMotion ? false : { opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={contentTransition}
       >
-        <div className="border-b border-[var(--app-border)] pb-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Asset workspace</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Media</h1>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">Browse project packages, working exports, and completed handoff archives.</p>
-        </div>
+        <PageHeader
+          eyebrow="Asset workspace"
+          title="Media"
+          description="Browse project packages, working exports, and completed handoff archives."
+        />
 
+        <PageContent mode="fill">
         <LayoutGroup id="media-workspace">
-          <div className="mt-4 grid min-h-[520px] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:grid-cols-[230px_minmax(0,1fr)_300px]">
-            <aside className="border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 lg:border-b-0 lg:border-r">
+          <FillViewport bodyLabel="Media workspace" bodyClassName="overflow-auto lg:overflow-hidden">
+          <ThreePane
+            density="compact"
+            className="min-h-[520px] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:h-full lg:min-h-0"
+            master={(
+            <aside className="min-h-0 overflow-auto border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 lg:border-b-0 lg:border-r">
               <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-subtle)]">Collections</p>
               <nav className="mt-2 space-y-0.5" aria-label="Media collections">
                 {collections.map((item) => {
@@ -140,9 +154,11 @@ export function PrecisionMedia({
                 })}
               </nav>
             </aside>
-
-            <main className="min-w-0 border-b border-[var(--app-border)] lg:border-b-0 lg:border-r">
-              <div className="flex flex-col gap-2 border-b border-[var(--app-border)] p-3 sm:flex-row sm:items-center">
+            )}
+            detail={(
+            <main className="min-h-0 min-w-0 overflow-hidden border-b border-[var(--app-border)] lg:border-b-0 lg:border-r">
+              <PageToolbar className="border-b border-[var(--app-border)] p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
                   <Input
@@ -183,6 +199,7 @@ export function PrecisionMedia({
                   })}
                 </div>
               </div>
+              </PageToolbar>
 
               <div className="flex h-10 items-center border-b border-[var(--app-border)] px-4">
                 <AnimatePresence mode="wait" initial={false}>
@@ -209,7 +226,7 @@ export function PrecisionMedia({
                 </motion.span>
               </div>
 
-              <div className="relative min-h-[420px]">
+              <div className="relative min-h-[420px] overflow-auto lg:h-[calc(100%-5.5rem)]">
                 <AnimatePresence mode="wait" initial={false}>
                   {filtered.length ? (
                     <motion.div
@@ -350,8 +367,9 @@ export function PrecisionMedia({
                 </AnimatePresence>
               </div>
             </main>
-
-            <aside className="min-h-[360px] p-4" aria-label="Selected package details">
+            )}
+            inspector={(
+            <aside className="min-h-[360px] min-w-0 overflow-auto p-4" aria-label="Selected package details">
               <AnimatePresence mode="wait" initial={false}>
                 {selected ? (
                   <motion.div
@@ -392,9 +410,13 @@ export function PrecisionMedia({
                 )}
               </AnimatePresence>
             </aside>
-          </div>
+            )}
+          />
+          </FillViewport>
         </LayoutGroup>
+        </PageContent>
       </motion.div>
+      </WorkspacePage>
     </MotionConfig>
   );
 }

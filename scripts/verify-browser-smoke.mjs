@@ -8,6 +8,18 @@ import { setTimeout as delay } from "node:timers/promises";
 const routes = [
   { path: "/", label: "dashboard", expectedText: ["Dashboard"] },
   { path: "/projects", label: "projects", expectedText: ["Projects", "My Projects", "Team Projects"] },
+  { path: "/calendar", label: "calendar", expectedText: ["Calendar"] },
+  { path: "/timeline", label: "timeline", expectedText: ["Delivery timeline"] },
+  { path: "/clients", label: "clients", expectedText: ["Clients"] },
+  { path: "/feedback", label: "feedback", expectedText: ["Feedback"] },
+  { path: "/media", label: "media", expectedText: ["Media"] },
+  {
+    path: "/resources",
+    label: "resources",
+    expectedText: ["Resources", "Resource Library", "New Resource"],
+  },
+  { path: "/templates", label: "templates", expectedText: ["Templates"] },
+  { path: "/integrations", label: "integrations", expectedText: ["Integrations"] },
   {
     path: "/team",
     label: "team",
@@ -20,6 +32,10 @@ const routes = [
     expectedText: ["Reports", "Invoice drafts", "Salary Batch Ledger", "Editor Summary", "Delivered Projects"],
   },
   { path: "/settings", label: "settings", expectedText: ["Settings"] },
+  { path: "/account", label: "account", expectedText: ["Account Settings"] },
+  { path: "/organization", label: "organization", expectedText: ["Organization Profile"] },
+  { path: "/profile/edit", label: "profile-edit", expectedText: ["Edit Profile"] },
+  { path: "/sample-studio", label: "sample-studio", expectedText: ["Good to see you"] },
   { path: "/profile", label: "profile", expectedText: ["Frame Desk", "Share Profile"] },
   {
     path: "/client-portal",
@@ -47,12 +63,7 @@ let server;
 try {
   const port = await getOpenPort();
   const baseUrl = `http://127.0.0.1:${port}`;
-  const serverCommand = process.platform === "win32" ? "cmd.exe" : "npm";
-  const serverArgs = process.platform === "win32"
-    ? ["/d", "/s", "/c", `npm run start -- -p ${port}`]
-    : ["run", "start", "--", "-p", String(port)];
-
-  server = spawn(serverCommand, serverArgs, {
+  server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "-p", String(port)], {
     env: { ...process.env, PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true
@@ -123,7 +134,7 @@ try {
     throw error;
   }
 } finally {
-  if (server && !server.killed) stopServer(server);
+  if (server && !server.killed) await stopServer(server);
   rmSync(outputDirectory, { recursive: true, force: true });
 }
 
@@ -198,12 +209,16 @@ async function waitForServer(url, getOutput) {
   throw new Error(`Production server did not start within ${startupTimeoutMs / 1000}s.\n${getOutput()}`);
 }
 
-function stopServer(child) {
-  if (process.platform === "win32") {
-    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore" });
-    return;
-  }
+async function stopServer(child) {
+  if (child.exitCode !== null) return;
+  const exited = new Promise((resolveExit) => child.once("exit", resolveExit));
+  child.stdout?.destroy();
+  child.stderr?.destroy();
   child.kill("SIGTERM");
+  await Promise.race([exited, delay(2_000)]);
+  if (child.exitCode === null && process.platform === "win32") {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", timeout: 5_000 });
+  }
 }
 
 function readPngDimensions(path) {

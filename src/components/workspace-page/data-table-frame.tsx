@@ -1,0 +1,49 @@
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
+
+import { cn } from "@/lib/utils";
+
+type DataTableFrameProps = ComponentPropsWithoutRef<"section"> & {
+  header?: ReactNode;
+  footer?: ReactNode;
+  bounded?: boolean;
+  bodyClassName?: string;
+  bodyLabel?: string;
+};
+
+export function DataTableFrame({
+  header,
+  footer,
+  bounded = false,
+  bodyClassName,
+  bodyLabel,
+  className,
+  children,
+  ...props
+}: DataTableFrameProps) {
+  return (
+    <section
+      data-slot="data-table-frame"
+      className={cn(
+        "flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground",
+        bounded && "min-h-0",
+        className,
+      )}
+      {...props}
+    >
+      {header ? <div className="shrink-0 border-b border-border">{header}</div> : null}
+      <div
+        data-slot="data-table-frame-body"
+        aria-label={bodyLabel}
+        tabIndex={bounded && bodyLabel ? 0 : undefined}
+        className={cn(
+          "min-w-0 overflow-x-auto",
+          bounded && "min-h-0 flex-1 overflow-y-auto",
+          bodyClassName,
+        )}
+      >
+        {children}
+      </div>
+      {footer ? <div className="shrink-0 border-t border-border">{footer}</div> : null}
+    </section>
+  );
+}

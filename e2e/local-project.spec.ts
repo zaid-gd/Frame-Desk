@@ -175,8 +175,8 @@ test("shows the compact dashboard overview and links to all projects", async ({ 
   expect(Math.abs((searchBox?.y ?? 0) - (filterBox?.y ?? 0))).toBeLessThanOrEqual(5);
 
   const pulse = page.getByRole("region", { name: "Operational pulse" });
-  await expect(pulse.getByText("Earned", { exact: true })).toBeVisible();
-  await expect(pulse.getByText("Salary batch", { exact: true })).toBeVisible();
+  await expect(pulse).toContainText("Earned");
+  await expect(pulse).toContainText("Salary batch");
   await expect(pulse.getByTestId("salary-batch-progress")).toContainText(/5\s*\/\s*5 edits/);
   const markPayment = pulse.getByRole("button", { name: /Mark payment/ });
   await expect(markPayment).toBeEnabled();

@@ -651,6 +651,14 @@ These checks should begin as documented allowlists and tighten as each capabilit
 
 The temporary adapter is a migration tool, not a permanent layer. Its deletion is part of the acceptance criteria.
 
+## Related Presentation Architecture
+
+The shared sizing, header, toolbar, section, responsive-grid, and scrolling
+contracts for authenticated screens are defined in
+[workspace-page-system.md](./workspace-page-system.md). That Module remains
+inside the design-system seam described here and must not import application or
+Convex concerns.
+
 ## Acceptance Criteria
 
 The seam is established when:

@@ -62,6 +62,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  ContentSection,
+  DataTableFrame,
+  MetricStrip,
+  PageContent,
+  PageHeader,
+  PageToolbar,
+  SplitPane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 
 type DueFilter = "ALL" | "This Week" | "Overdue" | "Delivered";
 type SortKey = "createdAt_desc" | "createdAt_asc" | "dueDate_asc" | "earnings_desc" | "earnings_asc";
@@ -554,31 +564,19 @@ export function PrecisionDashboard(props: DashboardProps) {
     .slice(0, 4);
 
   return (
-    <motion.div
-      className="mx-auto w-full max-w-[1540px] px-4 py-5 sm:px-6 lg:px-7"
-      initial={entry.initial}
-      animate={entry.animate}
-      transition={{ duration: reduceMotion ? 0 : 0.5, ease: easing }}
-    >
-      <motion.header
-        className="flex flex-col gap-5 border-b border-[var(--app-border)] pb-5 lg:flex-row lg:items-end lg:justify-between lg:gap-6"
+    <WorkspacePage family="data-index">
+      <motion.div
+        className="contents"
         initial={entry.initial}
         animate={entry.animate}
         transition={{ duration: reduceMotion ? 0 : 0.5, ease: easing }}
       >
-        <div className="min-w-0 lg:max-w-[460px]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--app-highlight)]">
-            Production desk
-          </p>
-          <h1 className="mt-2 text-[clamp(1.65rem,3vw,2.3rem)] font-semibold leading-tight tracking-[-0.045em] text-[var(--app-ink)]">
-            Good to see you, {props.settings.profileName?.split(" ")[0] || "editor"}.
-          </h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-[var(--app-muted)]">
-            Scan commitments, deadlines, handoffs, and earnings from one focused production ledger.
-          </p>
-        </div>
-        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap lg:justify-end">
-          <div className="relative min-w-[220px] flex-1 lg:w-[300px] lg:flex-none">
+      <PageHeader
+        eyebrow="Production desk"
+        title={<>Good to see you, {props.settings.profileName?.split(" ")[0] || "editor"}.</>}
+        description="Scan commitments, deadlines, handoffs, and earnings from one focused production ledger."
+        actions={<PageToolbar
+          primary={<div className="relative min-w-[220px] flex-1 lg:w-[300px] lg:flex-none">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" strokeWidth={1.75} />
             <Input
               value={props.query}
@@ -587,45 +585,33 @@ export function PrecisionDashboard(props: DashboardProps) {
               aria-label="Search dashboard projects"
               className="h-9 rounded-md border-[var(--app-border)] bg-[var(--app-panel)] pl-9 text-xs shadow-none focus-visible:border-[var(--app-accent)]"
             />
-          </div>
-          <Button
-            variant="outline"
-            className="h-9 rounded-md border-[var(--app-border)] bg-[var(--app-panel)] px-3 text-[11px] shadow-none"
-            aria-expanded={showFilters}
-            aria-controls="dashboard-filters"
-            onClick={() => setShowFilters((value) => !value)}
-          >
-            <ListFilter className="size-3.5" strokeWidth={1.75} />
-            Filters{activeFilterCount ? ` · ${activeFilterCount}` : ""}
-          </Button>
-          <Select value={props.sortKey} onValueChange={(value) => props.setSortKey(value as SortKey)}>
-            <SelectTrigger
-              aria-label="Sort dashboard projects"
-              className="h-9 w-[142px] rounded-md border-[var(--app-border)] bg-[var(--app-panel)] text-[11px] shadow-none"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="createdAt_desc">Newest</SelectItem>
-              <SelectItem value="createdAt_asc">Oldest</SelectItem>
-              <SelectItem value="dueDate_asc">Due soon</SelectItem>
-              <SelectItem value="earnings_desc">Highest value</SelectItem>
-              <SelectItem value="earnings_asc">Lowest value</SelectItem>
-            </SelectContent>
-          </Select>
-          {(activeFilterCount > 0 || props.query) ? (
+          </div>}
+          secondary={<>
             <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-2 text-[11px] text-[var(--app-muted)]"
-              onClick={clearFilters}
+              variant="outline"
+              className="h-9 rounded-md border-[var(--app-border)] bg-[var(--app-panel)] px-3 text-[11px] shadow-none"
+              aria-expanded={showFilters}
+              aria-controls="dashboard-filters"
+              onClick={() => setShowFilters((value) => !value)}
             >
-              Clear all
+              <ListFilter className="size-3.5" strokeWidth={1.75} />
+              Filters{activeFilterCount ? ` · ${activeFilterCount}` : ""}
             </Button>
-          ) : null}
-        </div>
-      </motion.header>
-
+            <Select value={props.sortKey} onValueChange={(value) => props.setSortKey(value as SortKey)}>
+              <SelectTrigger aria-label="Sort dashboard projects" className="h-9 w-[142px] rounded-md border-[var(--app-border)] bg-[var(--app-panel)] text-[11px] shadow-none"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="createdAt_desc">Newest</SelectItem>
+                <SelectItem value="createdAt_asc">Oldest</SelectItem>
+                <SelectItem value="dueDate_asc">Due soon</SelectItem>
+                <SelectItem value="earnings_desc">Highest value</SelectItem>
+                <SelectItem value="earnings_asc">Lowest value</SelectItem>
+              </SelectContent>
+            </Select>
+            {(activeFilterCount > 0 || props.query) ? <Button variant="ghost" size="sm" className="h-9 px-2 text-[11px] text-[var(--app-muted)]" onClick={clearFilters}>Clear all</Button> : null}
+          </>}
+        />}
+      />
+      <PageContent>
       <AnimatePresence initial={false}>
         {showFilters ? (
           <motion.div
@@ -669,16 +655,12 @@ export function PrecisionDashboard(props: DashboardProps) {
         ) : null}
       </AnimatePresence>
 
-      <motion.section
-        className={cn(
-          "mt-3 grid gap-px overflow-hidden rounded-[10px] border border-[var(--app-border)] bg-[var(--app-border)] sm:grid-cols-2",
-          showSalaryBatch ? "xl:grid-cols-5" : "xl:grid-cols-4",
-        )}
+      <motion.div
         initial={entry.initial}
         animate={entry.animate}
         transition={{ delay: reduceMotion ? 0 : 0.04, duration: reduceMotion ? 0 : 0.5, ease: easing }}
-        aria-label="Operational pulse"
       >
+      <MetricStrip columns={showSalaryBatch ? 5 : 4} aria-label="Operational pulse">
         <div className="bg-[var(--app-panel)] px-4 py-3">
           <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">In motion</p>
           <div className="mt-1 flex items-baseline gap-2">
@@ -755,14 +737,17 @@ export function PrecisionDashboard(props: DashboardProps) {
             </div>
           </div>
         ) : null}
-      </motion.section>
+      </MetricStrip>
+      </motion.div>
 
       <motion.div
-        className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]"
         initial={entry.initial}
         animate={entry.animate}
         transition={{ delay: reduceMotion ? 0 : 0.08, duration: reduceMotion ? 0 : 0.55, ease: easing }}
       >
+        <SplitPane
+          ratio="inspector"
+          primary={(
         <div className="min-w-0 space-y-4">
           <WorkspaceSection
             title="Project ledger"
@@ -777,6 +762,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               </Button>
             )}
           >
+            <DataTableFrame bounded={false} bodyClassName="overflow-x-auto">
             {props.visibleProjects.length ? (
               <>
                 <div className="divide-y divide-[var(--app-border)] sm:hidden">
@@ -866,7 +852,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                           data-project-id={row.original.id}
                           aria-selected={selected?.id === row.original.id}
                           className={cn(
-                            "h-[58px] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
+                            "h-[var(--workspace-row-height,58px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
                             selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
                           )}
                           initial={reduceMotion ? false : { opacity: 0, y: 8 }}
@@ -932,10 +918,12 @@ export function PrecisionDashboard(props: DashboardProps) {
                 </div>
               </motion.div>
             )}
+            </DataTableFrame>
           </WorkspaceSection>
 
         </div>
-
+          )}
+          secondary={(
         <div className="min-w-0 xl:sticky xl:top-[64px] xl:self-start">
           <ProjectInspector
             project={selected}
@@ -945,15 +933,19 @@ export function PrecisionDashboard(props: DashboardProps) {
             canEdit={props.canEditProjects}
           />
         </div>
+          )}
+        />
       </motion.div>
 
       <motion.section
-        className="mt-4 grid items-start gap-4 lg:grid-cols-2"
         initial={entry.initial}
         animate={entry.animate}
         transition={{ delay: reduceMotion ? 0 : 0.12, duration: reduceMotion ? 0 : 0.55, ease: easing }}
         aria-label="Workspace follow-up"
       >
+        <SplitPane
+          ratio="balanced"
+          primary={(
         <WorkspaceSection
           title="Attention queue"
           count={attentionContext.length}
@@ -998,7 +990,8 @@ export function PrecisionDashboard(props: DashboardProps) {
             <EmptySection label="No deadlines, blockers, or reviews need attention." />
           )}
         </WorkspaceSection>
-
+          )}
+          secondary={(
         <WorkspaceSection
           title="Activity"
           count={activity.length}
@@ -1080,7 +1073,10 @@ export function PrecisionDashboard(props: DashboardProps) {
             )}
           </div>
         </WorkspaceSection>
+          )}
+        />
       </motion.section>
+      </PageContent>
 
       <Sheet open={mobileInspectorOpen} onOpenChange={setMobileInspectorOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto p-0 sm:max-w-md xl:hidden">
@@ -1098,7 +1094,8 @@ export function PrecisionDashboard(props: DashboardProps) {
           />
         </SheetContent>
       </Sheet>
-    </motion.div>
+      </motion.div>
+    </WorkspacePage>
   );
 }
 
@@ -1118,19 +1115,16 @@ function WorkspaceSection({
   children: React.ReactNode;
 }) {
   return (
-    <section aria-label={title} className={cn("overflow-hidden", surface, className)}>
-      <header className="flex h-12 items-center gap-2.5 border-b border-[var(--app-border)] px-4">
-        <Icon className="size-3.5 text-[var(--app-muted)]" strokeWidth={1.75} />
-        <h2 className="text-[13px] font-medium tracking-[-0.01em]">{title}</h2>
-        {typeof count === "number" ? (
-          <span className="rounded-full bg-[var(--app-soft-panel)] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[var(--app-muted)]">
-            {count}
-          </span>
-        ) : null}
-        <div className="ml-auto">{action}</div>
-      </header>
+    <ContentSection
+      aria-label={title}
+      title={title}
+      metadata={<><Icon className="size-3.5 text-[var(--app-muted)]" strokeWidth={1.75} />{typeof count === "number" ? <span className="rounded-full bg-[var(--app-soft-panel)] px-2 py-0.5 font-mono text-[10px] tabular-nums text-[var(--app-muted)]">{count}</span> : null}</>}
+      actions={action}
+      bodyMode="flush"
+      className={cn(surface, className)}
+    >
       {children}
-    </section>
+    </ContentSection>
   );
 }
 

@@ -54,6 +54,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  ContentSection,
+  FillViewport,
+  MasterDetail,
+  MetricItem,
+  MetricStrip,
+  PageContent,
+  PageHeader,
+  SplitPane,
+  WorkspacePage,
+} from "@/components/workspace-page";
 
 function delivered(project: WorkItem) {
   return project.status === "Delivered";
@@ -174,23 +185,25 @@ export function PrecisionClients({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="flex flex-col gap-4 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Relationships</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Clients</h1>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">Projects, delivery history, and account context in one focused directory.</p>
-        </div>
-        <Button className="h-9 self-start sm:self-auto" onClick={() => setAddOpen(true)}><Plus /> New Client</Button>
-      </div>
+    <WorkspacePage family="master-detail" mode="fill">
+      <PageHeader
+        eyebrow="Relationships"
+        title="Clients"
+        description="Projects, delivery history, and account context in one focused directory."
+        actions={<Button className="h-9" onClick={() => setAddOpen(true)}><Plus /> New Client</Button>}
+      />
 
-      <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-        <Summary label="Clients" value={clients.length} icon={UsersRound} />
-        <Summary label="Active projects" value={projects.filter(active).length} icon={FolderKanban} />
-        <Summary label="Delivered" value={projects.filter(delivered).length} icon={CheckCircle2} />
-      </div>
+      <PageContent mode="fill">
+      <MetricStrip columns={3}>
+        <MetricItem label="Clients" value={clients.length} icon={<UsersRound className="size-4" />} />
+        <MetricItem label="Active projects" value={projects.filter(active).length} icon={<FolderKanban className="size-4" />} />
+        <MetricItem label="Delivered" value={projects.filter(delivered).length} icon={<CheckCircle2 className="size-4" />} />
+      </MetricStrip>
 
-      <div className="mt-4 grid overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:max-h-[calc(100dvh-300px)] lg:grid-cols-[320px_minmax(0,1fr)]">
+      <FillViewport bodyLabel="Client workspace" bodyClassName="overflow-visible lg:overflow-hidden">
+      <MasterDetail
+        className="min-h-full lg:h-full lg:overflow-hidden"
+        master={(
         <aside className="flex min-h-0 flex-col border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--app-border)] p-3">
             <div className="relative">
@@ -242,8 +255,9 @@ export function PrecisionClients({
             {!clients.length ? <div className="p-6 text-center text-xs text-[var(--app-muted)]">No clients match this view.</div> : null}
           </div>
         </aside>
-
-        <AnimatePresence mode="wait" initial={false}>
+        )}
+        detail={(
+          <AnimatePresence mode="wait" initial={false}>
           {selected ? (
             <motion.main
               key={selected.name}
@@ -314,8 +328,11 @@ export function PrecisionClients({
               <div><UsersRound className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Add your first client</p><p className="mt-1 text-xs text-[var(--app-muted)]">Client records organize project history and delivery context.</p><Button className="mt-3 h-8" size="sm" onClick={() => setAddOpen(true)}><Plus /> New Client</Button></div>
             </motion.main>
           )}
-        </AnimatePresence>
-      </div>
+          </AnimatePresence>
+        )}
+      />
+      </FillViewport>
+      </PageContent>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
@@ -330,7 +347,7 @@ export function PrecisionClients({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </WorkspacePage>
   );
 }
 
@@ -355,20 +372,22 @@ export function PrecisionFeedback({
   const revisionCount = projects.filter((project) => project.status === "Revision").length;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="border-b border-[var(--app-border)] pb-4">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Client review</p>
-        <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Feedback</h1>
-        <p className="mt-1 text-xs text-[var(--app-muted)]">Track review notes, revisions, and approval state without losing production context.</p>
-      </div>
-      <div className="mt-4 grid grid-cols-3 divide-x divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-        <Summary label="Awaiting review" value={queue.length} icon={MessageSquareText} />
-        <Summary label="Revisions" value={revisionCount} icon={Clock3} />
-        <Summary label="Delivered" value={deliveredCount} icon={CheckCircle2} />
-      </div>
-      <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-        <header className="flex min-h-12 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-sm font-semibold">Review Queue</h2><p className="text-[10px] text-[var(--app-muted)]">Active work requiring client or editor attention.</p></div>
+    <WorkspacePage family="master-detail">
+      <PageHeader eyebrow="Client review" title="Feedback" description="Track review notes, revisions, and approval state without losing production context." />
+      <PageContent>
+      <MetricStrip columns={3}>
+        <MetricItem label="Awaiting review" value={queue.length} icon={<MessageSquareText className="size-4" />} />
+        <MetricItem label="Revisions" value={revisionCount} icon={<Clock3 className="size-4" />} />
+        <MetricItem label="Delivered" value={deliveredCount} icon={<CheckCircle2 className="size-4" />} />
+      </MetricStrip>
+      <MasterDetail
+        variant="detail-rail"
+        master={(
+        <ContentSection
+          title="Review Queue"
+          description="Active work requiring client or editor attention."
+          bodyMode="flush"
+          actions={(
           <div className="flex items-center gap-1" role="group" aria-label="Filter review queue">
             {(["All", "Review", "Revision"] as const).map((option) => {
               const count = option === "All"
@@ -390,7 +409,8 @@ export function PrecisionFeedback({
               );
             })}
           </div>
-        </header>
+          )}
+        >
         <span className="sr-only" aria-live="polite">{visibleQueue.length} {filter.toLowerCase()} queue items shown</span>
         <div className="border-t border-[var(--app-border)]">
           <AnimatePresence mode="wait" initial={false}>
@@ -435,8 +455,18 @@ export function PrecisionFeedback({
             )}
           </AnimatePresence>
         </div>
-      </section>
-    </div>
+        </ContentSection>
+        )}
+        detail={(
+          <ContentSection title="Review context" description="Open a queue item to continue in its project workspace.">
+            <div className="grid min-h-56 place-items-center text-center">
+              <div><MessageSquareText className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Select a review item</p><p className="mt-1 text-xs text-[var(--app-muted)]">Revision notes and project context remain available when you open the project.</p></div>
+            </div>
+          </ContentSection>
+        )}
+      />
+      </PageContent>
+    </WorkspacePage>
   );
 }
 
@@ -532,13 +562,12 @@ export function PrecisionReports({
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] px-3 py-4 sm:px-5 lg:px-6 lg:py-5">
-      <div className="flex flex-col gap-3 border-b border-[var(--app-border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-highlight)]">Performance</p>
-          <h1 className="mt-1.5 text-[24px] font-semibold tracking-[-0.015em]">Reports</h1>
-          <p className="mt-1 text-xs text-[var(--app-muted)]">Earnings, delivery throughput, work mix, and salary batch payout state.</p>
-        </div>
+    <WorkspacePage family="data-index">
+      <PageHeader
+        eyebrow="Performance"
+        title="Reports"
+        description="Earnings, delivery throughput, work mix, and salary batch payout state."
+        actions={(
         <div className="flex items-center gap-2">
           <Select value={period} onValueChange={(value) => setPeriod(value as PayoutPeriod)}>
             <SelectTrigger className="h-8 w-[138px] text-xs" aria-label="Payout period">
@@ -555,15 +584,18 @@ export function PrecisionReports({
             <Download /> Export CSV
           </Button>
         </div>
-      </div>
-      <div className="mt-4 grid grid-cols-2 divide-x divide-y divide-[var(--app-border)] overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] lg:grid-cols-4 lg:divide-y-0">
-        <ReportMetric label="Collected" value={money(collected, settings.currencyCode)} helper="Freelance plus paid batches" icon={CircleDollarSign} index={0} reduceMotion={Boolean(reduceMotion)} />
-        <ReportMetric label="Outstanding" value={money(report.unpaidBatchEarnings, settings.currencyCode)} helper={`${report.unpaidBatchCount} unpaid batches`} icon={Clock3} index={1} reduceMotion={Boolean(reduceMotion)} />
-        <ReportMetric label="Delivered edits" value={String(report.deliveredProjects.length)} helper={`${salaryEdits} salary edits`} icon={CheckCircle2} index={2} reduceMotion={Boolean(reduceMotion)} />
-        <ReportMetric label="Invoice drafts" value={String(invoiceDrafts.length)} helper={money(invoiceTotal, settings.currencyCode)} icon={BriefcaseBusiness} index={3} reduceMotion={Boolean(reduceMotion)} />
-      </div>
+        )}
+      />
+      <PageContent>
+      <MetricStrip columns={4}>
+        <MetricItem label="Collected" value={money(collected, settings.currencyCode)} supporting="Freelance plus paid batches" icon={<CircleDollarSign className="size-4" />} />
+        <MetricItem label="Outstanding" value={money(report.unpaidBatchEarnings, settings.currencyCode)} supporting={`${report.unpaidBatchCount} unpaid batches`} icon={<Clock3 className="size-4" />} />
+        <MetricItem label="Delivered edits" value={String(report.deliveredProjects.length)} supporting={`${salaryEdits} salary edits`} icon={<CheckCircle2 className="size-4" />} />
+        <MetricItem label="Invoice drafts" value={String(invoiceDrafts.length)} supporting={money(invoiceTotal, settings.currencyCode)} icon={<BriefcaseBusiness className="size-4" />} />
+      </MetricStrip>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(300px,0.8fr)]">
+      <SplitPane
+        primary={(
         <motion.section
           initial={reduceMotion ? false : { opacity: 0, y: 7 }}
           animate={{ opacity: 1, y: 0 }}
@@ -623,7 +655,8 @@ export function PrecisionReports({
             )}
           </motion.div>
         </motion.section>
-
+        )}
+        secondary={(
         <motion.section
           initial={reduceMotion ? false : { opacity: 0, y: 7 }}
           animate={{ opacity: 1, y: 0 }}
@@ -649,13 +682,10 @@ export function PrecisionReports({
             ))}
           </div>
         </motion.section>
-      </div>
+        )}
+      />
 
-      <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-        <header className="flex min-h-12 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div><h2 className="text-sm font-semibold">Invoice drafts</h2><p className="text-[10px] text-[var(--app-muted)]">Local CSV drafts for delivered client projects. Payment collection still requires a trusted payment provider.</p></div>
-          <Button variant="outline" size="sm" className="h-8" onClick={exportInvoiceDrafts} disabled={!invoiceDrafts.length}><Download /> Export invoices</Button>
-        </header>
+      <ContentSection title="Invoice drafts" description="Local CSV drafts for delivered client projects. Payment collection still requires a trusted payment provider." bodyMode="flush" actions={<Button variant="outline" size="sm" className="h-8" onClick={exportInvoiceDrafts} disabled={!invoiceDrafts.length}><Download /> Export invoices</Button>}>
         <div className="overflow-x-auto border-t border-[var(--app-border)]">
           <table className="w-full min-w-[760px] border-collapse">
             <thead><tr className="bg-[var(--app-soft-panel)] text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]"><th className="h-8 px-4">Draft</th><th className="px-4">Client</th><th className="px-4">Projects</th><th className="px-4">Due</th><th className="px-4 text-right">Total</th></tr></thead>
@@ -673,9 +703,8 @@ export function PrecisionReports({
             </tbody>
           </table>
         </div>
-      </section>
-      <section className="mt-4 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-        <header className="flex h-12 items-center justify-between px-4"><div><h2 className="text-sm font-semibold">Salary Batch Ledger</h2><p className="text-[10px] text-[var(--app-muted)]">Completed edit batches and payout status.</p></div><span className="text-[11px] text-[var(--app-muted)]">{report.batches.length} batches</span></header>
+      </ContentSection>
+      <ContentSection title="Salary Batch Ledger" description="Completed edit batches and payout status." metadata={<span className="text-[11px] text-muted-foreground">{report.batches.length} batches</span>} bodyMode="flush">
         <div className="overflow-x-auto border-t border-[var(--app-border)]">
           <table className="w-full min-w-[720px] border-collapse">
             <thead><tr className="bg-[var(--app-soft-panel)] text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]"><th className="h-8 px-4">Batch</th><th className="px-4">Completed</th><th className="px-4">Edits</th><th className="px-4">Amount</th><th className="px-4">Payment</th><th className="px-4 text-right">Action</th></tr></thead>
@@ -694,14 +723,12 @@ export function PrecisionReports({
             </tbody>
           </table>
         </div>
-      </section>
+      </ContentSection>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-          <header className="flex h-12 items-center justify-between px-4">
-            <div><h2 className="text-sm font-semibold">Editor Summary</h2><p className="text-[10px] text-[var(--app-muted)]">Delivered work attributed to workspace editors.</p></div>
-            <span className="text-[11px] text-[var(--app-muted)]">{editorSummary.length} editors</span>
-          </header>
+      <SplitPane
+        ratio="balanced"
+        primary={(
+        <ContentSection title="Editor Summary" description="Delivered work attributed to workspace editors." metadata={<span className="text-[11px] text-muted-foreground">{editorSummary.length} editors</span>} bodyMode="flush">
           <div className="divide-y divide-[var(--app-border)] border-t border-[var(--app-border)]">
             {editorSummary.map((editor) => (
               <div key={editor.userId} className="flex items-center gap-3 px-4 py-3">
@@ -713,13 +740,10 @@ export function PrecisionReports({
               </div>
             ))}
           </div>
-        </section>
-
-        <section className="overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]">
-          <header className="flex h-12 items-center justify-between px-4">
-            <div><h2 className="text-sm font-semibold">Delivered Projects</h2><p className="text-[10px] text-[var(--app-muted)]">Most recently completed editing work.</p></div>
-            <span className="text-[11px] text-[var(--app-muted)]">{report.deliveredProjects.length} projects</span>
-          </header>
+        </ContentSection>
+        )}
+        secondary={(
+        <ContentSection title="Delivered Projects" description="Most recently completed editing work." metadata={<span className="text-[11px] text-muted-foreground">{report.deliveredProjects.length} projects</span>} bodyMode="flush">
           <div className="divide-y divide-[var(--app-border)] border-t border-[var(--app-border)]">
             {report.deliveredProjects.slice(0, 6).map((project) => (
               <div key={project.id} className="grid grid-cols-[minmax(0,1fr)_100px_auto] items-center gap-3 px-4 py-3">
@@ -730,48 +754,14 @@ export function PrecisionReports({
             ))}
             {!report.deliveredProjects.length ? <div className="grid min-h-28 place-items-center text-xs text-[var(--app-muted)]">Delivered projects will appear here.</div> : null}
           </div>
-        </section>
-      </div>
-    </div>
+        </ContentSection>
+        )}
+      />
+      </PageContent>
+    </WorkspacePage>
   );
-}
-
-function Summary({ label, value, icon: Icon }: { label: string; value: number; icon: typeof UsersRound }) {
-  return <div className="flex min-h-[76px] items-center gap-2.5 px-3 py-3"><span className="grid size-8 place-items-center rounded-md bg-[var(--app-soft-panel)] text-[var(--app-muted)]"><Icon className="size-4" /></span><span><span className="block text-[10px] text-[var(--app-muted)]">{label}</span><span className="mt-0.5 block text-xl font-semibold tabular-nums">{value}</span></span></div>;
 }
 
 function ClientMetric({ label, value }: { label: string; value: string }) {
   return <div className="px-4 py-3"><p className="text-[9px] font-semibold uppercase text-[var(--app-subtle)]">{label}</p><p className="mt-1 text-sm font-semibold">{value}</p></div>;
-}
-
-function ReportMetric({
-  label,
-  value,
-  helper,
-  icon: Icon,
-  index,
-  reduceMotion,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  icon: typeof CircleDollarSign;
-  index: number;
-  reduceMotion: boolean;
-}) {
-  return (
-    <motion.div
-      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={reduceMotion ? { duration: 0 } : { ...revealTransition, delay: index * 0.045 }}
-      className="flex min-h-[92px] items-center gap-3 px-4 py-3"
-    >
-      <span className="grid size-9 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]"><Icon className="size-[18px]" /></span>
-      <span className="min-w-0">
-        <span className="block text-[10px] text-[var(--app-muted)]">{label}</span>
-        <span className="mt-0.5 block truncate text-xl font-semibold tabular-nums">{value}</span>
-        <span className="mt-0.5 block truncate text-[10px] text-[var(--app-subtle)]">{helper}</span>
-      </span>
-    </motion.div>
-  );
 }

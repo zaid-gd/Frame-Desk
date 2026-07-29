@@ -317,7 +317,7 @@ export function WorkspaceShell({
           tabIndex={-1}
           className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto bg-[var(--app-canvas)] pt-12 outline-none lg:fixed lg:bottom-0 lg:left-[60px] lg:right-0 lg:top-12 lg:h-auto lg:min-h-0 lg:overscroll-contain lg:rounded-tl-2xl lg:pt-0"
         >
-          <div className="min-h-full">
+          <div className="min-h-full lg:h-full">
             {children}
           </div>
         </main>
