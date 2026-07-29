@@ -241,7 +241,7 @@ export function WorkspaceShell({
   );
 
   return (
-    <div className="min-h-dvh bg-[var(--app-canvas)] text-[var(--app-ink)]">
+    <div className="min-h-dvh bg-[var(--app-canvas)] text-[var(--app-ink)] lg:h-dvh lg:overflow-hidden lg:bg-[var(--app-sidebar)]">
       <DesktopSidebar page={page} settings={settings} starterNavigation={starterNavigation} />
 
       <div
@@ -252,7 +252,7 @@ export function WorkspaceShell({
       >
         <header
           className={cn(
-            "fixed inset-x-0 top-0 z-30 flex h-12 items-center border-b border-[var(--app-border)] bg-[var(--app-sidebar)] px-2.5 transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between lg:px-3",
+            "fixed inset-x-0 top-0 z-30 flex h-12 items-center bg-[var(--app-sidebar)] px-2.5 transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between lg:px-3",
             "lg:left-[60px]",
           )}
         >
@@ -311,8 +311,15 @@ export function WorkspaceShell({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto pt-12 outline-none lg:h-auto lg:min-h-[calc(100dvh-48px)] lg:overflow-visible">
-          {children}
+        <main
+          id="main-content"
+          data-testid="workspace-content-surface"
+          tabIndex={-1}
+          className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto bg-[var(--app-canvas)] pt-12 outline-none lg:fixed lg:bottom-0 lg:left-[60px] lg:right-0 lg:top-12 lg:h-auto lg:min-h-0 lg:overscroll-contain lg:rounded-tl-2xl lg:pt-0"
+        >
+          <div className="min-h-full">
+            {children}
+          </div>
         </main>
       </div>
 
@@ -356,10 +363,10 @@ function DesktopSidebar({
       initial={false}
       animate={{ width: 60 }}
       transition={reduceMotion ? { duration: 0 } : shellTransition}
-      className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-sidebar)] lg:flex lg:flex-col"
+      className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden bg-[var(--app-sidebar)] lg:flex lg:flex-col"
     >
       <div className={cn(
-        "grid h-12 grid-cols-1 items-center justify-items-center border-b border-[var(--app-border)] bg-[var(--app-sidebar)] px-1.5",
+        "grid h-12 grid-cols-1 items-center justify-items-center bg-[var(--app-sidebar)] px-1.5",
       )}>
         <Link
           href="/"

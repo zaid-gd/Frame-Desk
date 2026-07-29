@@ -76,22 +76,108 @@ test("uses a unified compact desktop shell", async ({ page }) => {
 
   const sidebar = page.locator("aside").first();
   const topbar = page.locator("header").first();
+  const contentSurface = page.getByTestId("workspace-content-surface");
   await expect(sidebar).toBeVisible();
   await expect(topbar).toBeVisible();
+  await expect(contentSurface).toBeVisible();
 
   const sidebarBox = await sidebar.boundingBox();
   const topbarBox = await topbar.boundingBox();
+  const contentSurfaceBox = await contentSurface.boundingBox();
   expect(sidebarBox?.width).toBe(60);
   expect(topbarBox?.height).toBe(48);
   expect(topbarBox?.x).toBe(60);
+  expect(contentSurfaceBox?.x).toBe(60);
+  expect(contentSurfaceBox?.y).toBe(48);
 
   const surfaces = await page.evaluate(() => {
     const sidebarElement = document.querySelector("aside");
     const topbarElement = document.querySelector("header");
+    const contentSurfaceElement = document.querySelector('[data-testid="workspace-content-surface"]');
     return {
       sidebar: sidebarElement ? getComputedStyle(sidebarElement).backgroundColor : null,
+      sidebarBorder: sidebarElement ? getComputedStyle(sidebarElement).borderRightWidth : null,
       topbar: topbarElement ? getComputedStyle(topbarElement).backgroundColor : null,
+      topbarBorder: topbarElement ? getComputedStyle(topbarElement).borderBottomWidth : null,
+      contentRadius: contentSurfaceElement ? getComputedStyle(contentSurfaceElement).borderTopLeftRadius : null,
+      contentOverflow: contentSurfaceElement ? getComputedStyle(contentSurfaceElement).overflow : null,
     };
   });
   expect(surfaces.topbar).toBe(surfaces.sidebar);
+  expect(surfaces.sidebarBorder).toBe("0px");
+  expect(surfaces.topbarBorder).toBe("0px");
+  expect(parseFloat(surfaces.contentRadius ?? "0")).toBeGreaterThanOrEqual(16);
+  expect(surfaces.contentOverflow).toBe("auto");
+
+  await contentSurface.evaluate((element) => {
+    const spacer = document.createElement("div");
+    spacer.dataset.testid = "shell-scroll-spacer";
+    spacer.style.height = "200vh";
+    element.appendChild(spacer);
+    element.scrollTop = 320;
+  });
+  await expect.poll(() => contentSurface.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  const scrolledSurfaceBox = await contentSurface.boundingBox();
+  expect(scrolledSurfaceBox?.x).toBe(60);
+  expect(scrolledSurfaceBox?.y).toBe(48);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test("shows the compact dashboard overview and links to all projects", async ({ page }) => {
+  await chooseLocalMode(page);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("cutlab-studio:privacy-consent:v1", "essential");
+    window.localStorage.setItem("video-editing-work-tracker:settings:v1", JSON.stringify({
+      profileName: "Screen",
+      currencyCode: "USD",
+      salaryWorkType: "Job / Salary",
+      salaryBatchSize: 5,
+      salaryBatchAmount: 10000,
+      projectTags: ["Job / Salary", "Freelance"],
+      theme: "Dark",
+      accentColor: "#14B8A6",
+      density: "Comfortable",
+    }));
+    window.localStorage.setItem("video-editing-work-tracker:v1", JSON.stringify(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `dashboard-project-${index + 1}`,
+        profileId: "video-editor",
+        createdAt: `2026-07-${String(28 - index).padStart(2, "0")}T09:00:00.000Z`,
+        title: `Dashboard project ${index + 1}`,
+        client: index % 2 ? "Orbit Labs" : "Aperture Coffee",
+        status: index < 5 ? "Delivered" : index === 5 ? "Revision" : "In Progress",
+        workType: "Job / Salary",
+        startDate: "2026-07-01",
+        dueDate: `2026-07-${String(22 + index).padStart(2, "0")}`,
+        earnings: 0,
+        notes: index === 5 ? "Client feedback needs attention." : "Production checklist is current.",
+      })),
+    ));
+  });
+  await openApp(page, "/");
+
+  const search = page.getByRole("textbox", { name: "Search dashboard projects" });
+  const filters = page.getByRole("button", { name: /^Filters/ });
+  const searchBox = await search.boundingBox();
+  const filterBox = await filters.boundingBox();
+  expect(Math.abs((searchBox?.y ?? 0) - (filterBox?.y ?? 0))).toBeLessThanOrEqual(5);
+
+  const pulse = page.getByRole("region", { name: "Operational pulse" });
+  await expect(pulse.getByText("Earned", { exact: true })).toBeVisible();
+  await expect(pulse.getByText("Salary batch", { exact: true })).toBeVisible();
+
+  const ledger = page.getByRole("region", { name: "Project ledger" });
+  await expect(ledger.getByTestId("project-row")).toHaveCount(5);
+  const viewAll = ledger.getByRole("link", { name: "View all projects" });
+  await expect(viewAll).toHaveAttribute("href", "/projects");
+
+  const followUp = page.getByRole("region", { name: "Workspace follow-up" });
+  const attentionBox = await followUp.getByRole("region", { name: "Attention queue" }).boundingBox();
+  const activityBox = await followUp.getByRole("region", { name: "Activity" }).boundingBox();
+  expect(attentionBox?.width ?? 0).toBeGreaterThan(500);
+  expect(activityBox?.width ?? 0).toBeGreaterThan(500);
+  expect(Math.abs((attentionBox?.y ?? 0) - (activityBox?.y ?? 0))).toBeLessThanOrEqual(2);
+
+  await viewAll.click();
+  await expect(page).toHaveURL(/\/projects$/);
 });
