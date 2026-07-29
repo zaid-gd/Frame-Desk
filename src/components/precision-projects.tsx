@@ -8,11 +8,13 @@ import {
   CalendarDays,
   CheckCircle2,
   Edit3,
+  Film,
   FolderKanban,
   FolderOpen,
   MoreHorizontal,
   Plus,
   Search,
+  SlidersHorizontal,
   Trash2,
   UsersRound,
 } from "lucide-react";
@@ -122,6 +124,53 @@ function projectColor(project: WorkItem) {
   return palette[hash % palette.length];
 }
 
+function projectDuration(project: WorkItem) {
+  let hash = 0;
+  for (const char of project.title) hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
+  const minutes = 1 + (hash % 11);
+  const seconds = (hash >>> 3) % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function projectNextAction(project: WorkItem) {
+  if (project.status === "Delivered") return "Archive final exports and confirm the payment record.";
+  if (["Review", "Client Review"].includes(project.status)) return "Collect review notes and prepare the next client-ready version.";
+  if (project.status === "Revision") return "Apply the requested revisions and send the updated cut.";
+  if (project.status === "In Progress") return "Complete the current production pass before the next handoff.";
+  return "Confirm the brief, owner, and first production milestone.";
+}
+
+function ProjectVideoThumbnail({
+  project,
+  className,
+}: {
+  project: WorkItem;
+  className?: string;
+}) {
+  return (
+    <span
+      role="img"
+      aria-label={`${project.title} video thumbnail`}
+      data-slot="project-thumbnail"
+      data-thumbnail-kind="video"
+      className={cn(
+        "relative isolate flex h-[50px] w-[88px] shrink-0 overflow-hidden rounded-md border border-white/10",
+        className,
+      )}
+      style={{ background: projectColor(project) }}
+    >
+      <span className="absolute -right-3 top-1/2 h-[130%] w-[52%] -translate-y-1/2 rotate-12 bg-[var(--app-accent)] opacity-45" />
+      <span className="absolute inset-x-2 top-2 flex items-center justify-between text-slate-900/60 dark:text-white/80">
+        <Film className="size-3.5" />
+        <span className="size-1.5 rounded-full bg-current opacity-60" />
+      </span>
+      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1 py-0.5 text-[8px] font-medium leading-none text-white">
+        {projectDuration(project)}
+      </span>
+    </span>
+  );
+}
+
 export function PrecisionProjects(props: PrecisionProjectsProps) {
   const [scope, setScope] = useState<WorkspaceScope>("personal");
   const [query, setQuery] = useState("");
@@ -163,6 +212,13 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
     active: source.filter((project) => !delivered(project) && project.status !== "Cancelled").length,
     review: source.filter((project) => ["Review", "Revision", "Client Review"].includes(project.status)).length,
     delivered: source.filter(delivered).length,
+    dueSoon: source.filter((project) => {
+      if (delivered(project) || project.status === "Cancelled") return false;
+      const due = new Date(`${project.dueDate}T00:00:00`).getTime();
+      const now = Date.now();
+      return due >= now && due <= now + (7 * 86_400_000);
+    }).length,
+    earned: source.filter(delivered).reduce((total, project) => total + project.earnings, 0),
   }), [source]);
 
   const columns = useMemo(() => [
@@ -170,11 +226,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
       header: "Project",
       cell: ({ row }) => (
         <div className="flex min-w-0 items-center gap-3">
-          <div className="relative h-10 w-14 shrink-0 overflow-hidden rounded-md border border-[var(--app-border)]" style={{ background: projectColor(row.original) }}>
-            <FolderOpen className="absolute right-1.5 top-1.5 size-3.5 text-black/30" />
-            <span className="absolute inset-x-2 bottom-2 h-0.5 rounded bg-white/70" />
-            <span className="absolute bottom-2 left-2 h-0.5 w-7 rounded bg-[var(--app-accent)]" />
-          </div>
+          <ProjectVideoThumbnail project={row.original} />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-semibold">{row.original.title}</p>
             <p className="mt-0.5 max-w-[300px] truncate text-[11px] text-[var(--app-muted)]">
@@ -184,10 +236,6 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         </div>
       ),
     }),
-    columnHelper.accessor("workType", {
-      header: "Type",
-      cell: (info) => <span className="whitespace-nowrap text-xs font-medium">{info.getValue()}</span>,
-    }),
     columnHelper.accessor("dueDate", {
       header: "Due date",
       cell: (info) => <span className="whitespace-nowrap text-xs">{formatDate(info.getValue())}</span>,
@@ -195,15 +243,6 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
     columnHelper.accessor("status", {
       header: "Status",
       cell: (info) => <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(info.getValue()))}>{info.getValue()}</Badge>,
-    }),
-    columnHelper.display({
-      id: "amount",
-      header: "Amount",
-      cell: ({ row }) => (
-        <span className="whitespace-nowrap text-xs font-medium">
-          {row.original.workType === props.settings.salaryWorkType ? "Batch tracked" : money(row.original.earnings, props.settings.currencyCode)}
-        </span>
-      ),
     }),
     columnHelper.display({
       id: "progress",
@@ -223,6 +262,15 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
           </div>
         );
       },
+    }),
+    columnHelper.accessor("earnings", {
+      id: "amount",
+      header: "Value",
+      cell: ({ row }) => (
+        <span className="whitespace-nowrap text-xs font-medium">
+          {row.original.workType === props.settings.salaryWorkType ? "Batch tracked" : money(row.original.earnings, props.settings.currencyCode)}
+        </span>
+      ),
     }),
     columnHelper.display({
       id: "actions",
@@ -289,6 +337,22 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
       <PageContent mode="fill">
       <PageToolbar
         primary={
+        <>
+        <div className="relative min-w-0 flex-1 sm:max-w-[560px]">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search project, client, or note..." aria-label="Search projects" className="h-9 bg-[var(--app-panel)] pl-8 text-xs transition-shadow focus-visible:ring-2" />
+        </div>
+        <div className="flex min-w-[150px] items-center gap-2">
+          <SlidersHorizontal className="size-4 shrink-0 text-[var(--app-muted)]" />
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger aria-label="Filter projects by status" className="h-9 w-full bg-[var(--app-panel)] text-xs transition-colors"><SelectValue /></SelectTrigger>
+            <SelectContent>{["All", "Planned", "In Progress", "Review", "Client Review", "Revision", "Delivered", "Cancelled"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+          </Select>
+        </div>
+        </>
+        }
+        secondary={
+        <>
         <div className="relative inline-flex w-fit rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] p-0.5">
           <button
             aria-pressed={scope === "personal"}
@@ -308,26 +372,27 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
             <span className="relative">Team Projects <span className="ml-1 text-[10px]">{props.teamProjects.length}</span></span>
           </button>
         </div>
-        }
-        secondary={
-        <div className="flex w-full flex-1 flex-col gap-2 sm:flex-row lg:max-w-[680px]">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
-            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, client, or notes..." aria-label="Search projects" className="h-9 bg-[var(--app-panel)] pl-8 text-xs transition-shadow focus-visible:ring-2" />
-          </div>
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger aria-label="Filter projects by status" className="h-9 w-full bg-[var(--app-panel)] text-xs transition-colors sm:w-[150px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{["All", "Planned", "In Progress", "Review", "Client Review", "Revision", "Delivered", "Cancelled"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent>
+          <Select
+            value={sorting[0]?.id ?? "updated"}
+            onValueChange={(value) => setSorting(value === "updated" ? [] : [{ id: value, desc: value === "amount" }])}
+          >
+            <SelectTrigger aria-label="Sort projects" className="h-9 w-[140px] bg-[var(--app-panel)] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Last updated</SelectItem>
+              <SelectItem value="dueDate">Due date</SelectItem>
+              <SelectItem value="title">Title</SelectItem>
+              <SelectItem value="amount">Value</SelectItem>
+            </SelectContent>
           </Select>
-        </div>
+        </>
         }
       />
 
       <MetricStrip columns={4}>
-        <MetricItem icon={<FolderKanban className="size-3.5" />} label="All projects" value={source.length} />
-        <MetricItem icon={<CalendarDays className="size-3.5" />} label="Active" value={summary.active} />
-        <MetricItem icon={<UsersRound className="size-3.5" />} label="In review" value={summary.review} />
-        <MetricItem icon={<CheckCircle2 className="size-3.5" />} label="Delivered" value={summary.delivered} />
+        <MetricItem icon={<FolderKanban className="size-3.5" />} label="All projects" value={source.length} supporting="this workspace" />
+        <MetricItem icon={<CalendarDays className="size-3.5" />} label="In motion" value={summary.active} supporting={`${summary.dueSoon} due soon`} />
+        <MetricItem icon={<UsersRound className="size-3.5" />} label="Needs attention" value={summary.review} supporting="review or revision" />
+        <MetricItem icon={<CheckCircle2 className="size-3.5" />} label="Delivered" value={summary.delivered} supporting={`${money(summary.earned, props.settings.currencyCode)} collected`} />
       </MetricStrip>
 
       <motion.div
@@ -403,11 +468,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                     setMobileInspectorOpen(true);
                   }}
                 >
-                  <span
-                    aria-hidden="true"
-                    className="size-12 rounded-md border border-[var(--app-border)]"
-                    style={{ backgroundColor: projectColor(row.original) }}
-                  />
+                  <ProjectVideoThumbnail project={row.original} className="h-12 w-16" />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{row.original.title}</span>
                     <span className="mt-1 block truncate text-xs text-[var(--app-muted)]">
@@ -438,7 +499,15 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                         <th
                           key={header.id}
                           aria-sort={header.column.getIsSorted() === "asc" ? "ascending" : header.column.getIsSorted() === "desc" ? "descending" : "none"}
-                          className="h-8 px-3 text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]"
+                          className={cn(
+                            "h-8 px-3 text-left text-[10px] font-semibold uppercase text-[var(--app-subtle)]",
+                            header.column.id === "title" && "w-[38%]",
+                            header.column.id === "dueDate" && "w-[14%]",
+                            header.column.id === "status" && "w-[14%]",
+                            header.column.id === "progress" && "w-[17%]",
+                            header.column.id === "amount" && "w-[13%]",
+                            header.column.id === "actions" && "w-[4%]",
+                          )}
                         >
                           {header.isPlaceholder ? null : header.column.getCanSort() ? (
                             <button
@@ -466,7 +535,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                       data-project-title={row.original.title}
                       aria-selected={selected?.id === row.original.id}
                       className={cn(
-                        "h-[var(--workspace-row-height,58px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)] active:bg-[var(--app-active)]",
+                        "h-[var(--workspace-row-height,70px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)] active:bg-[var(--app-active)]",
                         selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
                       )}
                       animate={{ opacity: 1 }}
@@ -651,14 +720,13 @@ function ProjectInspector({
       className={cn("sticky top-[76px] max-h-[calc(100dvh-96px)] overflow-y-auto rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]", className)}
     >
       <div className="border-b border-[var(--app-border)] p-4">
-        <div className="flex items-start gap-3">
+        <div>
           <motion.div
             initial={reduceMotion ? false : { scale: 0.96 }}
             animate={{ scale: 1 }}
-            className="grid size-10 shrink-0 place-items-center rounded-md border border-[var(--app-border)]"
-            style={{ background: projectColor(project) }}
+            className="w-full"
           >
-            <FolderOpen className="size-4 text-black/35" />
+            <ProjectVideoThumbnail project={project} className="mb-3 aspect-video h-auto w-full" />
           </motion.div>
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold">{project.title}</h2>
@@ -668,9 +736,12 @@ function ProjectInspector({
         </div>
       </div>
       <div className="space-y-4 p-4">
-        <Detail label="Work type" value={project.workType} />
-        <Detail label="Due date" value={formatDate(project.dueDate)} />
-        <Detail label="Amount" value={project.workType === settings.salaryWorkType ? "Batch tracked" : money(project.earnings, settings.currencyCode)} />
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-5">
+          <Detail label="Client" value={project.client || "No client"} />
+          <Detail label="Work type" value={project.workType} />
+          <Detail label="Due date" value={formatDate(project.dueDate)} />
+          <Detail label="Value" value={project.workType === settings.salaryWorkType ? "Batch tracked" : money(project.earnings, settings.currencyCode)} />
+        </dl>
         <div className="border-t border-[var(--app-border)] pt-4">
           <div className="flex justify-between text-xs font-semibold"><span>Progress</span><span>{value}%</span></div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
@@ -684,6 +755,10 @@ function ProjectInspector({
         <div className="border-t border-[var(--app-border)] pt-4">
           <p className="text-[10px] font-semibold uppercase text-[var(--app-subtle)]">Project note</p>
           <p className="mt-2 text-xs leading-5 text-[var(--app-muted)]">{project.notes || "No project notes yet."}</p>
+        </div>
+        <div className="border-t border-[var(--app-border)] pt-4">
+          <p className="text-[10px] font-semibold uppercase text-[var(--app-subtle)]">Next action</p>
+          <p className="mt-2 text-xs leading-5 text-[var(--app-ink)]">{projectNextAction(project)}</p>
         </div>
         <div className="grid grid-cols-2 gap-2 pt-1">
           <Button variant="outline" className="h-9 transition-transform active:scale-[0.98]" disabled={!canEdit && Boolean(project.teamId)} onClick={() => onEdit(project)}><Edit3 /> Edit</Button>

@@ -1,5 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
+import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "@playwright/test";
@@ -194,6 +196,64 @@ async function assertWorkspaceGeometry(page, route, expectedFamily) {
   }
 }
 
+async function assertApprovedFamilyDesigns(page) {
+  const captureDirectory = join(tmpdir(), `frame-desk-workspace-family-designs-${process.pid}`);
+  if (process.env.CUTLAB_CAPTURE_FAMILIES === "1") {
+    await mkdir(captureDirectory, { recursive: true });
+  }
+
+  await page.goto(`${baseUrl}/projects`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: "Projects" }).waitFor();
+  const projectThumbnail = page
+    .locator('[data-slot="project-thumbnail"][data-thumbnail-kind="video"]:visible')
+    .first();
+  try {
+    await projectThumbnail.waitFor({ state: "visible" });
+  } catch {
+    const projectRows = await page.locator('[data-testid="project-row"], [data-testid="mobile-project-row"]').count();
+    throw new Error(`/projects is missing the approved video-thumbnail project rows (${projectRows} project rows rendered).`);
+  }
+  if (process.env.CUTLAB_CAPTURE_FAMILIES === "1") {
+    await page.getByRole("heading", { level: 2, name: "Project library" }).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(captureDirectory, "projects-restored.png"), fullPage: true });
+  }
+
+  await page.goto(`${baseUrl}/calendar`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: "Calendar" }).waitFor();
+  const calendarToolbar = page.locator('[data-slot="page-toolbar"][data-family-toolbar="calendar"]');
+  if (await calendarToolbar.count() === 0) {
+    throw new Error("/calendar is missing the approved month controls and view toolbar.");
+  }
+  if (process.env.CUTLAB_CAPTURE_FAMILIES === "1") {
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(captureDirectory, "calendar-restored.png"), fullPage: true });
+  }
+
+  await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: "Settings" }).waitFor();
+  const settingsNavigation = page.locator('[data-slot="settings-navigation"][data-navigation-kind="icon-index"]');
+  if (await settingsNavigation.count() === 0) {
+    throw new Error("/settings is missing the approved icon-based settings index.");
+  }
+  if (process.env.CUTLAB_CAPTURE_FAMILIES === "1") {
+    await page.getByRole("heading", { level: 2, name: "Project Tags & Salary" }).waitFor();
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: join(captureDirectory, "settings-restored.png"), fullPage: true });
+  }
+
+  for (const [route, selector, message] of [
+    ["/feedback", '[data-slot="review-detail"]', "Feedback is missing its functional selected-review detail rail."],
+    ["/resources", '[data-slot="page-toolbar"][data-family-toolbar="resources"]', "Resources is missing its library toolbar."],
+    ["/templates", '[data-slot="template-card"]', "Templates is missing its visual template-card library."],
+    ["/integrations", '[data-slot="page-toolbar"][data-family-toolbar="integrations"]', "Integrations is missing its grouped library toolbar."],
+    ["/account", '[data-family-region="account-administration"]', "Account is missing its administration-family composition."],
+  ]) {
+    await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
+    if (await page.locator(selector).count() === 0) throw new Error(message);
+  }
+}
+
 try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying first-value onboarding and sample isolation...");
@@ -304,6 +364,9 @@ try {
       await page.getByRole("heading", { level: 1, name: heading }).waitFor();
       await assertWorkspaceGeometry(page, route, family);
     }
+
+    console.log("Verifying approved representative page-family designs...");
+    await assertApprovedFamilyDesigns(page);
   });
 
   for (const viewport of [

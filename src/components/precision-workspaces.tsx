@@ -359,6 +359,7 @@ export function PrecisionFeedback({
   onViewProject: (project: WorkItem) => void;
 }) {
   const [filter, setFilter] = useState<"All" | "Review" | "Revision">("All");
+  const [selectedId, setSelectedId] = useState("");
   const reduceMotion = useHydratedReducedMotion();
   const queue = useMemo(() => projects
     .filter((project) => review(project) || (active(project) && /client|approval/i.test(project.notes)))
@@ -370,6 +371,13 @@ export function PrecisionFeedback({
   }), [filter, queue]);
   const deliveredCount = projects.filter(delivered).length;
   const revisionCount = projects.filter((project) => project.status === "Revision").length;
+  const selected = visibleQueue.find((project) => project.id === selectedId) ?? visibleQueue[0] ?? null;
+
+  useEffect(() => {
+    if (!visibleQueue.some((project) => project.id === selectedId)) {
+      setSelectedId(visibleQueue[0]?.id ?? "");
+    }
+  }, [selectedId, visibleQueue]);
 
   return (
     <WorkspacePage family="master-detail">
@@ -431,8 +439,13 @@ export function PrecisionFeedback({
                     animate={{ opacity: 1, y: 0 }}
                     transition={reduceMotion ? { duration: 0 } : { ...revealTransition, delay: Math.min(index * 0.03, 0.18) }}
                     whileTap={reduceMotion ? undefined : { scale: 0.996 }}
-                    className="grid w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[minmax(0,1fr)_150px_120px_auto] sm:items-center"
-                    onClick={() => onViewProject(project)}
+                    aria-pressed={selected?.id === project.id}
+                    className={cn(
+                      "grid w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[minmax(0,1fr)_150px_120px_auto] sm:items-center",
+                      selected?.id === project.id && "bg-[var(--app-active)] shadow-[inset_2px_0_var(--app-highlight)]",
+                    )}
+                    onClick={() => setSelectedId(project.id)}
+                    onDoubleClick={() => onViewProject(project)}
                   >
                 <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">{project.title}</span><span className="mt-1 block truncate text-[11px] text-[var(--app-muted)]">{project.client || project.workType} · {project.notes || "No review note"}</span></span>
                 <span className="text-[11px] text-[var(--app-muted)]">Due {formatDate(project.dueDate)}</span>
@@ -458,10 +471,53 @@ export function PrecisionFeedback({
         </ContentSection>
         )}
         detail={(
-          <ContentSection title="Review context" description="Open a queue item to continue in its project workspace.">
-            <div className="grid min-h-56 place-items-center text-center">
-              <div><MessageSquareText className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Select a review item</p><p className="mt-1 text-xs text-[var(--app-muted)]">Revision notes and project context remain available when you open the project.</p></div>
-            </div>
+          <ContentSection
+            data-slot="review-detail"
+            title={selected?.title ?? "Review context"}
+            description={selected ? `${selected.client || selected.workType} · due ${formatDate(selected.dueDate)}` : "Select a queue item to inspect its review context."}
+          >
+            {selected ? (
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={selected.id}
+                  initial={reduceMotion ? false : { opacity: 0, x: 6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, x: -6 }}
+                  transition={reduceMotion ? { duration: 0 } : revealTransition}
+                  className="space-y-5"
+                >
+                  <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px]", statusTone(selected.status))}>{selected.status}</Badge>
+                  <dl className="grid grid-cols-2 gap-4">
+                    <ClientMetric label="Client" value={selected.client || "No client"} />
+                    <ClientMetric label="Work type" value={selected.workType} />
+                  </dl>
+                  <div className="border-t border-[var(--app-border)] pt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--app-muted)]">Latest review note</p>
+                    <p className="mt-2 text-xs leading-5 text-[var(--app-ink)]">{selected.notes || "No review note has been recorded yet."}</p>
+                  </div>
+                  <div className="border-t border-[var(--app-border)] pt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--app-muted)]">Review history</p>
+                    <div className="mt-3 space-y-3">
+                      <div className="flex gap-3 text-xs">
+                        <span className="mt-1 size-2 shrink-0 rounded-full bg-[var(--app-highlight)]" />
+                        <div><p className="font-medium">{selected.status === "Revision" ? "Revision requested" : "Review requested"}</p><p className="mt-0.5 text-[11px] text-[var(--app-muted)]">Current production stage</p></div>
+                      </div>
+                      <div className="flex gap-3 text-xs">
+                        <span className="mt-1 size-2 shrink-0 rounded-full bg-[var(--app-border)]" />
+                        <div><p className="font-medium">Project prepared for feedback</p><p className="mt-0.5 text-[11px] text-[var(--app-muted)]">Open the project for files and comments</p></div>
+                      </div>
+                    </div>
+                  </div>
+                  <Button className="w-full" onClick={() => onViewProject(selected)}>
+                    Open review workspace <ArrowRight className="size-4" />
+                  </Button>
+                </motion.div>
+              </AnimatePresence>
+            ) : (
+              <div className="grid min-h-56 place-items-center text-center">
+                <div><MessageSquareText className="mx-auto size-7 text-[var(--app-muted)]" /><p className="mt-2 text-sm font-semibold">Select a review item</p><p className="mt-1 text-xs text-[var(--app-muted)]">Revision notes and project context will appear here.</p></div>
+              </div>
+            )}
           </ContentSection>
         )}
       />

@@ -137,6 +137,7 @@ export function PrecisionCalendar({
   const initialDate = firstProjectDate ? parseDate(firstProjectDate)! : todayDate();
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(iso(todayDate()));
+  const [viewMode, setViewMode] = useState<"month" | "week" | "agenda">("month");
   const reduceMotion = useHydratedReducedMotion();
 
   const monthDays = useMemo(() => calendarMonthDays(visibleMonth, settings.weekStart), [visibleMonth, settings.weekStart]);
@@ -149,6 +150,33 @@ export function PrecisionCalendar({
     const due = parseDate(project.dueDate);
     return due?.getFullYear() === visibleMonth.getFullYear() && due.getMonth() === visibleMonth.getMonth();
   }).length, [projects, visibleMonth]);
+  const visibleMonthProjects = useMemo(() => projects
+    .filter((project) => {
+      const due = parseDate(project.dueDate);
+      return due?.getFullYear() === visibleMonth.getFullYear() && due.getMonth() === visibleMonth.getMonth();
+    })
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate) || a.title.localeCompare(b.title)), [projects, visibleMonth]);
+  const selectedWeekDays = useMemo(() => {
+    const selected = parseDate(selectedDate) ?? todayDate();
+    const weekOffset = settings.weekStart === "Sun" ? selected.getDay() : (selected.getDay() + 6) % 7;
+    const start = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate() - weekOffset);
+    return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+  }, [selectedDate, settings.weekStart]);
+  const calendarViewRows = useMemo<Array<{ project: WorkItem | null; dateKey: string }>>(() => {
+    if (viewMode === "agenda") {
+      return visibleMonthProjects.map((project) => ({ project, dateKey: project.dueDate }));
+    }
+    if (viewMode === "week") {
+      return selectedWeekDays.flatMap((date): Array<{ project: WorkItem | null; dateKey: string }> => {
+        const dateKey = iso(date);
+        const matches = projects.filter((project) => project.dueDate === dateKey);
+        return matches.length
+          ? matches.map((project) => ({ project, dateKey }))
+          : [{ project: null, dateKey }];
+      });
+    }
+    return [];
+  }, [projects, selectedWeekDays, viewMode, visibleMonthProjects]);
 
   function shiftMonth(offset: number) {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
@@ -174,26 +202,48 @@ export function PrecisionCalendar({
       />
 
       <PageContent mode="fill">
+      <PageToolbar
+        data-family-toolbar="calendar"
+        primary={(
+          <>
+            <Button variant="outline" size="icon" aria-label="Previous month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(-1)}>
+              <ChevronLeft className="size-4" />
+            </Button>
+            <div className="min-w-[170px]">
+              <p className="text-sm font-semibold text-[var(--app-ink)]">{monthLabel}</p>
+              <p className="text-[10px] text-[var(--app-muted)]">{monthProjectCount} scheduled items</p>
+            </div>
+            <Button variant="outline" size="icon" aria-label="Next month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(1)}>
+              <ChevronRight className="size-4" />
+            </Button>
+          </>
+        )}
+        secondary={(
+          <div className="inline-flex h-9 rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-0.5" role="group" aria-label="Calendar view">
+            {(["month", "week", "agenda"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={viewMode === mode}
+                onClick={() => setViewMode(mode)}
+                className={cn(
+                  "rounded px-3 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-highlight)]",
+                  viewMode === mode ? "bg-[var(--app-panel)] text-[var(--app-highlight)] shadow-sm" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]",
+                )}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        )}
+      />
       <FillViewport bodyLabel="Calendar workspace" className="min-h-0" bodyClassName="overflow-auto">
         <SplitPane
           ratio="inspector"
           className="min-h-full"
-          primary={(
+          primary={viewMode === "month" ? (
             <ContentSection bodyMode="flush" className="h-full">
               <>
-              <div className="flex items-center justify-between gap-3 border-b border-[var(--app-border)] px-4 py-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <Button variant="outline" size="icon" aria-label="Previous month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(-1)}>
-                <ChevronLeft className="size-4" />
-              </Button>
-              <h2 className="truncate text-xl font-semibold">{monthLabel}</h2>
-              <Button variant="outline" size="icon" aria-label="Next month" className="size-9 border-[var(--app-border)] text-[var(--app-highlight)]" onClick={() => shiftMonth(1)}>
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
-            <span className="rounded-md bg-[var(--app-active)] px-2 py-1 text-xs font-semibold text-[var(--app-highlight)]">{monthProjectCount} in month</span>
-          </div>
-
               <div className="grid grid-cols-7 border-l border-t border-[var(--app-border)]">
             {weekdays.map((day) => (
               <div key={day} className="border-b border-r border-[var(--app-border)] px-2 py-2 text-[11px] font-semibold uppercase text-[var(--app-muted)]">
@@ -240,6 +290,34 @@ export function PrecisionCalendar({
             })}
               </div>
               </>
+            </ContentSection>
+          ) : (
+            <ContentSection
+              title={viewMode === "week" ? `Week of ${formatDate(iso(selectedWeekDays[0]), { month: "short", day: "numeric" })}` : `${monthLabel} agenda`}
+              description={viewMode === "week" ? "Seven-day delivery and review window." : `${visibleMonthProjects.length} scheduled projects ordered by due date.`}
+              bodyMode="flush"
+              className="h-full"
+            >
+              <div className="divide-y divide-[var(--app-border)]">
+                {calendarViewRows.map(({ project, dateKey }, index) => (
+                  <button
+                    key={`${dateKey}-${project?.id ?? "empty"}-${index}`}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(dateKey);
+                      if (project) onViewProject(project);
+                    }}
+                    className="grid w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[120px_minmax(0,1fr)_120px] sm:items-center"
+                  >
+                    <span className="text-xs font-medium text-[var(--app-muted)]">{formatDate(dateKey, { weekday: "short", month: "short", day: "numeric" })}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{project?.title ?? "No scheduled delivery"}</span>
+                      <span className="mt-0.5 block truncate text-xs text-[var(--app-muted)]">{project ? project.client || project.workType : "Open production time"}</span>
+                    </span>
+                    {project ? <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge> : null}
+                  </button>
+                ))}
+              </div>
             </ContentSection>
           )}
           secondary={(

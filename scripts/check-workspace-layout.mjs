@@ -18,6 +18,10 @@ const forbidden = [
     label: "TypeScript viewport measurement",
     pattern: /window\.(?:innerHeight|innerWidth)/g,
   },
+  {
+    label: "page-specific remaining-height calculation",
+    pattern: /(?:lg|xl):h-\[calc\(100%-[^\]]+\)\]/g,
+  },
 ];
 
 const failures = [];
@@ -53,6 +57,11 @@ for (const file of authenticatedPresentationFiles) {
 const trackerSource = readFileSync("src/app/tracker-app.tsx", "utf8");
 if (/function PageFrame\(/.test(trackerSource)) {
   failures.push("src/app/tracker-app.tsx still defines the retired PageFrame wrapper.");
+}
+for (const slot of ["conversation-header", "conversation-history", "conversation-composer"]) {
+  if (!trackerSource.includes(`data-slot="${slot}"`)) {
+    failures.push(`Team Chat is missing the shared ${slot} region.`);
+  }
 }
 
 const workspacePageSource = readFileSync("src/components/workspace-page/workspace-page.tsx", "utf8");

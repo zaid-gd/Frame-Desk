@@ -149,6 +149,7 @@ import {
   LockKeyhole,
   MapPin,
   MessageSquare,
+  Palette,
   Pencil,
   Play,
   Plug,
@@ -156,6 +157,7 @@ import {
   RefreshCw,
   Send,
   Share2,
+  SlidersHorizontal,
   Trash2,
   Unplug,
   Upload,
@@ -941,7 +943,7 @@ export function TrackerApp({
   ) : page === "team-chat" ? (
     <TeamChatPage />
   ) : page === "settings" ? (
-    <SettingsDesignPage settings={settings} setSettings={setSettings} onNewProject={openNewProject} notify={notify} />
+    <SettingsDesignPage settings={settings} setSettings={setSettings} notify={notify} />
   ) : page === "account" ? (
     <AccountSettingsPage />
   ) : page === "profile" ? (
@@ -1084,45 +1086,76 @@ function AccountSettingsPage() {
         eyebrow="Workspace / Account"
         title="Account Settings"
         description="Manage your private login details separately from your public Frame Desk profile."
+        actions={
+          <PageToolbar
+            primary={<OwnedBadge variant={isSignedIn ? "default" : "secondary"}>{isSignedIn ? "Signed in" : "Local mode"}</OwnedBadge>}
+            secondary={isSignedIn ? (
+              <OwnedButton asChild variant="outline">
+                <Link href="/profile/edit">
+                  <Pencil aria-hidden="true" />
+                  Edit public profile
+                </Link>
+              </OwnedButton>
+            ) : null}
+          />
+        }
       />
-      <PageContent>
-      <ContentSection title="Private account controls">
-      {!isLoaded ? (
-        <div role="status" className="grid min-h-[280px] place-items-center rounded-lg border bg-card p-6 text-card-foreground">
-          <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-            <LoaderCircle aria-hidden="true" className="size-7 animate-spin text-primary" />
-            <span>Loading account controls...</span>
-          </div>
-        </div>
-      ) : !isSignedIn ? (
-        <section className="rounded-lg border bg-card p-5 text-card-foreground md:p-6" aria-labelledby="account-required-title">
-          <div className="grid max-w-[620px] gap-4">
-            <h2 id="account-required-title" className="text-2xl font-semibold text-foreground">Account required</h2>
-            <p className="text-sm leading-6 text-muted-foreground">
-              Local mode does not have an account record, email, password, or connected login provider. Sign in or create an account to manage private account settings.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <OwnedButton type="button" onClick={() => openSignUp()}>Create Account</OwnedButton>
-              <OwnedButton type="button" variant="outline" onClick={() => openSignIn()}>Sign In</OwnedButton>
+      <PageContent data-family-region="account-administration">
+        <MetricStrip columns={2}>
+          <MetricItem label="Private account" value={isLoaded ? (isSignedIn ? "Connected" : "Local") : "Loading"} supporting="Login, security, and provider controls" />
+          <MetricItem label="Public profile" value={isSignedIn ? "Ready" : "Locked"} supporting="The profile clients and collaborators can see" />
+        </MetricStrip>
+
+        <ContentSection title="Private account" description="Authentication and account controls stay inside this signed-in area." bodyMode="flush">
+          {!isLoaded ? (
+            <div role="status" className="grid min-h-[220px] place-items-center p-6">
+              <div className="flex flex-col items-center gap-3 text-sm text-[var(--app-muted)]">
+                <LoaderCircle aria-hidden="true" className="size-7 animate-spin text-[var(--app-accent)]" />
+                <span>Loading account controls...</span>
+              </div>
             </div>
-          </div>
-        </section>
-      ) : (
-        <div className="grid gap-4">
-          <section aria-label="Private account controls" className="rounded-lg border bg-muted/30 p-2.5 md:p-3.5">
-            <div className="[&_.cl-card]:shadow-none [&_.cl-cardBox]:w-full [&_.cl-cardBox]:rounded-lg [&_.cl-cardBox]:border [&_.cl-cardBox]:border-border [&_.cl-cardBox]:shadow-none [&_.cl-navbar]:border-border [&_.cl-pageScrollBox]:py-1 [&_.cl-rootBox]:w-full">
-              <UserProfile routing="hash" />
+          ) : !isSignedIn ? (
+            <div className="grid max-w-[620px] gap-4 p-5 md:p-6" aria-labelledby="account-required-title">
+              <h2 id="account-required-title" className="text-xl font-semibold text-foreground">Account required</h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                Local mode does not have an account record, email, password, or connected login provider. Sign in or create an account to manage private account settings.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <OwnedButton type="button" onClick={() => openSignUp()}>Create account</OwnedButton>
+                <OwnedButton type="button" variant="outline" onClick={() => openSignIn()}>Sign in</OwnedButton>
+              </div>
             </div>
-          </section>
-          <OwnedButton asChild variant="outline" className="justify-self-end">
-            <Link href="/profile/edit">
-              <Pencil aria-hidden="true" />
-              Edit Public Profile
-            </Link>
-          </OwnedButton>
-        </div>
-      )}
-      </ContentSection>
+          ) : (
+            <div className="p-2.5 md:p-3.5">
+              <div className="[&_.cl-card]:shadow-none [&_.cl-cardBox]:w-full [&_.cl-cardBox]:rounded-lg [&_.cl-cardBox]:border [&_.cl-cardBox]:border-[var(--app-border)] [&_.cl-cardBox]:bg-[var(--app-soft-panel)] [&_.cl-cardBox]:shadow-none [&_.cl-navbar]:border-[var(--app-border)] [&_.cl-pageScrollBox]:py-1 [&_.cl-rootBox]:w-full">
+                <UserProfile routing="hash" />
+              </div>
+            </div>
+          )}
+        </ContentSection>
+
+        <ContentSection title="Public profile" description="Keep the profile you share with clients separate from private authentication settings.">
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <p className="text-sm font-semibold">Profile visibility and presentation</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+                Update your public name, handle, bio, location, and published work from the profile editor.
+              </p>
+            </div>
+            {isSignedIn ? (
+              <OwnedButton asChild variant="outline" className="shrink-0">
+                <Link href="/profile/edit">
+                  <Pencil aria-hidden="true" />
+                  Edit public profile
+                </Link>
+              </OwnedButton>
+            ) : (
+              <OwnedButton type="button" variant="outline" onClick={() => openSignIn()} className="shrink-0">
+                Sign in to edit
+              </OwnedButton>
+            )}
+          </div>
+        </ContentSection>
       </PageContent>
     </WorkspacePage>
   );
@@ -1294,7 +1327,15 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState<ResourceLink>(() => emptyResourceForm());
   const [error, setError] = useState("");
+  const [resourceSearch, setResourceSearch] = useState("");
+  const [resourceCategory, setResourceCategory] = useState("all");
   const sortedResources = [...resources].sort((a, b) => Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt));
+  const visibleResources = sortedResources.filter((resource) => {
+    const query = resourceSearch.trim().toLowerCase();
+    const matchesSearch = !query || [resource.title, resource.url, resource.notes, resource.category, projectName(resource.projectId)].some((value) => value.toLowerCase().includes(query));
+    const matchesCategory = resourceCategory === "all" || resource.category === resourceCategory;
+    return matchesSearch && matchesCategory;
+  });
   const linkedToProjects = resources.filter((resource) => resource.projectId).length;
   const projectOptions = ["General", ...projects.map((project) => project.id)];
   const projectLabels = Object.fromEntries(projects.map((project) => [project.id, project.title]));
@@ -1412,9 +1453,36 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
         />
       </MetricStrip>
 
+      <PageToolbar
+        data-family-toolbar="resources"
+        primary={
+          <div className="relative min-w-0 flex-1 sm:max-w-md">
+            <Link2 aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--app-muted)]" />
+            <OwnedInput
+              aria-label="Search resources"
+              value={resourceSearch}
+              onChange={(event) => setResourceSearch(event.target.value)}
+              placeholder="Search resources, links, or projects..."
+              className="h-10 bg-[var(--app-control)] pl-9"
+            />
+          </div>
+        }
+        secondary={
+          <OwnedSelect value={resourceCategory} onValueChange={setResourceCategory}>
+            <OwnedSelectTrigger aria-label="Filter resources by category" className="h-10 w-full sm:w-44">
+              <OwnedSelectValue placeholder="All categories" />
+            </OwnedSelectTrigger>
+            <OwnedSelectContent position="popper">
+              <OwnedSelectItem value="all">All categories</OwnedSelectItem>
+              {resourceCategories.map((category) => <OwnedSelectItem key={category} value={category}>{category}</OwnedSelectItem>)}
+            </OwnedSelectContent>
+          </OwnedSelect>
+        }
+      />
+
       <ContentSection
         title="Resource Library"
-        description="Manual links for now; this can later map to cloud storage APIs or OAuth providers."
+        description={resourceSearch || resourceCategory !== "all" ? `${visibleResources.length} matching resources` : "Manual links for now; this can later map to cloud storage APIs or OAuth providers."}
         metadata={
           <OwnedBadge variant="secondary" className="self-start rounded-md bg-primary/15 text-primary sm:self-auto">
             {resources.length} saved
@@ -1423,19 +1491,24 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
         bodyMode="flush"
       >
         <div className="divide-y divide-border">
-          {sortedResources.length ? sortedResources.map((resource) => (
-            <article key={resource.id} className="grid items-center gap-4 px-4 py-4 lg:grid-cols-[minmax(0,1.4fr)_160px_minmax(0,1fr)_140px]">
-              <div className="min-w-0">
-                <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <h3 className="truncate text-sm font-semibold">{resource.title}</h3>
-                  <OwnedBadge variant="secondary" className="rounded-md text-[11px] font-medium">{resource.category}</OwnedBadge>
+          {visibleResources.length ? visibleResources.map((resource) => (
+            <article key={resource.id} className="grid items-center gap-4 px-4 py-4 transition-colors hover:bg-[var(--app-soft-panel)] lg:grid-cols-[minmax(0,1.4fr)_160px_minmax(0,1fr)_140px]">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-accent)]" aria-hidden="true">
+                  <Link2 className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-sm font-semibold">{resource.title}</h3>
+                    <OwnedBadge variant="secondary" className="rounded-md text-[11px] font-medium">{resource.category}</OwnedBadge>
+                  </div>
+                  <p className="truncate text-xs text-[var(--app-muted)]">{resource.url}</p>
+                  {resource.notes ? <p className="mt-1 text-xs leading-relaxed text-[var(--app-muted)]">{resource.notes}</p> : null}
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{resource.url}</p>
-                {resource.notes ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{resource.notes}</p> : null}
               </div>
               <p className="text-sm">{resource.projectId ? projectName(resource.projectId) || "Linked project" : "General"}</p>
-              <time className="truncate text-xs text-muted-foreground" dateTime={resource.updatedAt || resource.createdAt}>
-                {formatDate((resource.updatedAt || resource.createdAt).slice(0, 10))}
+              <time className="truncate text-xs text-[var(--app-muted)]" dateTime={resource.updatedAt || resource.createdAt}>
+                Updated {formatDate((resource.updatedAt || resource.createdAt).slice(0, 10))}
               </time>
               <div className="flex gap-1 lg:justify-end">
                 <OwnedButton
@@ -1474,8 +1547,8 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
             </article>
           )) : (
             <PageEmptyState
-              title="No resources yet"
-              description="Add asset folders, reference docs, cloud links, review URLs, or handoff resources."
+              title={resources.length ? "No matching resources" : "No resources yet"}
+              description={resources.length ? "Try a different search or category filter." : "Add asset folders, reference docs, cloud links, review URLs, or handoff resources."}
             />
           )}
         </div>
@@ -1702,41 +1775,51 @@ function TemplatesDesignPage({
         {templates.map((template) => (
           <article
             key={template.id}
-            className="flex min-h-52 flex-col justify-between border-t border-border py-5 text-foreground"
+            data-slot="template-card"
+            className="group flex min-h-[250px] flex-col justify-between rounded-lg border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-4 text-foreground transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)]"
           >
             <div>
               <header className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-base font-semibold">{template.name}</h2>
-                    {template.custom ? (
-                      <OwnedBadge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                        Custom
-                      </OwnedBadge>
-                    ) : null}
+                    <OwnedBadge variant="secondary" className="rounded-md text-[10px] uppercase tracking-wide">
+                      {template.custom ? "Custom" : "Built-in"}
+                    </OwnedBadge>
                   </div>
                   <p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">{template.description}</p>
                 </div>
-                <FileText aria-hidden="true" className="size-5 shrink-0 text-primary" />
+                <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-accent)]">
+                  <FileText aria-hidden="true" className="size-4" />
+                </span>
               </header>
 
-              <dl className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+              <dl className="mt-4 grid grid-cols-2 gap-3 border-y border-[var(--app-border)] py-3 text-xs">
                 <div>
-                  <dt className="sr-only">Project type</dt>
-                  <dd className="font-semibold text-primary">{template.projectType}</dd>
+                  <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--app-muted)]">Project type</dt>
+                  <dd className="mt-1 font-semibold text-[var(--app-highlight)]">{template.projectType}</dd>
                 </div>
                 <div>
-                  <dt className="sr-only">Duration</dt>
-                  <dd className="text-muted-foreground">{template.durationDays} days</dd>
+                  <dt className="text-[10px] uppercase tracking-[0.12em] text-[var(--app-muted)]">Setup time</dt>
+                  <dd className="mt-1 text-foreground">{template.durationDays} days</dd>
                 </div>
               </dl>
 
               <div className="mt-4">
-                <h3 className="text-xs font-semibold text-muted-foreground">Workflow</h3>
-                <p className="mt-1 text-sm leading-relaxed">
-                  {template.workflowStages.join(" → ") || "Add stages after creating the project"}
-                </p>
-                <p className="mt-2 text-xs text-muted-foreground">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground">Workflow preview</h3>
+                  <span className="font-mono text-[10px] text-[var(--app-muted)]">{template.workflowStages.length} stages</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label={`${template.name} workflow stages`}>
+                  {(template.workflowStages.length ? template.workflowStages : ["Add stages after creating the project"]).slice(0, 4).map((stage, index) => (
+                    <span key={`${template.id}-${stage}-${index}`} className="inline-flex items-center gap-1.5">
+                      <span className="rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2 py-1 text-[11px] text-foreground">{stage}</span>
+                      {index < Math.min(template.workflowStages.length, 4) - 1 ? <span aria-hidden="true" className="text-[var(--app-muted)]">→</span> : null}
+                    </span>
+                  ))}
+                  {template.workflowStages.length > 4 ? <span className="text-[11px] text-[var(--app-muted)]">+{template.workflowStages.length - 4}</span> : null}
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
                   {template.deliverables.length} deliverables · {template.checklistItems.length} checklist items
                 </p>
               </div>
@@ -2014,20 +2097,20 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
       </MetricStrip>
 
       {teamError ? (
-        <div role="alert" className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
+        <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
           {teamError}
         </div>
       ) : null}
 
       {!isUserLoaded ? (
-        <div role="status" className="flex items-center gap-3 rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
+        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Checking account status...
-        </div>
+        </ContentSection>
       ) : !isSignedIn ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm md:p-8">
+        <ContentSection title="Team access" description="Shared workspaces keep members, project comments, notifications, activity, and chat in sync.">
           <div className="max-w-3xl">
-            <h2 className="text-2xl font-semibold leading-tight md:text-3xl">Team workspaces require an account</h2>
+            <h2 className="text-xl font-semibold leading-tight md:text-2xl">Team workspaces require an account</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Local mode is available for solo tracking, but invites, shared projects, comments, notifications, activity, and chat need Clerk sign-in so Convex can sync the right team workspace.
             </p>
@@ -2036,36 +2119,34 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
               <OwnedButton type="button" variant="outline" onClick={() => openSignIn()}>Sign In</OwnedButton>
             </div>
           </div>
-        </section>
+        </ContentSection>
       ) : isConvexAuthLoading ? (
-        <div role="status" className="flex items-center gap-3 rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
+        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Connecting your account to Team sync...
-        </div>
+        </ContentSection>
       ) : !isConvexAuthenticated ? (
-        <section role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-destructive shadow-sm md:p-8">
+        <ContentSection role="alert" className="border-destructive/50 bg-destructive/10 text-destructive" bodyClassName="p-6 md:p-8">
           <h2 className="text-xl font-semibold">Team sync is not connected</h2>
           <p className="mt-2 text-sm leading-relaxed">
             Clerk sign-in is loaded, but Convex did not receive an authenticated token. Check `convex/auth.config.ts`, the Clerk JWT template audience, and the Clerk issuer environment variables before running the two-account Team smoke test.
           </p>
-        </section>
+        </ContentSection>
       ) : teamData === undefined ? (
-        <div role="status" className="flex items-center gap-3 rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground shadow-sm">
+        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Loading team workspace...
-        </div>
+        </ContentSection>
       ) : !teamData ? (
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-lg border border-border bg-card text-card-foreground shadow-sm md:col-span-2">
+          <ContentSection className="md:col-span-2" bodyMode="flush">
             <EmptyPanel
               title="Invite your team"
               body="Create a shared workspace or join one with an invite code to start collaborating."
               assetKey="team"
             />
-          </div>
-          <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-            <h2 className="text-xl font-semibold">Create a workspace</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Owners can invite up to four more members. Projects, comments, notifications, activity, and chat sync through Convex.</p>
+          </ContentSection>
+          <ContentSection title="Create a workspace" description="Owners can invite up to four more members. Projects, comments, notifications, activity, and chat sync through Convex.">
             <FieldLayout className="mt-5" label="Workspace name" description={`${workspaceName.length}/${TEAM_WORKSPACE_NAME_LIMIT} characters`}>
               <OwnedInput
                 value={workspaceName}
@@ -2076,10 +2157,8 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
             <OwnedButton type="button" className="mt-4" disabled={Boolean(busyAction)} onClick={() => runTeamAction("create", () => createWorkspace({ name: workspaceName }))}>
               Create Team Workspace
             </OwnedButton>
-          </section>
-          <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-            <h2 className="text-xl font-semibold">Join with an invite code</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Use the six-character code from your team owner. Your signed-in email must match a pending invite.</p>
+          </ContentSection>
+          <ContentSection title="Join a workspace" description="Use the six-character code from your team owner. Your signed-in email must match a pending invite.">
             <FieldLayout
               className="mt-5"
               label="Invite code"
@@ -2096,33 +2175,28 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
             <OwnedButton type="button" variant="outline" className="mt-4" disabled={Boolean(busyAction) || !inviteCodeIsValid} onClick={() => runTeamAction("join", () => joinWorkspace({ inviteCode }))}>
               Join Workspace
             </OwnedButton>
-          </section>
+          </ContentSection>
         </div>
       ) : (
         <SplitPane
+          data-slot="team-administration"
           ratio="supporting"
           primary={(
           <div className="grid min-w-0 content-start gap-4">
-            <section className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm">
-              <header className="flex flex-col justify-between gap-4 p-5 md:flex-row md:items-center">
-                <div>
-                  <h2 className="text-xl font-semibold">{teamData.workspace.name}</h2>
-                  {canManageTeam ? (
-                    <div className="mt-2 flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                      <p className="text-sm text-muted-foreground">
-                        Invite code <span className="font-bold tracking-widest text-primary">{teamData.workspace.inviteCode}</span>
-                      </p>
-                      <OwnedButton type="button" size="sm" variant="outline" onClick={() => copyInviteCode(teamData.workspace.inviteCode)}>
-                        <Copy aria-hidden="true" />
-                        {inviteCopyLabel}
-                      </OwnedButton>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">Invite code is visible to team owners only.</p>
-                  )}
-                </div>
+            <ContentSection
+              title={teamData.workspace.name}
+              description={canManageTeam ? (
+                <span>Invite code <span className="font-mono font-bold tracking-widest text-[var(--app-highlight)]">{teamData.workspace.inviteCode}</span></span>
+              ) : "Invite code is visible to team owners only."}
+              actions={(
                 <div className="flex flex-wrap items-center gap-2">
                   <OwnedBadge variant="secondary">{teamData.currentMember.role} access</OwnedBadge>
+                  {canManageTeam ? (
+                    <OwnedButton type="button" size="sm" variant="outline" onClick={() => copyInviteCode(teamData.workspace.inviteCode)}>
+                      <Copy aria-hidden="true" />
+                      {inviteCopyLabel}
+                    </OwnedButton>
+                  ) : null}
                   {canLeaveWorkspace ? (
                     <OwnedButton
                       type="button"
@@ -2136,9 +2210,11 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     </OwnedButton>
                   ) : null}
                 </div>
-              </header>
+              )}
+              bodyMode="flush"
+            >
 
-              <div className="divide-y divide-border border-t border-border">
+              <div className="divide-y divide-[var(--app-border)]">
                 {teamData.members.map((member) => (
                   <article key={member._id} className="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-center">
                     <div className="min-w-0">
@@ -2186,7 +2262,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
               </div>
 
               {canManageTeam ? (
-                <div className="border-t border-border p-5">
+              <div className="border-t border-[var(--app-border)] p-5">
                   <h3 className="text-sm font-semibold">Invite member</h3>
                   <div className="mt-3 grid items-end gap-3 md:grid-cols-[minmax(0,1fr)_160px_120px]">
                     <FieldLayout
@@ -2214,14 +2290,12 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                   </div>
                 </div>
               ) : null}
-            </section>
+            </ContentSection>
 
-            <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-              <header className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                <div>
-                  <h2 className="text-xl font-semibold">Project Comments</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Leave notes for the team. Use @name or @emailname to notify someone.</p>
-                </div>
+            <ContentSection
+              title="Project Comments"
+              description="Leave notes for the team. Use @name or @emailname to notify someone."
+              actions={(
                 <div className="w-full md:w-64">
                   <ProjectSelect
                     label="Project"
@@ -2231,10 +2305,12 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     onChange={setSelectedProjectId}
                   />
                 </div>
-              </header>
+              )}
+              bodyClassName="grid gap-4"
+            >
               {selectedProject ? (
-                <div className="mt-4 grid gap-4">
-                  <div className="rounded-md border border-border bg-muted p-3">
+                <div className="grid gap-4">
+                  <div className="rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3">
                     <p className="text-sm font-semibold">{selectedProject.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{selectedProject.client || "No client"} · {selectedProject.status} · Due {formatDate(selectedProject.dueDate, settings.dateFormat)}</p>
                   </div>
@@ -2242,7 +2318,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     {projectComments === undefined ? (
                       <p className="text-sm text-muted-foreground">Loading comments...</p>
                     ) : projectComments.length ? projectComments.map((comment) => (
-                      <article key={comment._id} className="rounded-md border border-border bg-card p-3">
+                      <article key={comment._id} className="rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] p-3">
                         <p className="text-sm font-semibold">
                           {comment.authorName} <time className="text-xs font-normal text-muted-foreground">{formatActivityTime(comment.createdAt)}</time>
                         </p>
@@ -2292,29 +2368,29 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                   ) : null}
                 </div>
               ) : <EmptyPanel title="No team projects yet" body="Create a team project to start leaving shared comments." />}
-            </section>
+            </ContentSection>
           </div>
           )}
           secondary={(
           <aside className="grid min-w-0 content-start gap-4">
-            <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-              <header className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold">Notifications</h2>
-                {unreadNotifications ? (
-                  <OwnedButton
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => runTeamAction("read-all", () => markAllNotificationsRead({ teamId: teamData.workspace._id }))}
-                  >
-                    Mark all read
-                  </OwnedButton>
-                ) : null}
-              </header>
-              <div className="mt-4 grid gap-2">
+            <ContentSection
+              title="Notifications"
+              description="Unread mentions and project updates that need your attention."
+              actions={unreadNotifications ? (
+                <OwnedButton
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={Boolean(busyAction)}
+                  onClick={() => runTeamAction("read-all", () => markAllNotificationsRead({ teamId: teamData.workspace._id }))}
+                >
+                  Mark all read
+                </OwnedButton>
+              ) : null}
+              bodyClassName="grid gap-2"
+            >
                 {teamData.notifications.length ? teamData.notifications.map((notification) => (
-                  <article key={notification._id} className={notification.read ? "flex justify-between gap-3 rounded-md border border-border p-3" : "flex justify-between gap-3 rounded-md border border-primary/40 bg-primary/10 p-3"}>
+                  <article key={notification._id} className={notification.read ? "flex justify-between gap-3 rounded-md border border-[var(--app-border)] p-3" : "flex justify-between gap-3 rounded-md border border-[var(--app-accent)] bg-[var(--app-active)] p-3"}>
                     <div className="min-w-0">
                       <p className="text-sm font-medium">{notification.message}</p>
                       {notification.projectId ? <p className="mt-1 text-xs font-semibold text-primary">Project: {teamProjectLabel(notification.projectId)}</p> : null}
@@ -2344,14 +2420,15 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     </div>
                   </article>
                 )) : <EmptyPanel title="No notifications" body="Mentions and project notifications will appear here." />}
-              </div>
-            </section>
+            </ContentSection>
 
-            <section className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
-              <h2 className="text-xl font-semibold">Activity Feed</h2>
-              <div className="mt-4 grid gap-2">
+            <ContentSection
+              title="Activity Feed"
+              description="Workspace creation, invites, comments, and project updates."
+              bodyClassName="grid gap-2"
+            >
                 {teamData.activity.length ? teamData.activity.map((activity) => (
-                  <article key={activity._id} className="rounded-md border-l-4 border-primary bg-muted p-3">
+                  <article key={activity._id} className="rounded-md border-l-2 border-[var(--app-accent)] bg-[var(--app-soft-panel)] p-3">
                     <p className="text-sm font-medium">{activity.message}</p>
                     {activity.projectId ? (
                       <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -2366,8 +2443,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     <time className="mt-1 block text-xs text-muted-foreground">{formatActivityTime(activity.createdAt)}</time>
                   </article>
                 )) : <EmptyPanel title="No activity yet" body="Workspace creation, invites, comments, and project updates will appear here." />}
-              </div>
-            </section>
+            </ContentSection>
           </aside>
           )}
         />
@@ -2389,6 +2465,7 @@ function TeamChatPage() {
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState("");
   const canUseChat = Boolean(teamData?.currentMember.permissions.useChat);
+  const chatReady = Boolean(isUserLoaded && isSignedIn && !isConvexAuthLoading && isConvexAuthenticated && teamData && canUseChat);
 
   function formatChatTime(value: string) {
     return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
@@ -2417,7 +2494,60 @@ function TeamChatPage() {
       description="Quick handoffs, production updates, and Manage Team access for your current workspace."
       />
       <PageContent mode="fill">
-      <FillViewport bodyLabel="Team chat workspace" bodyClassName="overflow-auto lg:overflow-hidden">
+      <FillViewport
+        bodyLabel="Team chat workspace"
+        bodyClassName="overflow-auto lg:overflow-hidden"
+        header={chatReady && teamData ? (
+          <div data-slot="conversation-header" className="flex flex-col justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-panel)] px-4 py-4 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="text-lg font-semibold">{teamData.workspace.name}</h2>
+              <p className="mt-1 text-xs text-[var(--app-muted)]">{teamData.members.filter((member) => member.status === "active").length} active members · Use @name to notify someone</p>
+            </div>
+            <OwnedBadge variant="secondary" className="self-start sm:self-auto">{teamData.currentMember.role} access</OwnedBadge>
+          </div>
+        ) : undefined}
+        footer={chatReady && teamData ? (
+          <form
+            data-slot="conversation-composer"
+            className="border-t border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void submitMessage();
+            }}
+          >
+            {chatError ? <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{chatError}</p> : null}
+            <div className="grid gap-2">
+              <label htmlFor={messageInputId} className="text-sm font-medium">Message</label>
+              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start">
+                <OwnedTextarea
+                  id={messageInputId}
+                  aria-describedby={messageCountId}
+                  aria-invalid={Boolean(chatError)}
+                  value={message}
+                  rows={2}
+                  {...chatInputProps}
+                  className="max-h-28 min-h-10 flex-1 bg-background"
+                  onChange={(event) => {
+                    setMessage(event.target.value);
+                    if (chatError) setChatError("");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void submitMessage();
+                    }
+                  }}
+                />
+                <OwnedButton type="submit" disabled={sending || !message.trim()} className="min-w-28">
+                  {sending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
+                  {sending ? "Sending..." : "Send"}
+                </OwnedButton>
+              </div>
+              <p id={messageCountId} className="text-xs text-[var(--app-muted)]">{message.length}/{TEAM_CHAT_MESSAGE_LIMIT} characters</p>
+            </div>
+          </form>
+        ) : undefined}
+      >
       {!isUserLoaded ? (
         <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
           <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -2464,16 +2594,8 @@ function TeamChatPage() {
           <p className="mt-2 text-sm text-muted-foreground">Your current role can access the workspace but does not have permission to view or send chat messages.</p>
         </section>
       ) : (
-        <section className="flex h-full min-h-[560px] flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm lg:min-h-0">
-          <header className="flex flex-col justify-between gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-center">
-            <div>
-              <h2 className="text-lg font-semibold">{teamData.workspace.name}</h2>
-              <p className="mt-1 text-xs text-muted-foreground">{teamData.members.filter((member) => member.status === "active").length} active members · Use @name to notify someone</p>
-            </div>
-            <OwnedBadge variant="secondary" className="self-start sm:self-auto">{teamData.currentMember.role} access</OwnedBadge>
-          </header>
-
-          <ol aria-label="Team chat messages" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-4 md:px-4">
+        <div data-slot="conversation-history" className="min-h-full bg-[var(--app-panel)]">
+          <ol aria-label="Team chat messages" className="flex min-h-full flex-col gap-3 px-3 py-4 md:px-4">
             {teamData.chat.length ? teamData.chat.map((chatMessage) => {
               const isOwnMessage = chatMessage.authorUserId === teamData.currentMember.userId;
               return (
@@ -2495,46 +2617,7 @@ function TeamChatPage() {
               </li>
             )}
           </ol>
-
-          <form
-            className="border-t border-border bg-muted/40 p-3"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitMessage();
-            }}
-          >
-            {chatError ? <p role="alert" className="mb-2 text-xs font-semibold text-destructive">{chatError}</p> : null}
-            <div className="grid gap-2">
-              <label htmlFor={messageInputId} className="text-sm font-medium">Message</label>
-              <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-start">
-                <OwnedTextarea
-                id={messageInputId}
-                aria-describedby={messageCountId}
-                aria-invalid={Boolean(chatError)}
-                value={message}
-                rows={2}
-                {...chatInputProps}
-                className="max-h-28 min-h-10 flex-1 bg-background"
-                onChange={(event) => {
-                  setMessage(event.target.value);
-                  if (chatError) setChatError("");
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
-                    event.preventDefault();
-                    void submitMessage();
-                  }
-                }}
-                />
-                <OwnedButton type="submit" disabled={sending || !message.trim()} className="min-w-28">
-                  {sending ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Send aria-hidden="true" />}
-                  {sending ? "Sending..." : "Send"}
-                </OwnedButton>
-              </div>
-              <p id={messageCountId} className="text-xs text-muted-foreground">{message.length}/{TEAM_CHAT_MESSAGE_LIMIT} characters</p>
-            </div>
-          </form>
-        </section>
+        </div>
       )}
       </FillViewport>
       </PageContent>
@@ -2558,11 +2641,25 @@ function IntegrationsDesignPage({
   const [integrationDialog, setIntegrationDialog] = useState<{ name: string; config: IntegrationConfig } | null>(null);
   const [disconnectTarget, setDisconnectTarget] = useState<string | null>(null);
   const [configError, setConfigError] = useState("");
+  const [integrationSearch, setIntegrationSearch] = useState("");
+  const [integrationFilter, setIntegrationFilter] = useState("all");
   const projectLinks = projects.filter((project) => configuredIntegrationCount(project.integrationLinks) > 0);
   const connectedCount = integrationNames.filter((name) => {
     const config = settings.integrationConfigs[name];
     return Boolean(settings.integrations[name] || config?.connected);
   }).length;
+  const visibleIntegrationNames = integrationNames.filter((name) => {
+    const config = settings.integrationConfigs[name] ?? emptyIntegrationConfig;
+    const connected = Boolean(settings.integrations[name] || config.connected);
+    const query = integrationSearch.trim().toLowerCase();
+    const matchesSearch = !query || [name, integrationDescriptions[name], config.account || settings.integrationAccounts[name] || ""].some((value) => value.toLowerCase().includes(query));
+    const matchesFilter = integrationFilter === "all" || (integrationFilter === "connected" ? connected : !connected);
+    return matchesSearch && matchesFilter;
+  });
+  const visibleProjectLinks = projectLinks.filter((project) => {
+    const query = integrationSearch.trim().toLowerCase();
+    return !query || [project.title, project.client || ""].some((value) => value.toLowerCase().includes(query));
+  });
 
   function openIntegration(name: string) {
     const existing = settings.integrationConfigs[name] ?? { ...emptyIntegrationConfig };
@@ -2637,6 +2734,33 @@ function IntegrationsDesignPage({
       description="Manage local service records and save external links for your workspace and individual projects."
       />
       <PageContent>
+        <PageToolbar
+          data-family-toolbar="integrations"
+          primary={
+            <div className="relative min-w-0 flex-1 sm:max-w-md">
+              <Plug aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--app-muted)]" />
+              <OwnedInput
+                aria-label="Search integrations"
+                value={integrationSearch}
+                onChange={(event) => setIntegrationSearch(event.target.value)}
+                placeholder="Search services and project links..."
+                className="h-10 bg-[var(--app-control)] pl-9"
+              />
+            </div>
+          }
+          secondary={
+            <OwnedSelect value={integrationFilter} onValueChange={setIntegrationFilter}>
+              <OwnedSelectTrigger aria-label="Filter integrations" className="h-10 w-full sm:w-40">
+                <OwnedSelectValue />
+              </OwnedSelectTrigger>
+              <OwnedSelectContent position="popper">
+                <OwnedSelectItem value="all">All services</OwnedSelectItem>
+                <OwnedSelectItem value="connected">Connected</OwnedSelectItem>
+                <OwnedSelectItem value="available">Not connected</OwnedSelectItem>
+              </OwnedSelectContent>
+            </OwnedSelect>
+          }
+        />
         <ContentSection
           title="Connected Services"
           description="Save the account and workspace details your studio uses. These are local records and do not grant API access."
@@ -2649,12 +2773,12 @@ function IntegrationsDesignPage({
         >
 
           <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
-            {integrationNames.map((name) => {
+            {visibleIntegrationNames.map((name) => {
               const config = settings.integrationConfigs[name] ?? emptyIntegrationConfig;
               const connected = Boolean(settings.integrations[name] || config.connected);
               const account = config.account || settings.integrationAccounts[name];
               return (
-                <li key={name} className="flex flex-col justify-between gap-3 bg-card p-4 sm:flex-row sm:items-center">
+                <li key={name} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] sm:flex-row sm:items-center">
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       aria-hidden="true"
@@ -2704,6 +2828,9 @@ function IntegrationsDesignPage({
               );
             })}
           </ul>
+          {!visibleIntegrationNames.length ? (
+            <PageEmptyState title="No matching services" description="Try a different search or connection filter." />
+          ) : null}
         </ContentSection>
 
         <IntegrationLinkManager
@@ -2730,16 +2857,16 @@ function IntegrationsDesignPage({
           title="Project Integrations"
           description="Project-specific links stay attached to each project record."
           actions={
-            <OwnedBadge variant={projectLinks.length ? "default" : "secondary"}>
+            <OwnedBadge variant={visibleProjectLinks.length ? "default" : "secondary"}>
               <Link2 aria-hidden="true" />
-              {projectLinks.length} projects linked
+              {visibleProjectLinks.length} projects linked
             </OwnedBadge>
           }
         >
-          {projectLinks.length ? (
+          {visibleProjectLinks.length ? (
             <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
-              {projectLinks.map((project) => (
-                <li key={project.id} className="flex flex-col justify-between gap-3 bg-card p-4 md:flex-row md:items-center">
+              {visibleProjectLinks.map((project) => (
+                <li key={project.id} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] md:flex-row md:items-center">
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold">{project.title}</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -2765,7 +2892,7 @@ function IntegrationsDesignPage({
             </ul>
           ) : (
             <div className="mt-4 rounded-lg border border-dashed border-border">
-              <EmptyPanel title="No project integration links" body="Open a project and add service links for folders, review pages, channels, or calendar events." />
+              <EmptyPanel title={projectLinks.length ? "No matching project links" : "No project integration links"} body={projectLinks.length ? "Try a different search term." : "Open a project and add service links for folders, review pages, channels, or calendar events."} />
             </div>
           )}
         </ContentSection>
@@ -3083,7 +3210,7 @@ function IntegrationLinkManager({
   );
 }
 
-function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; onNewProject: () => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
+function SettingsDesignPage({ settings, setSettings, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
   const stageColors = [cutlab.color.teal, cutlab.color.cyan, cutlab.color.warning, cutlab.color.success, cutlab.color.steel, cutlab.color.error];
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
@@ -3151,40 +3278,48 @@ function SettingsDesignPage({ settings, setSettings, onNewProject, notify }: { s
   return (
     <WorkspacePage family="administration">
       <PageHeader
-        eyebrow="Workspace / Settings"
+        eyebrow="Workspace administration"
         title="Settings"
-        description="Manage profile, workflow, notifications, and display preferences."
+        description="Manage workspace identity, production defaults, and team-wide behavior."
         actions={
         <div className="flex flex-wrap justify-end gap-2">
+          <span className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-xs font-medium text-[var(--app-muted)]">
+            <CircleCheckBig className="size-4 text-[var(--app-success)]" />
+            Saved automatically
+          </span>
           <OwnedButton type="button" variant="outline" onClick={resetSettings} className="text-destructive hover:text-destructive">Reset</OwnedButton>
-          <OwnedButton type="button" variant="outline" onClick={onNewProject}>
-            <Plus aria-hidden="true" />
-            New Project
-          </OwnedButton>
         </div>
       }
       />
       <PageContent>
       <MasterDetail
         master={(
-        <nav aria-label="Settings sections" className="hidden rounded-lg border bg-card p-3 text-card-foreground lg:sticky lg:top-4 lg:block">
+        <nav
+          aria-label="Settings sections"
+          data-slot="settings-navigation"
+          data-navigation-kind="icon-index"
+          className="hidden overflow-hidden rounded-lg border bg-card text-card-foreground lg:sticky lg:top-4 lg:block"
+        >
+          <div className="border-b border-border px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--app-accent)]">Settings index</p>
-          <div className="mt-2 grid">
+          </div>
+          <div className="grid gap-0.5 p-2">
             {[
-              ["#project-rules", "Project rules"],
-              ["#workflow", "Workflow"],
-              ["#notifications", "Notifications"],
-              ["#permissions", "Permissions"],
-              ["#integrations", "Integrations"],
-              ["#appearance", "Appearance"],
-              ["#regional", "Regional"]
-            ].map(([href, label]) => (
-              <a key={href} href={href} className="flex min-h-8 items-center rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              { href: "#project-rules", label: "Project rules", icon: SlidersHorizontal },
+              { href: "#workflow", label: "Workflow", icon: History },
+              { href: "#notifications", label: "Notifications", icon: Bell },
+              { href: "#permissions", label: "Permissions", icon: LockKeyhole },
+              { href: "#integrations", label: "Integrations", icon: Plug },
+              { href: "#appearance", label: "Appearance", icon: Palette },
+              { href: "#regional", label: "Regional", icon: Globe2 },
+            ].map(({ href, label, icon: Icon }) => (
+              <a key={href} href={href} className="flex min-h-9 items-center gap-3 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Icon className="size-4 shrink-0" aria-hidden="true" />
                 {label}
               </a>
             ))}
           </div>
-          <p className="mt-4 pr-2 text-[11px] leading-5 text-muted-foreground">Changes save automatically to the active workspace.</p>
+          <p className="border-t border-border p-4 text-[11px] leading-5 text-muted-foreground">Changes save automatically to the active workspace.</p>
         </nav>
         )}
         detail={(
