@@ -63,6 +63,7 @@ type BuildPayoutReportOptions = {
   salaryBatchAmount: number;
   profileName: string;
   editors?: PayoutEditor[];
+  currentUserId?: string;
   period: PayoutPeriod;
   now?: Date;
 };
@@ -107,12 +108,13 @@ export function buildPayoutReport({
   salaryBatchAmount,
   profileName,
   editors = [],
+  currentUserId,
   period,
   now,
 }: BuildPayoutReportOptions): PayoutReport {
   const range = payoutPeriodRange(period, now);
   const editorNames = new Map(editors.map((editor) => [editor.userId, editor.name]));
-  const personalEditorId = "personal";
+  const personalEditorId = currentUserId?.trim() || (editors.length === 1 ? editors[0].userId : "personal");
   const personalEditorName = profileName.trim() || "You";
 
   const deliveredProjects = projects
@@ -120,7 +122,9 @@ export function buildPayoutReport({
     .filter((project) => isInRange(project.dueDate, range.start, range.end))
     .map((project): PayoutProjectRow => {
       const editorId = project.assigneeUserIds?.[0] || project.ownerUserId || personalEditorId;
-      const editorName = editorNames.get(editorId) || (editorId === personalEditorId ? personalEditorName : "Unassigned");
+      const editorName = editorId === personalEditorId
+        ? personalEditorName
+        : editorNames.get(editorId) || "Unassigned";
       const isSalaryEdit = project.workType.trim().toLowerCase() === salaryWorkType.trim().toLowerCase();
       return {
         id: project.id,

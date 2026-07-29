@@ -153,6 +153,18 @@ test("shows the compact dashboard overview and links to all projects", async ({ 
         notes: index === 5 ? "Client feedback needs attention." : "Production checklist is current.",
       })),
     ));
+    window.localStorage.setItem("video-editing-work-tracker:salary-batches:v1", JSON.stringify({
+      batches: [{
+        id: "batch-1",
+        number: 1,
+        completedDate: "2026-07-28",
+        archived: false,
+        archivedDate: "",
+        amount: 10000,
+        paid: false,
+        paidDate: "",
+      }],
+    }));
   });
   await openApp(page, "/");
 
@@ -165,6 +177,9 @@ test("shows the compact dashboard overview and links to all projects", async ({ 
   const pulse = page.getByRole("region", { name: "Operational pulse" });
   await expect(pulse.getByText("Earned", { exact: true })).toBeVisible();
   await expect(pulse.getByText("Salary batch", { exact: true })).toBeVisible();
+  await expect(pulse.getByTestId("salary-batch-progress")).toContainText(/5\s*\/\s*5 edits/);
+  const markPayment = pulse.getByRole("button", { name: /Mark payment/ });
+  await expect(markPayment).toBeEnabled();
 
   const ledger = page.getByRole("region", { name: "Project ledger" });
   await expect(ledger.getByTestId("project-row")).toHaveCount(5);
@@ -177,6 +192,27 @@ test("shows the compact dashboard overview and links to all projects", async ({ 
   expect(attentionBox?.width ?? 0).toBeGreaterThan(500);
   expect(activityBox?.width ?? 0).toBeGreaterThan(500);
   expect(Math.abs((attentionBox?.y ?? 0) - (activityBox?.y ?? 0))).toBeLessThanOrEqual(2);
+
+  const contentViewport = page.getByTestId("workspace-content-surface");
+  await contentViewport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  const scrollBeforeActivitySwitch = await contentViewport.evaluate((element) => element.scrollTop);
+  expect(scrollBeforeActivitySwitch).toBeGreaterThan(0);
+  await followUp.getByRole("button", { name: "Team" }).click();
+  await expect.poll(async () => (
+    Math.abs((await contentViewport.evaluate((element) => element.scrollTop)) - scrollBeforeActivitySwitch)
+  )).toBeLessThanOrEqual(2);
+
+  await markPayment.click();
+  await expect(pulse.getByTestId("salary-batch-progress")).toContainText(/0\s*\/\s*5 edits/);
+  await expect(markPayment).toBeDisabled();
+  const storedSalaryBatch = await page.evaluate(() => {
+    const stored = JSON.parse(window.localStorage.getItem("video-editing-work-tracker:salary-batches:v1") ?? "{}");
+    return stored.batches?.[0] ?? null;
+  });
+  expect(storedSalaryBatch).toMatchObject({ id: "batch-1", paid: true });
+  expect(storedSalaryBatch.paidDate).not.toBe("");
 
   await viewAll.click();
   await expect(page).toHaveURL(/\/projects$/);

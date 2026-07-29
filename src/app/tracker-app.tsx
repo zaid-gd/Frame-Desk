@@ -864,6 +864,7 @@ export function TrackerApp({
         stats={stats}
         projects={personalProjects}
         visibleProjects={filteredProjects.filter((project) => !project.teamId)}
+        salaryBatches={salaryBatches}
         sessionActivity={dashboardActivity}
         teamActivity={teamData?.activity ?? []}
         teamName={teamData?.workspace?.name}
@@ -888,6 +889,10 @@ export function TrackerApp({
         onViewProject={openProjectDetails}
         onEditProject={openEditProject}
         onDeleteProject={requestDeleteProject}
+        onMarkSalaryPayment={(batchId) => {
+          updateSalaryBatchPayment(batchId, true);
+          if (!isSample) notify("Salary payment marked as received.");
+        }}
         canCreateProjects={canCreateProjects}
         canEditProjects={canEditProjects}
         canDeleteProject={canDeleteProject}
@@ -931,6 +936,7 @@ export function TrackerApp({
       salaryBatches={salaryBatches}
       settings={settings}
       editors={activeTeamMembers.map((member) => ({ userId: member.userId, name: member.name }))}
+      currentUserId={teamData?.currentMember.userId}
       onUpdateBatchPayment={updateSalaryBatchPayment}
     />
   ) : page === "integrations" ? (

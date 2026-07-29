@@ -34,8 +34,8 @@ import {
   motion,
 } from "motion/react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import type { WorkItem, SettingsState } from "@/lib/types";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { SalaryBatch, WorkItem, SettingsState } from "@/lib/types";
 import type { ProjectStatus } from "@/lib/domain-values";
 import { useHydratedReducedMotion } from "@/lib/motion";
 import { cn } from "@/lib/utils";
@@ -86,6 +86,7 @@ type DashboardProps = {
   };
   projects: WorkItem[];
   visibleProjects: WorkItem[];
+  salaryBatches: SalaryBatch[];
   sessionActivity: DashboardActivity[];
   teamActivity: Array<{
     _id: string;
@@ -117,6 +118,7 @@ type DashboardProps = {
   onViewProject: (item: WorkItem) => void;
   onEditProject: (item: WorkItem) => void;
   onDeleteProject: (id: string) => void;
+  onMarkSalaryPayment: (batchId: string) => void;
   canCreateProjects: boolean;
   canEditProjects: boolean;
   canDeleteProject: (project: WorkItem) => boolean;
@@ -300,12 +302,20 @@ export function PrecisionDashboard(props: DashboardProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [activityMode, setActivityMode] = useState<"recent" | "team">("recent");
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
+  const activityScrollTopRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!props.visibleProjects.some((project) => project.id === selectedId)) {
       setSelectedId(props.visibleProjects[0]?.id ?? "");
     }
   }, [props.visibleProjects, selectedId]);
+
+  useLayoutEffect(() => {
+    if (activityScrollTopRef.current === null) return;
+    const contentViewport = document.getElementById("main-content");
+    if (contentViewport) contentViewport.scrollTop = activityScrollTopRef.current;
+    activityScrollTopRef.current = null;
+  }, [activityMode]);
 
   const selected = props.projects.find((project) => project.id === selectedId)
     ?? props.visibleProjects[0]
@@ -328,7 +338,13 @@ export function PrecisionDashboard(props: DashboardProps) {
   }, [props.projects]);
   const { overdue, dueThisWeek, dueSoon, blockers } = projectSummary;
   const salarySize = Math.max(1, Number(props.settings.salaryBatchSize) || 20);
-  const salaryProgress = props.stats.salaryBatchProgress || (props.stats.salaryEdits ? salarySize : 0);
+  const pendingSalaryBatch = useMemo(
+    () => props.salaryBatches
+      .filter((batch) => !batch.archived && !batch.paid)
+      .sort((a, b) => a.number - b.number)[0] ?? null,
+    [props.salaryBatches],
+  );
+  const salaryProgress = props.stats.salaryBatchProgress || (pendingSalaryBatch ? salarySize : 0);
   const salaryPercent = Math.min(100, Math.round((salaryProgress / salarySize) * 100));
   const showSalaryBatch = props.projects.some((project) => project.workType.trim().toLowerCase() === props.settings.salaryWorkType.trim().toLowerCase());
   const activeFilterCount = [
@@ -470,6 +486,12 @@ export function PrecisionDashboard(props: DashboardProps) {
     props.setDueFilter("ALL");
     props.setBillingFilter("ALL");
     props.setSortKey("createdAt_desc");
+  }
+
+  function changeActivityMode(mode: "recent" | "team") {
+    if (mode === activityMode) return;
+    activityScrollTopRef.current = document.getElementById("main-content")?.scrollTop ?? null;
+    setActivityMode(mode);
   }
 
   const recentActivity = props.sessionActivity.length
@@ -700,25 +722,37 @@ export function PrecisionDashboard(props: DashboardProps) {
           </div>
         </div>
         {showSalaryBatch ? (
-          <div className="bg-[var(--app-panel)] px-4 py-3">
+          <div className="bg-[var(--app-panel)] px-4 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">Salary batch</p>
               <span className="font-mono text-[9px] tabular-nums text-[var(--app-muted)]">
                 <AnimatedNumber value={salaryPercent} />%
               </span>
             </div>
-            <div className="mt-1 flex items-baseline gap-1">
-              <p className="text-xl font-semibold tracking-[-0.04em] tabular-nums text-[var(--app-ink)]">
-                <AnimatedNumber value={salaryProgress} />
-              </p>
-              <span className="text-[10px] text-[var(--app-muted)]">/ {salarySize} edits</span>
+            <div className="mt-1 flex items-end justify-between gap-3">
+              <div data-testid="salary-batch-progress" className="flex items-baseline gap-1">
+                <p className="text-xl font-semibold tracking-[-0.04em] tabular-nums text-[var(--app-ink)]">
+                  <AnimatedNumber value={salaryProgress} />
+                </p>
+                <span className="text-[10px] text-[var(--app-muted)]">/ {salarySize} edits</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 shrink-0 px-2 text-[9px] shadow-none"
+                disabled={!pendingSalaryBatch}
+                aria-label={pendingSalaryBatch ? `Mark payment for salary batch ${pendingSalaryBatch.number}` : "Mark payment"}
+                onClick={() => {
+                  if (pendingSalaryBatch) props.onMarkSalaryPayment(pendingSalaryBatch.id);
+                }}
+              >
+                Mark payment
+              </Button>
             </div>
-            <div className="mt-2 h-1 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
+            <div className="mt-1.5 h-1 overflow-hidden rounded-sm bg-[var(--app-progress-track)]">
               <AnimatedProgress value={salaryPercent} />
             </div>
-            <span className="mt-1.5 block font-mono text-[9px] text-[var(--app-muted)]">
-              {formatMoney(Number(props.settings.salaryBatchAmount) || 0, props.settings.currencyCode)} / completed batch
-            </span>
           </div>
         ) : null}
       </motion.section>
@@ -979,7 +1013,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                   activityMode === "recent" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "recent"}
-                onClick={() => setActivityMode("recent")}
+                onClick={() => changeActivityMode("recent")}
               >
                 {activityMode === "recent" ? (
                   <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)]" />
@@ -993,7 +1027,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                   activityMode === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "team"}
-                onClick={() => setActivityMode("team")}
+                onClick={() => changeActivityMode("team")}
               >
                 {activityMode === "team" ? (
                   <motion.span layoutId="activity-mode" className="absolute inset-0 rounded bg-[var(--app-panel)]" />
@@ -1003,46 +1037,48 @@ export function PrecisionDashboard(props: DashboardProps) {
             </div>
           }
         >
-          {props.teamLoading && activityMode === "team" ? (
-            <ActivitySkeleton />
-          ) : activity.length ? (
-            <motion.div
-              key={activityMode}
-              className="divide-y divide-[var(--app-border)]"
-              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reduceMotion ? 0 : 0.3, ease: easing }}
-            >
-              {activity.slice(0, 4).map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  className="flex items-start gap-3 px-4 py-3"
-                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: reduceMotion ? 0 : index * 0.08, ease: easing }}
-                >
-                  <span className={cn(
-                    "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md",
-                    item.kind === "delivered"
-                      ? "bg-[var(--app-success-bg)] text-[var(--app-success)]"
-                      : "bg-[var(--app-active)] text-[var(--app-highlight)]",
-                  )}>
-                    {item.kind === "delivered"
-                      ? <CheckCircle2 className="size-3" strokeWidth={1.75} />
-                      : <MessageSquareText className="size-3" strokeWidth={1.75} />}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 block text-[11px] font-medium leading-4 text-[var(--app-ink)]">{item.message}</span>
-                    <span className="mt-0.5 block font-mono text-[9px] text-[var(--app-muted)]">
-                      {item.actor || props.teamName || "Workspace"} · {relativeActivityTime(item.createdAt)}
+          <div className="min-h-[224px]">
+            {props.teamLoading && activityMode === "team" ? (
+              <ActivitySkeleton />
+            ) : activity.length ? (
+              <motion.div
+                key={activityMode}
+                className="divide-y divide-[var(--app-border)]"
+                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: reduceMotion ? 0 : 0.3, ease: easing }}
+              >
+                {activity.slice(0, 4).map((item, index) => (
+                  <motion.div
+                    key={item.id}
+                    className="flex items-start gap-3 px-4 py-3"
+                    initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: reduceMotion ? 0 : index * 0.08, ease: easing }}
+                  >
+                    <span className={cn(
+                      "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md",
+                      item.kind === "delivered"
+                        ? "bg-[var(--app-success-bg)] text-[var(--app-success)]"
+                        : "bg-[var(--app-active)] text-[var(--app-highlight)]",
+                    )}>
+                      {item.kind === "delivered"
+                        ? <CheckCircle2 className="size-3" strokeWidth={1.75} />
+                        : <MessageSquareText className="size-3" strokeWidth={1.75} />}
                     </span>
-                  </span>
-                </motion.div>
-              ))}
-            </motion.div>
-          ) : (
-            <EmptySection label="No activity has been recorded yet." />
-          )}
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 block text-[11px] font-medium leading-4 text-[var(--app-ink)]">{item.message}</span>
+                      <span className="mt-0.5 block font-mono text-[9px] text-[var(--app-muted)]">
+                        {item.actor || props.teamName || "Workspace"} · {relativeActivityTime(item.createdAt)}
+                      </span>
+                    </span>
+                  </motion.div>
+                ))}
+              </motion.div>
+            ) : (
+              <EmptySection label="No activity has been recorded yet." />
+            )}
+          </div>
         </WorkspaceSection>
       </motion.section>
 

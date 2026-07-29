@@ -348,6 +348,53 @@ describe("salary payout reporting", () => {
     expect(csv).toContain("Salary batch,2026-06-12,Batch 2,Jordan Lee,Unpaid,9000,AED");
   });
 
+  test("does not split the current editor between profile and workspace identities", () => {
+    const report = buildPayoutReport({
+      projects: [{
+        id: "owner-salary-edit",
+        teamId: "team",
+        ownerUserId: "owner",
+        assigneeUserIds: ["owner"],
+        profileId: "video-editing",
+        title: "Owner salary edit",
+        status: "Delivered",
+        workType: "Job / Salary",
+        startDate: "2026-06-01",
+        dueDate: "2026-06-12",
+        earnings: 0,
+        notes: "",
+      }],
+      salaryBatches: [{
+        id: "batch-1",
+        number: 1,
+        completedDate: "2026-06-12",
+        archived: false,
+        archivedDate: "",
+        amount: 10000,
+        paid: true,
+        paidDate: "2026-06-13",
+      }],
+      salaryWorkType: "Job / Salary",
+      salaryBatchAmount: 10000,
+      profileName: "Screen",
+      editors: [
+        { userId: "owner", name: "Team member" },
+        { userId: "editor", name: "Actual teammate" },
+      ],
+      currentUserId: "owner",
+      period: "all",
+    });
+
+    expect(report.editors).toEqual([expect.objectContaining({
+      id: "owner",
+      name: "Screen",
+      deliveredProjects: 1,
+      salaryEdits: 1,
+      batchEarnings: 10000,
+      totalEarnings: 10000,
+    })]);
+  });
+
   test("persists client project payment metadata", async () => {
     const { owner, teamId } = await setupTeam();
     await owner.mutation(api.workItems.replaceAll, {

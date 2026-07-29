@@ -445,12 +445,14 @@ export function PrecisionReports({
   salaryBatches,
   settings,
   editors,
+  currentUserId,
   onUpdateBatchPayment,
 }: {
   projects: WorkItem[];
   salaryBatches: SalaryBatch[];
   settings: SettingsState;
   editors: Array<{ userId: string; name: string }>;
+  currentUserId?: string;
   onUpdateBatchPayment: (batchId: string, paid: boolean) => void;
 }) {
   const [trendRange, setTrendRange] = useState<3 | 6 | "all">(6);
@@ -463,8 +465,9 @@ export function PrecisionReports({
     salaryBatchAmount: Number(settings.salaryBatchAmount) || 0,
     profileName: settings.profileName,
     editors,
+    currentUserId,
     period,
-  }), [editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
+  }), [currentUserId, editors, period, projects, salaryBatches, settings.profileName, settings.salaryBatchAmount, settings.salaryWorkType]);
   const collected = report.manualEarnings + report.paidBatchEarnings;
   const salaryEdits = report.deliveredProjects.filter((project) => project.isSalaryEdit).length;
   const invoiceDrafts = useMemo(() => buildInvoiceDrafts({
