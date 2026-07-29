@@ -79,6 +79,7 @@ import { PrecisionMedia } from "@/components/precision-media";
 import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { SampleModeBar } from "@/components/sample-mode-bar";
 import { resolveOnboardingVariant, trackOnboardingEvent, type OnboardingVariant } from "@/lib/onboarding";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog as OwnedAlertDialog,
   AlertDialogAction as OwnedAlertDialogAction,
@@ -3211,6 +3212,7 @@ function IntegrationLinkManager({
 }
 
 function SettingsDesignPage({ settings, setSettings, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
+  const [activeSection, setActiveSection] = useState<"workspace" | "workflow" | "notifications" | "permissions" | "integrations" | "appearance" | "regional">("workspace");
   const stageColors = [cutlab.color.teal, cutlab.color.cyan, cutlab.color.warning, cutlab.color.success, cutlab.color.steel, cutlab.color.error];
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
@@ -3218,6 +3220,15 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
     { role: "Owner", permissions: ["Create and edit projects", "Update project stages", "Leave project notes", "Assign work", "Mention teammates", "Use team chat", "Manage members and roles"] },
     { role: "Editor", permissions: ["Create and edit projects", "Update project stages", "Leave project notes", "Assign work", "Mention teammates", "Use team chat"] },
     { role: "Reviewer", permissions: ["View team projects", "Leave project notes", "Mention teammates", "Use team chat"] }
+  ];
+  const settingsNavigation = [
+    { id: "workspace" as const, label: "Workspace", icon: FolderKanban },
+    { id: "workflow" as const, label: "Workflow", icon: History },
+    { id: "notifications" as const, label: "Notifications", icon: Bell },
+    { id: "permissions" as const, label: "Permissions", icon: LockKeyhole },
+    { id: "integrations" as const, label: "Integrations", icon: Plug },
+    { id: "appearance" as const, label: "Appearance", icon: Palette },
+    { id: "regional" as const, label: "Regional", icon: Globe2 },
   ];
 
   function updateNotification(name: string, enabled: boolean) {
@@ -3276,7 +3287,7 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
   }
 
   return (
-    <WorkspacePage family="administration">
+    <WorkspacePage family="administration" mode="fill">
       <PageHeader
         eyebrow="Workspace administration"
         title="Settings"
@@ -3291,40 +3302,88 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
         </div>
       }
       />
-      <PageContent>
+      <PageContent mode="fill">
+      <PageToolbar className="lg:hidden">
+        <OwnedSelect value={activeSection} onValueChange={(value) => setActiveSection(value as typeof activeSection)}>
+          <OwnedSelectTrigger aria-label="Choose settings section" className="w-full">
+            <OwnedSelectValue />
+          </OwnedSelectTrigger>
+          <OwnedSelectContent>
+            {settingsNavigation.map(({ id, label }) => (
+              <OwnedSelectItem key={id} value={id}>{label}</OwnedSelectItem>
+            ))}
+          </OwnedSelectContent>
+        </OwnedSelect>
+      </PageToolbar>
+      <FillViewport bodyLabel="Settings workspace" bodyClassName="overflow-visible lg:overflow-hidden">
       <MasterDetail
+        className="min-h-full lg:h-full lg:min-h-0 lg:overflow-hidden"
         master={(
         <nav
           aria-label="Settings sections"
           data-slot="settings-navigation"
           data-navigation-kind="icon-index"
-          className="hidden overflow-hidden rounded-lg border bg-card text-card-foreground lg:sticky lg:top-4 lg:block"
+          className="hidden h-full overflow-hidden rounded-lg border bg-card text-card-foreground lg:flex lg:flex-col"
         >
           <div className="border-b border-border px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--app-accent)]">Settings index</p>
           </div>
-          <div className="grid gap-0.5 p-2">
-            {[
-              { href: "#project-rules", label: "Project rules", icon: SlidersHorizontal },
-              { href: "#workflow", label: "Workflow", icon: History },
-              { href: "#notifications", label: "Notifications", icon: Bell },
-              { href: "#permissions", label: "Permissions", icon: LockKeyhole },
-              { href: "#integrations", label: "Integrations", icon: Plug },
-              { href: "#appearance", label: "Appearance", icon: Palette },
-              { href: "#regional", label: "Regional", icon: Globe2 },
-            ].map(({ href, label, icon: Icon }) => (
-              <a key={href} href={href} className="flex min-h-9 items-center gap-3 rounded-md px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <div className="grid flex-1 content-start gap-0.5 p-2">
+            {settingsNavigation.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                aria-current={activeSection === id ? "page" : undefined}
+                onClick={() => setActiveSection(id)}
+                className={cn(
+                  "flex min-h-9 items-center gap-3 rounded-md px-3 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  activeSection === id
+                    ? "bg-[var(--app-active)] text-[var(--app-highlight)]"
+                    : "text-muted-foreground hover:bg-accent hover:text-primary",
+                )}
+              >
                 <Icon className="size-4 shrink-0" aria-hidden="true" />
                 {label}
-              </a>
+              </button>
             ))}
           </div>
           <p className="border-t border-border p-4 text-[11px] leading-5 text-muted-foreground">Changes save automatically to the active workspace.</p>
         </nav>
         )}
         detail={(
-        <div className={`grid min-w-0 ${settings.density === "Compact" ? "gap-2" : "gap-3"}`}>
-          <SettingsPanel id="project-rules" title="Project Tags & Salary" subtitle="Customize project tags, the salary tag, payout amount, and videos needed per batch.">
+        <section
+          aria-label={`${settingsNavigation.find((item) => item.id === activeSection)?.label} settings`}
+          className={cn(
+            "grid min-h-0 min-w-0 content-start overflow-visible lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pr-1",
+            settings.density === "Compact" ? "gap-2" : "gap-3",
+          )}
+          tabIndex={0}
+        >
+          {activeSection === "workspace" ? (
+          <>
+          <SettingsPanel id="workspace-profile" title="Workspace profile" subtitle="Shown across project pages, team spaces, and client handoffs.">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <FieldLayout label="Workspace name">
+                <OwnedInput
+                  value={settings.studioName}
+                  onChange={(event) => setSettings({ ...settings, studioName: event.target.value })}
+                />
+              </FieldLayout>
+              <FieldLayout label="Workspace owner">
+                <OwnedInput
+                  value={settings.profileName}
+                  onChange={(event) => setSettings({ ...settings, profileName: event.target.value })}
+                />
+              </FieldLayout>
+              <FieldLayout label="Workspace role" className="sm:col-span-2">
+                <OwnedInput
+                  value={settings.profileTitle}
+                  onChange={(event) => setSettings({ ...settings, profileTitle: event.target.value })}
+                />
+              </FieldLayout>
+            </div>
+          </SettingsPanel>
+          <SettingsPanel id="project-rules" title="Production defaults" subtitle="Configure project tags, salary tracking, payout value, and batch size.">
             <div className="grid gap-3">
               {settings.projectTags.map((tag, index) => (
                 <div key={`project-tag-${index}`} className="flex min-w-0 items-end gap-3">
@@ -3386,6 +3445,9 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
               </p>
             </div>
           </SettingsPanel>
+          </>
+          ) : null}
+          {activeSection === "workflow" ? (
           <SettingsPanel id="workflow" title="Project Stages" subtitle="Default workflow stages for new work.">
             {settings.projectStages.map((stage, index) => (
               <div key={`project-stage-${index}`} className="flex items-center gap-3">
@@ -3422,6 +3484,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
             </OwnedButton>
             {stageIssues ? <p role="alert" className="text-sm text-destructive">{stageIssues}</p> : null}
           </SettingsPanel>
+          ) : null}
+          {activeSection === "notifications" ? (
           <SettingsPanel id="notifications" title="Notifications" subtitle="Choose when project and team events should surface.">
             {Object.keys(defaultSettings.notifications).map((item) => (
               <div key={item} className="flex items-center justify-between gap-4 border-b py-3">
@@ -3438,6 +3502,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
             ))}
             <SettingsLink label="Toggle weekly summary" onClick={() => updateNotification("Weekly summary", !settings.notifications["Weekly summary"])} />
           </SettingsPanel>
+          ) : null}
+          {activeSection === "permissions" ? (
           <SettingsPanel id="permissions" title="Team Roles & Permissions" subtitle="Convex enforces these fixed workspace roles on every shared action.">
             <div className="grid gap-3 lg:grid-cols-3">
               {rolePolicy.map(({ role, permissions }) => (
@@ -3459,6 +3525,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
             </div>
             <p className="text-xs text-muted-foreground">Clients collaborate through private Client Portal links and are not workspace members.</p>
           </SettingsPanel>
+          ) : null}
+          {activeSection === "integrations" ? (
           <div id="integrations" className="scroll-mt-6">
             <IntegrationLinkManager
               title="Integrations"
@@ -3472,6 +3540,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
               }}
             />
           </div>
+          ) : null}
+          {activeSection === "appearance" ? (
           <SettingsPanel id="appearance" title="Appearance" subtitle="Customize how Frame Desk looks and feels for your tracker.">
             <div className="grid items-end gap-5 md:grid-cols-3">
               <SegmentedSetting label="Theme" options={["Light", "Dark", "System"]} active={settings.theme} onChange={(value) => setSettings({ ...settings, theme: value })} />
@@ -3494,6 +3564,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
               <SegmentedSetting label="Density" options={["Comfortable", "Compact"]} active={settings.density} onChange={(value) => setSettings({ ...settings, density: value })} />
             </div>
           </SettingsPanel>
+          ) : null}
+          {activeSection === "regional" ? (
           <SettingsPanel id="regional" title="Regional Preferences" subtitle="Choose the currency used for earnings and payout totals.">
             <div className="grid gap-5 md:grid-cols-2">
               <ProjectSelect
@@ -3511,9 +3583,11 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
               </FieldLayout>
             </div>
           </SettingsPanel>
-        </div>
+          ) : null}
+        </section>
         )}
       />
+      </FillViewport>
       </PageContent>
     </WorkspacePage>
   );

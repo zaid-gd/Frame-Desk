@@ -1,13 +1,19 @@
 import { spawn, spawnSync } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "@playwright/test";
+import nextEnv from "@next/env";
+
+const { loadEnvConfig } = nextEnv;
+loadEnvConfig(process.cwd());
 
 const startupTimeoutMs = 30_000;
 const configuredBaseUrl = process.env.CUTLAB_UI_URL;
+const verificationAccessPassword = process.env.ACCESS_WALL_PASSWORD || "frame-desk-local-verification-only";
 const workspaceRoutes = [
   ["/", "Good to see you, Jordan.", "data-index"],
   ["/projects", "Projects", "data-index"],
@@ -34,7 +40,7 @@ if (!baseUrl) {
   const port = await getOpenPort();
   baseUrl = `http://127.0.0.1:${port}`;
   server = spawn(process.execPath, [join("node_modules", "next", "dist", "bin", "next"), "start", "-p", String(port)], {
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, ACCESS_WALL_PASSWORD: verificationAccessPassword, PORT: String(port) },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -52,8 +58,26 @@ if (!baseUrl) {
 
 const browser = await chromium.launch({ headless: true });
 
-async function withPage(viewport, run, { seedWorkspace = true } = {}) {
+async function withPage(
+  viewport,
+  run,
+  { seedWorkspace = true, projectCount = 1, clientCount = Math.min(projectCount, 12) } = {},
+) {
   const context = await browser.newContext({ viewport, reducedMotion: "no-preference" });
+  if (verificationAccessPassword) {
+    const expiresAt = Math.floor(Date.now() / 1000) + (60 * 60);
+    const payload = `v1.${expiresAt}`;
+    const signature = createHmac("sha256", verificationAccessPassword)
+      .update(payload)
+      .digest("base64url");
+    await context.addCookies([{
+      name: "cutlab_access",
+      value: `${payload}.${signature}`,
+      url: baseUrl,
+      httpOnly: true,
+      sameSite: "Strict",
+    }]);
+  }
   await context.route("**/_vercel/**", async (route) => {
     const isScript = route.request().resourceType() === "script";
     await route.fulfill({
@@ -62,7 +86,11 @@ async function withPage(viewport, run, { seedWorkspace = true } = {}) {
       body: isScript ? "" : "ok",
     });
   });
-  if (seedWorkspace) await context.addInitScript(() => {
+  if (seedWorkspace) await context.addInitScript(({ clientCount, projectCount }) => {
+    const clientNames = Array.from(
+      { length: clientCount },
+      (_, index) => `Client ${index + 1}`,
+    );
     localStorage.setItem("cutlab-studio:auth-mode:v1", "local");
     localStorage.setItem("video-editing-work-tracker:settings:v1", JSON.stringify({
       studioName: "Frame Desk",
@@ -78,7 +106,7 @@ async function withPage(viewport, run, { seedWorkspace = true } = {}) {
       salaryBatchSize: 20,
       salaryBatchAmount: 10000,
       salaryWorkType: "Job / Salary",
-      customClients: ["Apex"],
+      customClients: clientNames,
       projectTags: ["Job / Salary", "Freelance"],
       projectStages: ["Planned", "In Progress", "Review", "Delivered"],
       notifications: {},
@@ -91,22 +119,22 @@ async function withPage(viewport, run, { seedWorkspace = true } = {}) {
       editorPermissions: {},
       rolePermissions: {},
     }));
-    localStorage.setItem("video-editing-work-tracker:v1", JSON.stringify([
-      {
-        id: "interaction-project",
+    localStorage.setItem("video-editing-work-tracker:v1", JSON.stringify(
+      Array.from({ length: projectCount }, (_, index) => ({
+        id: `interaction-project-${index + 1}`,
         profileId: "video-editor",
-        title: "Interaction test edit",
-        client: "Apex",
-        status: "In Progress",
+        title: `Interaction test edit ${index + 1}`,
+        client: clientNames[index % clientNames.length],
+        status: index % 3 === 0 ? "In Progress" : "Delivered",
         workType: "Job / Salary",
         startDate: "2026-06-10",
-        dueDate: "2026-06-18",
+        dueDate: `2026-06-${String((index % 27) + 1).padStart(2, "0")}`,
         earnings: 0,
-        notes: "Review the motion pass.",
+        notes: `Review motion pass ${index + 1}.`,
         createdAt: "2026-06-10T09:00:00.000Z",
-      },
-    ]));
-  });
+      })),
+    ));
+  }, { clientCount, projectCount });
   else await context.addInitScript(() => {
     localStorage.setItem("cutlab-studio:privacy-consent:v1", "essential");
   });
@@ -155,6 +183,8 @@ async function assertWorkspaceGeometry(page, route, expectedFamily) {
       viewportWidth: document.documentElement.clientWidth,
       documentWidth: document.documentElement.scrollWidth,
       main: rect(main),
+      mainClientLeft: main ? Math.round(main.getBoundingClientRect().left + main.clientLeft) : 0,
+      mainClientWidth: main?.clientWidth ?? 0,
       pageRoot: rect(pageRoot),
       header: rect(header),
       family: pageRoot?.getAttribute("data-family") ?? "",
@@ -175,8 +205,8 @@ async function assertWorkspaceGeometry(page, route, expectedFamily) {
   if (geometry.documentWidth > geometry.viewportWidth + 1) {
     throw new Error(`${route} has document-level horizontal overflow.`);
   }
-  const expectedWidth = Math.min(geometry.main.width, 1920);
-  const expectedLeft = geometry.main.left + ((geometry.main.width - expectedWidth) / 2);
+  const expectedWidth = Math.min(geometry.mainClientWidth, 1920);
+  const expectedLeft = geometry.mainClientLeft + ((geometry.mainClientWidth - expectedWidth) / 2);
   if (Math.abs(geometry.pageRoot.width - expectedWidth) > 1 || Math.abs(geometry.pageRoot.left - expectedLeft) > 1) {
     throw new Error(`${route} does not follow the shared 1920px workspace width contract.`);
   }
@@ -236,8 +266,16 @@ async function assertApprovedFamilyDesigns(page) {
   if (await settingsNavigation.count() === 0) {
     throw new Error("/settings is missing the approved icon-based settings index.");
   }
+  await page.getByRole("heading", { level: 2, name: "Workspace profile" }).waitFor();
+  await page.getByRole("heading", { level: 2, name: "Production defaults" }).waitFor();
+  await settingsNavigation.getByRole("button", { name: "Workflow" }).click();
+  await page.getByRole("heading", { level: 2, name: "Project Stages" }).waitFor();
+  if (await page.getByRole("heading", { level: 2, name: "Workspace profile" }).count()) {
+    throw new Error("/settings keeps every settings panel mounted instead of using the approved section workspace.");
+  }
+  await settingsNavigation.getByRole("button", { name: "Workspace" }).click();
+  await page.getByRole("heading", { level: 2, name: "Workspace profile" }).waitFor();
   if (process.env.CUTLAB_CAPTURE_FAMILIES === "1") {
-    await page.getByRole("heading", { level: 2, name: "Project Tags & Salary" }).waitFor();
     await page.waitForTimeout(500);
     await page.screenshot({ path: join(captureDirectory, "settings-restored.png"), fullPage: true });
   }
@@ -251,6 +289,53 @@ async function assertApprovedFamilyDesigns(page) {
   ]) {
     await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
     if (await page.locator(selector).count() === 0) throw new Error(message);
+  }
+}
+
+async function assertInnerWorkspaceScroll(page, route, heading, scrollLabel) {
+  await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: heading }).waitFor();
+  await page.locator(`[aria-label="${scrollLabel}"]`).first().waitFor();
+  await page.waitForTimeout(350);
+
+  const result = await page.evaluate((label) => {
+    const main = document.getElementById("main-content");
+    const candidates = Array.from(document.querySelectorAll(`[aria-label="${CSS.escape(label)}"]`));
+    const target = candidates.find((element) => {
+      const style = getComputedStyle(element);
+      return ["auto", "scroll"].includes(style.overflowY)
+        && element.scrollHeight > element.clientHeight + 8;
+    });
+    if (!target) {
+      return {
+        found: false,
+        mainScrollTop: main?.scrollTop ?? -1,
+        candidates: candidates.map((element) => ({
+          clientHeight: element.clientHeight,
+          scrollHeight: element.scrollHeight,
+          overflowY: getComputedStyle(element).overflowY,
+        })),
+      };
+    }
+
+    const mainScrollTop = main?.scrollTop ?? 0;
+    target.scrollTop = 0;
+    target.scrollTop = Math.min(240, target.scrollHeight - target.clientHeight);
+    return {
+      found: true,
+      scrollTop: target.scrollTop,
+      mainScrollTop,
+      mainScrollTopAfter: main?.scrollTop ?? 0,
+      clientHeight: target.clientHeight,
+      scrollHeight: target.scrollHeight,
+    };
+  }, scrollLabel);
+
+  if (!result.found || !("scrollTop" in result) || result.scrollTop <= 0) {
+    throw new Error(`${route} does not provide a working inner scroll region named "${scrollLabel}": ${JSON.stringify(result)}`);
+  }
+  if (result.mainScrollTopAfter !== result.mainScrollTop) {
+    throw new Error(`${route} moved the shell viewport while scrolling "${scrollLabel}".`);
   }
 }
 
@@ -351,6 +436,7 @@ try {
     await chooseEssentialPrivacy(page);
     const reduced = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
     if (!reduced) throw new Error("Reduced-motion media preference was not applied.");
+    await page.locator('[data-slot="settings-navigation"]').getByRole("button", { name: "Appearance" }).click();
     await page.getByRole("button", { name: "Dark" }).click();
     await page.waitForFunction(() => document.documentElement.classList.contains("dark"));
   });
@@ -368,6 +454,13 @@ try {
     console.log("Verifying approved representative page-family designs...");
     await assertApprovedFamilyDesigns(page);
   });
+
+  await withPage({ width: 1440, height: 900 }, async (page) => {
+    console.log("Verifying dense workspace panes own their scrolling...");
+    await assertInnerWorkspaceScroll(page, "/projects", "Projects", "Scrollable project library");
+    await assertInnerWorkspaceScroll(page, "/media", "Media", "Scrollable media packages");
+    await assertInnerWorkspaceScroll(page, "/clients", "Clients", "Scrollable client project history");
+  }, { projectCount: 48, clientCount: 1 });
 
   for (const viewport of [
     { width: 390, height: 844 },

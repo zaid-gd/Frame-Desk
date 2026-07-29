@@ -322,16 +322,6 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         eyebrow="Production workspace"
         title="Projects"
         description="A focused index for every tracked edit, handoff, review, and salary batch item."
-        actions={
-          <Button
-            aria-label={scope === "team" ? "New Team Project" : "New Project"}
-            className="h-9 self-start transition-transform active:scale-[0.98] sm:self-auto"
-            onClick={() => props.onNewProject(scope)}
-            disabled={scope === "personal" ? !props.canCreateProjects : !hasTeam || !props.canCreateTeamProjects}
-          >
-            <Plus /> {scope === "team" ? "New team project" : "New project"}
-          </Button>
-        }
       />
 
       <PageContent mode="fill">
@@ -407,10 +397,9 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
           primary={(
         <DataTableFrame
           aria-busy={isUpdating}
-          bounded
-          bodyLabel="Scrollable project library"
+          bodyLabel="Project library viewport"
           className="relative h-full min-h-0 border-[var(--app-border)] bg-[var(--app-panel)]"
-          bodyClassName="min-h-0 flex flex-col overflow-x-hidden max-lg:flex-none max-lg:overflow-visible"
+          bodyClassName="flex min-h-0 flex-1 flex-col overflow-hidden max-lg:flex-none max-lg:overflow-visible"
         >
           <AnimatePresence>
             {isUpdating ? (

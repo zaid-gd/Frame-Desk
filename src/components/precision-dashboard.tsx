@@ -1223,7 +1223,7 @@ function ProjectInspector({
         exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -6 }}
         transition={{ duration: reduceMotion ? 0 : 0.35, ease: easing }}
       >
-        <motion.div className={cn("flex items-start gap-3 border-b border-[var(--app-border)]", mobile ? "p-5" : "p-4")} layout>
+        <motion.div className={cn("flex items-start gap-3 border-b border-[var(--app-border)]", mobile ? "p-5" : "p-3.5")} layout>
           <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[var(--app-accent)]" />
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[15px] font-medium tracking-[-0.02em] leading-snug">{project.title}</h2>
@@ -1244,15 +1244,15 @@ function ProjectInspector({
           </DropdownMenu>
         </motion.div>
 
-        <div className={cn("space-y-4", mobile ? "p-5" : "p-4")}>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+        <div className={cn(mobile ? "space-y-4 p-5" : "space-y-3 p-3.5")}>
+          <div className={cn("grid grid-cols-2 gap-x-4", mobile ? "gap-y-4" : "gap-y-3")}>
             <InspectorField icon={UsersRound} label="Client" value={project.client || "No client"} />
             <InspectorField icon={FolderKanban} label="Type" value={project.workType} />
             <InspectorField icon={CalendarClock} label="Due date" value={formatDate(project.dueDate, { month: "short", day: "numeric" })} />
             <InspectorField icon={AlertCircle} label="Priority" value={priorityFor(project)} />
           </div>
 
-          <div className="border-t border-[var(--app-border)] pt-4">
+          <div className={cn("border-t border-[var(--app-border)]", mobile ? "pt-4" : "pt-3")}>
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-muted)]">Progress</p>
               <span className="font-mono text-[11px] tabular-nums text-[var(--app-muted)]">{progress}%</span>
@@ -1266,13 +1266,13 @@ function ProjectInspector({
           </div>
 
           {project.notes ? (
-            <div className="border-t border-[var(--app-border)] pt-4">
+            <div className={cn("border-t border-[var(--app-border)]", mobile ? "pt-4" : "pt-3")}>
               <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-muted)]">Project note</p>
               <p className={cn("mt-2 text-xs leading-5 text-[var(--app-ink)]/80", !mobile && "line-clamp-2")}>{project.notes}</p>
             </div>
           ) : null}
 
-          <div className="flex items-end justify-between gap-4 border-t border-[var(--app-border)] pt-4">
+          <div className={cn("flex items-end justify-between gap-4 border-t border-[var(--app-border)]", mobile ? "pt-4" : "pt-3")}>
             <div>
               <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[var(--app-muted)]">Value</p>
               <p className="mt-1 text-lg font-semibold tracking-[-0.02em] tabular-nums">

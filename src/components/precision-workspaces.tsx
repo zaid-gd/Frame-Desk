@@ -202,9 +202,9 @@ export function PrecisionClients({
 
       <FillViewport bodyLabel="Client workspace" bodyClassName="overflow-visible lg:overflow-hidden">
       <MasterDetail
-        className="min-h-full lg:h-full lg:overflow-hidden"
+        className="min-h-full lg:h-full lg:min-h-0 lg:overflow-hidden"
         master={(
-        <aside className="flex min-h-0 flex-col border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] lg:border-b-0 lg:border-r">
+        <aside className="flex min-h-0 flex-col border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] lg:h-full lg:border-b-0 lg:border-r">
           <div className="border-b border-[var(--app-border)] p-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--app-muted)]" />
@@ -265,7 +265,7 @@ export function PrecisionClients({
               animate={{ opacity: 1, x: 0 }}
               exit={reduceMotion ? { opacity: 1 } : { opacity: 0, x: -6 }}
               transition={reduceMotion ? { duration: 0 } : revealTransition}
-              className="flex min-h-0 min-w-0 flex-col"
+              className="flex min-h-0 min-w-0 flex-col lg:h-full"
             >
             <div className="flex flex-col gap-4 border-b border-[var(--app-border)] p-5 sm:flex-row sm:items-start">
               <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-[var(--app-active)] text-sm font-semibold text-[var(--app-highlight)]">{clientInitials(selected.name)}</span>

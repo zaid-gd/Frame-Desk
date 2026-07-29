@@ -111,7 +111,7 @@ export function PrecisionMedia({
           <FillViewport bodyLabel="Media workspace" bodyClassName="overflow-auto lg:overflow-hidden">
           <ThreePane
             density="compact"
-            className="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]"
+            className="h-full min-h-0 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]"
             master={(
             <aside className="min-h-0 overflow-auto border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 lg:border-b-0 lg:border-r">
               <p className="px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--app-subtle)]">Collections</p>
@@ -156,7 +156,7 @@ export function PrecisionMedia({
             </aside>
             )}
             detail={(
-            <main className="flex min-h-0 min-w-0 flex-col overflow-hidden border-b border-[var(--app-border)] lg:border-b-0 lg:border-r">
+            <main className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-b border-[var(--app-border)] lg:border-b-0 lg:border-r">
               <PageToolbar className="border-b border-[var(--app-border)] p-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
@@ -226,7 +226,7 @@ export function PrecisionMedia({
                 </motion.span>
               </div>
 
-              <div className="relative min-h-0 flex-1 overflow-auto">
+              <div className="relative min-h-0 flex-1 overflow-auto overscroll-contain" tabIndex={0} aria-label="Scrollable media packages">
                 <AnimatePresence mode="wait" initial={false}>
                   {filtered.length ? (
                     <motion.div
