@@ -247,13 +247,13 @@ export function WorkspaceShell({
       <div
         className={cn(
           "min-h-dvh transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-          collapsed ? "lg:pl-[76px]" : "lg:pl-[224px]",
+          collapsed ? "lg:pl-[60px]" : "lg:pl-[224px]",
         )}
       >
         <header
           className={cn(
-            "fixed inset-x-0 top-0 z-30 flex h-14 items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-3 backdrop-blur-xl transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between",
-            "lg:left-[76px]",
+            "fixed inset-x-0 top-0 z-30 flex h-12 items-center border-b border-[var(--app-border)] bg-[var(--app-sidebar)] px-2.5 transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between lg:px-3",
+            "lg:left-[60px]",
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
@@ -263,19 +263,23 @@ export function WorkspaceShell({
               </span>
             </div>
             <p className="truncate text-sm font-semibold lg:hidden">{title}</p>
+            <p className="hidden items-center gap-1.5 text-xs lg:flex">
+              <span className="text-[var(--app-subtle)]">Frame Desk</span>
+              <span aria-hidden="true" className="text-[var(--app-border)]">/</span>
+              <span className="font-medium text-[var(--app-ink)]">{title}</span>
+            </p>
           </div>
 
           <Button
             variant="outline"
             className={cn(
-              "hidden h-9 w-[540px] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-3 text-[var(--app-muted)] shadow-none transition-[left,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:absolute lg:flex lg:-translate-x-1/2",
-              "lg:left-[calc(50vw-76px)]",
+              "hidden h-8 w-[min(38vw,440px)] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-2.5 text-xs text-[var(--app-muted)] shadow-none transition-[left,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2",
             )}
             onClick={() => setCommandOpen(true)}
           >
-            <Search className="size-4" />
+            <Search className="size-3.5" />
             <span className="truncate">Search pages and workspace actions</span>
-            <kbd className="ml-auto rounded border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--app-muted)]">
+            <kbd className="ml-auto rounded border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-1.5 py-px font-mono text-[9px] text-[var(--app-muted)]">
               Ctrl K
             </kbd>
           </Button>
@@ -289,11 +293,11 @@ export function WorkspaceShell({
             >
               <Button
                 aria-label="New Project"
-                className="h-9 bg-[var(--app-accent)] px-3.5 text-[var(--app-accent-foreground)] shadow-none hover:bg-[var(--app-highlight)]"
+                className="h-8 bg-[var(--app-accent)] px-3 text-xs text-[var(--app-accent-foreground)] shadow-none hover:bg-[var(--app-highlight)]"
                 onClick={onNewProject}
                 disabled={!canCreateProject}
               >
-                <Plus className="size-4" />
+                <Plus className="size-3.5" />
                 New project
               </Button>
             </motion.div>
@@ -307,7 +311,7 @@ export function WorkspaceShell({
           </div>
         </header>
 
-        <main id="main-content" tabIndex={-1} className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto pt-14 outline-none lg:h-auto lg:min-h-[calc(100dvh-56px)] lg:overflow-visible">
+        <main id="main-content" tabIndex={-1} className="h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto pt-12 outline-none lg:h-auto lg:min-h-[calc(100dvh-48px)] lg:overflow-visible">
           {children}
         </main>
       </div>
@@ -350,27 +354,27 @@ function DesktopSidebar({
   return (
     <motion.aside
       initial={false}
-      animate={{ width: 76 }}
+      animate={{ width: 60 }}
       transition={reduceMotion ? { duration: 0 } : shellTransition}
       className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden border-r border-[var(--app-border)] bg-[var(--app-sidebar)] lg:flex lg:flex-col"
     >
       <div className={cn(
-        "grid h-14 grid-cols-1 items-center justify-items-center border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_92%,transparent)] px-2 backdrop-blur-xl",
+        "grid h-12 grid-cols-1 items-center justify-items-center border-b border-[var(--app-border)] bg-[var(--app-sidebar)] px-1.5",
       )}>
         <Link
           href="/"
           aria-label="Go to dashboard"
           className={cn(
             "min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-sidebar)]",
-            "flex h-full w-[60px] items-center justify-center overflow-hidden",
+            "flex h-full w-12 items-center justify-center overflow-hidden",
           )}
         >
           <motion.div
             initial={false}
             animate={{
-              opacity: collapsed ? 0.75 : 1,
-              height: collapsed ? 16 : 48,
-              width: collapsed ? 42 : 127,
+              opacity: collapsed ? 0.88 : 1,
+              height: collapsed ? 26 : 48,
+              width: collapsed ? 26 : 127,
             }}
             transition={reduceMotion ? { duration: 0 } : shellTransition}
             className={cn(
@@ -401,9 +405,9 @@ function DesktopSidebar({
 
       </div>
 
-      <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+      <nav aria-label="Primary navigation" className="min-h-0 flex-1 overflow-y-auto px-1.5 py-2">
         {visibleGroups.map((group, groupIndex) => (
-          <div key={group.label} className="mb-4">
+          <div key={group.label} className="mb-2.5">
             {!collapsed ? (
               <motion.p
                 initial={reduceMotion ? false : { opacity: 0 }}
@@ -414,8 +418,8 @@ function DesktopSidebar({
                 {group.label}
               </motion.p>
             ) : (
-              <div className="mb-1.5 flex h-3.5 items-center justify-center" aria-hidden="true">
-                {groupIndex > 0 ? <span className="h-px w-10 bg-[var(--app-border)]" /> : null}
+              <div className="mb-1 flex h-2 items-center justify-center" aria-hidden="true">
+                {groupIndex > 0 ? <span className="h-px w-8 bg-[var(--app-border)]" /> : null}
               </div>
             )}
             <div className="space-y-0.5">
@@ -443,7 +447,7 @@ function DesktopSidebar({
         ) : null}
       </nav>
 
-      <div className="border-t border-[var(--app-border)] p-2">
+      <div className="border-t border-[var(--app-border)] p-1.5">
         <ProfileMenu settings={settings} collapsed={collapsed} page={page} />
         {!collapsed ? (
           <footer className="mt-2 border-t border-[var(--app-border)] px-2 pt-2 text-[11px] leading-5 text-[var(--app-subtle)]">
@@ -481,8 +485,8 @@ function SidebarRoute({
       aria-label={collapsed ? item.label : undefined}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "group relative flex h-9 items-center overflow-hidden rounded-md text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-inset",
-        collapsed ? "mx-auto w-10 justify-center px-0" : "gap-2.5 px-2.5",
+        "group relative flex h-8 items-center overflow-hidden rounded text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-inset",
+        collapsed ? "mx-auto w-9 justify-center px-0" : "gap-2.5 px-2.5",
         active
           ? "text-[var(--app-highlight)]"
           : "text-[var(--app-muted)] hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)]",
@@ -492,7 +496,7 @@ function SidebarRoute({
         <motion.span
           layoutId="sidebar-active-route"
           transition={reduceMotion ? { duration: 0 } : shellTransition}
-          className="absolute inset-0 rounded-md bg-[var(--app-active)]"
+          className="absolute inset-0 rounded bg-[var(--app-active)]"
         />
       ) : null}
       <motion.span
@@ -500,7 +504,7 @@ function SidebarRoute({
         transition={reduceMotion ? { duration: 0 } : shellTransition}
         className="relative z-10 flex shrink-0"
       >
-        <Icon className="size-[17px]" strokeWidth={active ? 2.1 : 1.8} />
+        <Icon className="size-4" strokeWidth={active ? 2.1 : 1.8} />
       </motion.span>
       {!collapsed ? (
         <motion.span

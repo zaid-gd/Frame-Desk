@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
@@ -23,19 +23,28 @@ function storedChoice(): ConsentChoice | null {
 
 export function PrivacyControls() {
   const [choice, setChoice] = useState<ConsentChoice | null | undefined>(undefined);
+  const savedChoiceRef = useRef<ConsentChoice | null>(null);
 
   useEffect(() => {
-    setChoice(storedChoice());
+    const savedChoice = storedChoice();
+    savedChoiceRef.current = savedChoice;
+    setChoice(savedChoice);
     const openPreferences = () => setChoice(null);
     window.addEventListener(preferencesEvent, openPreferences);
     return () => window.removeEventListener(preferencesEvent, openPreferences);
   }, []);
 
   const saveChoice = useCallback((nextChoice: ConsentChoice) => {
+    const shouldReload = savedChoiceRef.current === "analytics" && nextChoice === "essential";
     try {
       window.localStorage.setItem(consentKey, nextChoice);
     } catch {
       // The preference remains valid for this session if storage is unavailable.
+    }
+    savedChoiceRef.current = nextChoice;
+    if (shouldReload) {
+      window.location.reload();
+      return;
     }
     setChoice(nextChoice);
   }, []);

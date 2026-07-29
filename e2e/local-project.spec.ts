@@ -48,3 +48,50 @@ test("opens the Privacy Policy and Terms of Service from the profile menu", asyn
   await page.getByRole("menuitem", { name: "Terms of Service" }).click();
   await expect(page.getByRole("heading", { name: "Terms of Service", level: 1 })).toBeVisible();
 });
+
+test("reloads after analytics consent is withdrawn", async ({ page }) => {
+  await chooseLocalMode(page);
+  await openApp(page, "/projects");
+  await page.evaluate(() => {
+    window.localStorage.setItem("cutlab-studio:privacy-consent:v1", "analytics");
+  });
+  await page.reload();
+
+  const analyticsScript = page.locator('script[src*="vercel-scripts.com/v1/script"], script[src*="/_vercel/insights/script"]');
+  await expect(analyticsScript).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Open profile menu" }).click();
+  await page.getByRole("menuitem", { name: "Privacy choices" }).click();
+  const reloaded = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Essential only" }).click();
+  await reloaded;
+
+  await expect(page.evaluate(() => window.localStorage.getItem("cutlab-studio:privacy-consent:v1"))).resolves.toBe("essential");
+  await expect(analyticsScript).toHaveCount(0);
+});
+
+test("uses a unified compact desktop shell", async ({ page }) => {
+  await chooseLocalMode(page);
+  await openApp(page, "/projects");
+
+  const sidebar = page.locator("aside").first();
+  const topbar = page.locator("header").first();
+  await expect(sidebar).toBeVisible();
+  await expect(topbar).toBeVisible();
+
+  const sidebarBox = await sidebar.boundingBox();
+  const topbarBox = await topbar.boundingBox();
+  expect(sidebarBox?.width).toBe(60);
+  expect(topbarBox?.height).toBe(48);
+  expect(topbarBox?.x).toBe(60);
+
+  const surfaces = await page.evaluate(() => {
+    const sidebarElement = document.querySelector("aside");
+    const topbarElement = document.querySelector("header");
+    return {
+      sidebar: sidebarElement ? getComputedStyle(sidebarElement).backgroundColor : null,
+      topbar: topbarElement ? getComputedStyle(topbarElement).backgroundColor : null,
+    };
+  });
+  expect(surfaces.topbar).toBe(surfaces.sidebar);
+});
