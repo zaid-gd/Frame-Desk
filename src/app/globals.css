@@ -325,6 +325,14 @@ button:not(:disabled):active,
   scrollbar-width: thin;
 }
 
+.workspace-scrollbar-hidden {
+  scrollbar-width: none;
+}
+
+.workspace-scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 .app-toast-position {
   bottom: 16px;
 }

@@ -706,7 +706,11 @@ function ProjectInspector({
       initial={reduceMotion ? false : { opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
       exit={reduceMotion ? undefined : { opacity: 0, x: -6 }}
-      className={cn("sticky top-[76px] max-h-[calc(100dvh-96px)] overflow-y-auto rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]", className)}
+      aria-label="Selected project details"
+      className={cn(
+        "workspace-scrollbar-hidden h-full min-h-0 overflow-y-auto overscroll-contain rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]",
+        className,
+      )}
     >
       <div className="border-b border-[var(--app-border)] p-4">
         <div>

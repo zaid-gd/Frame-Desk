@@ -660,7 +660,7 @@ export function PrecisionDashboard(props: DashboardProps) {
         animate={entry.animate}
         transition={{ delay: reduceMotion ? 0 : 0.04, duration: reduceMotion ? 0 : 0.5, ease: easing }}
       >
-      <MetricStrip columns={showSalaryBatch ? 5 : 4} aria-label="Operational pulse">
+      <MetricStrip columns={showSalaryBatch ? 5 : 4} aria-label="Operational pulse" className="gap-0 bg-transparent">
         <div className="bg-[var(--app-panel)] px-4 py-3">
           <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)]">In motion</p>
           <div className="mt-1 flex items-baseline gap-2">
@@ -747,12 +747,14 @@ export function PrecisionDashboard(props: DashboardProps) {
       >
         <SplitPane
           ratio="inspector"
+          className="items-stretch"
           primary={(
-        <div className="min-w-0 space-y-4">
+        <div className="h-full min-w-0">
           <WorkspaceSection
             title="Project ledger"
             count={props.visibleProjects.length}
             icon={FolderKanban}
+            className="h-full"
             action={(
               <Button asChild variant="ghost" size="sm" className="h-8 px-2 text-[11px] text-[var(--app-muted)] hover:text-[var(--app-ink)]">
                 <Link href="/projects">
@@ -924,7 +926,7 @@ export function PrecisionDashboard(props: DashboardProps) {
         </div>
           )}
           secondary={(
-        <div className="min-w-0 xl:sticky xl:top-[64px] xl:self-start">
+        <div className="h-full min-w-0">
           <ProjectInspector
             project={selected}
             settings={props.settings}
@@ -1216,7 +1218,7 @@ function ProjectInspector({
           "border border-[var(--app-border)] bg-[var(--app-panel)]",
           mobile
             ? "min-h-dvh overflow-y-auto rounded-none border-0"
-            : "hidden overflow-hidden rounded-[10px] xl:block",
+            : "hidden h-full overflow-hidden rounded-[10px] xl:block",
         )}
         initial={reduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}

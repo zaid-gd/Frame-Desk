@@ -339,6 +339,82 @@ async function assertInnerWorkspaceScroll(page, route, heading, scrollLabel) {
   }
 }
 
+async function assertDashboardAndProjectInspectorRefinements(page) {
+  await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: "Good to see you, Jordan." }).waitFor();
+  await page.getByRole("heading", { level: 2, name: "Interaction test edit 1" }).waitFor();
+  await page.waitForTimeout(600);
+
+  const dashboardLayout = await page.evaluate(() => {
+    const main = document.getElementById("main-content");
+    const metricStrip = document.querySelector('[aria-label="Operational pulse"]');
+    const ledger = document.querySelector('section[aria-label="Project ledger"]');
+    const inspectorHeading = Array.from(document.querySelectorAll("h2"))
+      .find((heading) => heading.textContent?.trim() === "Interaction test edit 1");
+    const inspector = inspectorHeading?.closest("aside");
+    const rect = (element) => {
+      const bounds = element?.getBoundingClientRect();
+      return bounds ? { top: bounds.top, bottom: bounds.bottom } : null;
+    };
+    return {
+      mainScrollbarWidth: main ? getComputedStyle(main).scrollbarWidth : "",
+      metricColumnGap: metricStrip ? getComputedStyle(metricStrip).columnGap : "",
+      ledger: rect(ledger),
+      inspector: rect(inspector),
+    };
+  });
+
+  if (dashboardLayout.mainScrollbarWidth !== "none") {
+    throw new Error(`Workspace viewport still exposes a native scrollbar: ${dashboardLayout.mainScrollbarWidth || "unknown"}.`);
+  }
+  if (dashboardLayout.metricColumnGap !== "0px") {
+    throw new Error(`Dashboard KPI strip still has separator gaps: ${dashboardLayout.metricColumnGap || "unknown"}.`);
+  }
+  if (!dashboardLayout.ledger || !dashboardLayout.inspector) {
+    throw new Error("Dashboard project ledger or detail inspector could not be measured.");
+  }
+  if (
+    Math.abs(dashboardLayout.ledger.top - dashboardLayout.inspector.top) > 1
+    || Math.abs(dashboardLayout.ledger.bottom - dashboardLayout.inspector.bottom) > 1
+  ) {
+    throw new Error(`Dashboard ledger and inspector are not level: ${JSON.stringify(dashboardLayout)}.`);
+  }
+
+  await page.goto(`${baseUrl}/projects`, { waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 1, name: "Projects" }).waitFor();
+  await page.getByRole("heading", { level: 2, name: "Interaction test edit 1" }).waitFor();
+  const projectInspector = await page.evaluate(() => {
+    const main = document.getElementById("main-content");
+    const inspectorHeading = Array.from(document.querySelectorAll("h2"))
+      .find((heading) => heading.textContent?.trim() === "Interaction test edit 1");
+    const inspector = inspectorHeading?.closest("aside");
+    if (!main || !inspector) return null;
+    const mainBounds = main.getBoundingClientRect();
+    const inspectorBounds = inspector.getBoundingClientRect();
+    inspector.scrollTop = inspector.scrollHeight;
+    return {
+      mainBottom: mainBounds.bottom,
+      inspectorBottom: inspectorBounds.bottom,
+      clientHeight: inspector.clientHeight,
+      scrollHeight: inspector.scrollHeight,
+      scrollTop: inspector.scrollTop,
+      overflowY: getComputedStyle(inspector).overflowY,
+    };
+  });
+
+  if (!projectInspector) throw new Error("Projects detail inspector could not be measured.");
+  if (projectInspector.inspectorBottom > projectInspector.mainBottom + 1) {
+    throw new Error(`Projects detail inspector is clipped by the workspace viewport: ${JSON.stringify(projectInspector)}.`);
+  }
+  if (
+    !["auto", "scroll"].includes(projectInspector.overflowY)
+    || projectInspector.scrollHeight <= projectInspector.clientHeight + 8
+    || projectInspector.scrollTop <= 0
+  ) {
+    throw new Error(`Projects detail inspector does not own working vertical scroll: ${JSON.stringify(projectInspector)}.`);
+  }
+}
+
 try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying first-value onboarding and sample isolation...");
@@ -460,6 +536,8 @@ try {
     await assertInnerWorkspaceScroll(page, "/projects", "Projects", "Scrollable project library");
     await assertInnerWorkspaceScroll(page, "/media", "Media", "Scrollable media packages");
     await assertInnerWorkspaceScroll(page, "/clients", "Clients", "Scrollable client project history");
+    console.log("Verifying shell, Dashboard alignment, KPI strip, and Projects inspector refinements...");
+    await assertDashboardAndProjectInspectorRefinements(page);
   }, { projectCount: 48, clientCount: 1 });
 
   for (const viewport of [
