@@ -49,27 +49,6 @@ test("opens the Privacy Policy and Terms of Service from the profile menu", asyn
   await expect(page.getByRole("heading", { name: "Terms of Service", level: 1 })).toBeVisible();
 });
 
-test("reloads after analytics consent is withdrawn", async ({ page }) => {
-  await chooseLocalMode(page);
-  await openApp(page, "/projects");
-  await page.evaluate(() => {
-    window.localStorage.setItem("cutlab-studio:privacy-consent:v1", "analytics");
-  });
-  await page.reload();
-
-  const analyticsScript = page.locator('script[src*="vercel-scripts.com/v1/script"], script[src*="/_vercel/insights/script"]');
-  await expect(analyticsScript).toHaveCount(1);
-
-  await page.getByRole("button", { name: "Open profile menu" }).click();
-  await page.getByRole("menuitem", { name: "Privacy choices" }).click();
-  const reloaded = page.waitForEvent("load");
-  await page.getByRole("button", { name: "Essential only" }).click();
-  await reloaded;
-
-  await expect(page.evaluate(() => window.localStorage.getItem("cutlab-studio:privacy-consent:v1"))).resolves.toBe("essential");
-  await expect(analyticsScript).toHaveCount(0);
-});
-
 test("uses a unified compact desktop shell", async ({ page }) => {
   await chooseLocalMode(page);
   await openApp(page, "/projects");
@@ -126,7 +105,6 @@ test("uses a unified compact desktop shell", async ({ page }) => {
 test("shows the compact dashboard overview and links to all projects", async ({ page }) => {
   await chooseLocalMode(page);
   await page.addInitScript(() => {
-    window.localStorage.setItem("cutlab-studio:privacy-consent:v1", "essential");
     window.localStorage.setItem("video-editing-work-tracker:settings:v1", JSON.stringify({
       profileName: "Screen",
       currencyCode: "USD",

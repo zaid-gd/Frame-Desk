@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
 
   let password: unknown;
   try {
-    ({ password } = await request.json());
+    const body: unknown = await request.json();
+    password = body && typeof body === "object" && "password" in body
+      ? body.password
+      : undefined;
   } catch {
     return json("Enter the private access password.", 400);
   }

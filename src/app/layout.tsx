@@ -3,7 +3,6 @@ import Script from "next/script";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { Space_Grotesk } from "next/font/google";
-import { PrivacyControls } from "@/components/privacy-controls";
 import { siteUrl } from "@/lib/site";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -183,7 +182,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Skip to workspace content
         </a>
         <Providers>{children}</Providers>
-        <PrivacyControls />
       </body>
     </html>
   );

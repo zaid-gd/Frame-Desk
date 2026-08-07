@@ -2,6 +2,10 @@ node_modules/
 .next/
 out/
 dist/
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts
 
 .env
 .env.local

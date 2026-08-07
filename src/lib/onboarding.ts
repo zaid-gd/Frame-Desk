@@ -1,6 +1,4 @@
 const variantKey = "cutlab-studio:onboarding-variant:v2";
-const eventKeyPrefix = "cutlab-studio:onboarding-event:v2:";
-const privacyConsentKey = "cutlab-studio:privacy-consent:v1";
 
 export type OnboardingVariant = "control" | "v2";
 export type OnboardingEvent =
@@ -27,11 +25,7 @@ export function trackOnboardingEvent(
   event: OnboardingEvent,
   properties: { variant: OnboardingVariant; entrySource?: string; mode?: "local" | "account"; elapsedMs?: number },
 ) {
-  if (typeof window === "undefined") return;
-  if (window.localStorage.getItem(privacyConsentKey) !== "analytics") return;
-  const dedupeKey = `${eventKeyPrefix}${event}:${properties.mode ?? "none"}`;
-  if (window.sessionStorage.getItem(dedupeKey)) return;
-  window.sessionStorage.setItem(dedupeKey, "1");
-  track(event, properties);
+  // Analytics are intentionally disabled until a provider is selected.
+  void event;
+  void properties;
 }
-import { track } from "@vercel/analytics";

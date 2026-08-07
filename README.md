@@ -186,6 +186,38 @@ The [60-90 second product demo flow](docs/product/DEMO_FLOW.md) covers the full 
 story, including project setup, versioned delivery, a timecoded revision request,
 final delivery, and the resulting dashboard update.
 
+## Cloudflare Deployment
+
+The main Next.js app deploys to Cloudflare Workers through OpenNext. It is not a
+static Pages upload: the app uses dynamic routes, middleware, Convex-backed
+queries, and a route handler.
+
+For a local Worker preview:
+
+```bash
+npm run preview
+```
+
+For deployment from a machine authenticated with Wrangler:
+
+```bash
+npm run deploy
+```
+
+Cloudflare Workers Builds should run `npx opennextjs-cloudflare build` as the
+build command and `npx wrangler deploy` as the deploy command. Configure these
+values in the Worker’s build variables and runtime settings:
+
+- `NEXT_PUBLIC_CONVEX_URL`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+- `ACCESS_WALL_PASSWORD` as a secret
+
+The Clerk issuer variables in `.env.example` belong to the Convex deployment
+environment, not the Worker. Set `NEXT_PUBLIC_SITE_URL` to the production
+custom domain so metadata, canonical links, robots.txt, and sitemap.xml use
+the deployed address.
+
 ## Architecture Snapshot
 
 | Layer | Stack |
@@ -197,7 +229,7 @@ final delivery, and the resulting dashboard update.
 | Backend | Convex |
 | Storage | Convex Storage plus provider-neutral external links; Cloudflare R2 upcoming |
 | Local mode | Browser storage |
-| Analytics | Vercel Analytics, Vercel Speed Insights |
+| Analytics | Disabled in the current build |
 | Tests | Vitest, `convex-test`, Playwright, route/runtime verifiers |
 
 ## Data Model Notes
@@ -268,7 +300,7 @@ versioned media library, feedback queue, eight editing templates plus custom reu
 and version management, secured client portals, timecoded feedback, team
 collaboration, payout reporting, public profiles, indexed settings, responsive
 light and dark themes, Clerk authentication, resilient Convex synchronization,
-local guest mode, Vercel analytics, and end-to-end workflow coverage.
+local guest mode, and end-to-end workflow coverage.
 
 Client portal security currently includes enable/disable controls, optional expiry, token regeneration, and optional PBKDF2-hashed PIN/password protection. See [Security](docs/security/SECURITY.md) for the storage and access contract.
 

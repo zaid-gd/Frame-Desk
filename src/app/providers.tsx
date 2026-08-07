@@ -10,7 +10,11 @@ import { ClerkAuthBridge } from "@/lib/optional-auth";
 
 const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
+const hasCloudConfig = Boolean(convexUrl && clerkPublishableKey);
+// TrackerApp uses Convex hooks for both local and cloud UI paths. Keep those
+// hooks inside a provider during static rendering, while the local data mode
+// still avoids all cloud queries when credentials are absent.
+const convex = new ConvexReactClient(convexUrl || "https://placeholder.convex.cloud");
 
 function useLocalConvexAuth() {
   return {
@@ -37,7 +41,7 @@ const clerkAppearance = {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const app = (
-    <DataProvider mode={convex && clerkPublishableKey ? "cloud" : "local"}>
+    <DataProvider mode={hasCloudConfig ? "cloud" : "local"}>
       <TooltipProvider delayDuration={250}>
         {children}
         <Toaster
@@ -56,21 +60,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
   );
 
   if (!clerkPublishableKey) {
-    return convex ? (
+    return (
       <ConvexProviderWithAuth client={convex} useAuth={useLocalConvexAuth}>
         {app}
       </ConvexProviderWithAuth>
-    ) : app;
+    );
   }
 
   return (
     <ClerkProvider publishableKey={clerkPublishableKey} appearance={clerkAppearance}>
       <ClerkAuthBridge>
-        {convex ? (
-          <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-            {app}
-          </ConvexProviderWithClerk>
-        ) : app}
+        <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+          {app}
+        </ConvexProviderWithClerk>
       </ClerkAuthBridge>
     </ClerkProvider>
   );

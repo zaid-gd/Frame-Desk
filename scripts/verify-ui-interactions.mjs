@@ -78,14 +78,6 @@ async function withPage(
       sameSite: "Strict",
     }]);
   }
-  await context.route("**/_vercel/**", async (route) => {
-    const isScript = route.request().resourceType() === "script";
-    await route.fulfill({
-      status: 200,
-      contentType: isScript ? "application/javascript" : "text/plain",
-      body: isScript ? "" : "ok",
-    });
-  });
   if (seedWorkspace) await context.addInitScript(({ clientCount, projectCount }) => {
     const clientNames = Array.from(
       { length: clientCount },
@@ -135,9 +127,6 @@ async function withPage(
       })),
     ));
   }, { clientCount, projectCount });
-  else await context.addInitScript(() => {
-    localStorage.setItem("cutlab-studio:privacy-consent:v1", "essential");
-  });
 
   const page = await context.newPage();
   page.setDefaultTimeout(12_000);
@@ -146,8 +135,7 @@ async function withPage(
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     const text = message.text();
-    const ignoredLocalAssetError = text.includes("/_vercel/insights/script.js") || text.includes("/_vercel/speed-insights/script.js");
-    if (message.type() === "error" && !text.includes("webpack-hmr") && !ignoredLocalAssetError) errors.push(text);
+    if (message.type() === "error" && !text.includes("webpack-hmr")) errors.push(text);
   });
 
   try {
@@ -156,13 +144,6 @@ async function withPage(
   } finally {
     await context.close();
   }
-}
-
-async function chooseEssentialPrivacy(page) {
-  const privacyRegion = page.getByRole("region", { name: "Privacy preferences" });
-  await privacyRegion.waitFor({ state: "visible" });
-  await privacyRegion.getByRole("button", { name: "Essential only" }).click();
-  await privacyRegion.waitFor({ state: "hidden" });
 }
 
 async function assertWorkspaceGeometry(page, route, expectedFamily) {
@@ -455,16 +436,7 @@ try {
   await withPage({ width: 1440, height: 1000 }, async (page) => {
     console.log("Verifying dashboard and command palette...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await chooseEssentialPrivacy(page);
     await page.getByRole("heading", { name: "Good to see you, Jordan." }).waitFor();
-    await page.getByRole("button", { name: "Open profile menu" }).click();
-    await page.getByRole("menuitem", { name: "Privacy choices" }).click();
-    const privacyRegion = page.getByRole("region", { name: "Privacy preferences" });
-    await privacyRegion.waitFor({ state: "visible" });
-    await privacyRegion.getByRole("button", { name: "Allow analytics" }).click();
-    await privacyRegion.waitFor({ state: "hidden" });
-    const consentChoice = await page.evaluate(() => window.localStorage.getItem("cutlab-studio:privacy-consent:v1"));
-    if (consentChoice !== "analytics") throw new Error(`Expected analytics consent to persist, received ${consentChoice}`);
     await page.getByRole("button", { name: /filters/i }).click();
     await page.getByPlaceholder("Search the project ledger").fill("Interaction");
     await page.getByTestId("project-row").first().click();
@@ -490,7 +462,6 @@ try {
   await withPage({ width: 390, height: 844 }, async (page) => {
     console.log("Verifying mobile navigation and project inspector...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await chooseEssentialPrivacy(page);
     await page.getByRole("heading", { name: "Good to see you, Jordan." }).waitFor();
     await page.getByRole("button", { name: "New project" }).click();
     await page.getByRole("heading", { name: "Create Project" }).waitFor({ state: "visible" });
@@ -509,7 +480,6 @@ try {
     console.log("Verifying theme and reduced-motion preference...");
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto(`${baseUrl}/settings`, { waitUntil: "domcontentloaded" });
-    await chooseEssentialPrivacy(page);
     const reduced = await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches);
     if (!reduced) throw new Error("Reduced-motion media preference was not applied.");
     await page.locator('[data-slot="settings-navigation"]').getByRole("button", { name: "Appearance" }).click();
@@ -520,7 +490,6 @@ try {
   await withPage({ width: 1280, height: 900 }, async (page) => {
     console.log("Verifying every authenticated workspace route uses shared geometry...");
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-    await chooseEssentialPrivacy(page);
     for (const [route, heading, family] of workspaceRoutes) {
       await page.goto(`${baseUrl}${route}`, { waitUntil: "domcontentloaded" });
       await page.getByRole("heading", { level: 1, name: heading }).waitFor();
@@ -549,7 +518,6 @@ try {
     await withPage(viewport, async (page) => {
       console.log(`Verifying representative layout families at ${viewport.width}px...`);
       await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
-      await chooseEssentialPrivacy(page);
       for (const [route, heading, family] of [
         ["/projects", "Projects", "data-index"],
         ["/calendar", "Calendar", "canvas"],

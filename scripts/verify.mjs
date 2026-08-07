@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const baseUrl = process.env.CUTLAB_VERIFY_URL || "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 const routes = [
   ["/", 200, ["Dashboard", "Your first production", "Turn one active edit into a clear production plan", "Create first project", "Confirm the deadline and stage"]],
@@ -28,8 +29,8 @@ const routes = [
   ["/accessibility", 200, ["Accessibility Statement", "WCAG", "Known Limitations"]],
   ["/contact", 200, ["Contact Frame Desk", "Cutlab.Studios@gmail.com", "Prepare email"]],
   ["/sample-studio", 200, ["Sample Studio", "Good to see you,", "Summer launch film"]],
-  ["/robots.txt", 200, ["User-Agent: *", "Disallow: /projects", "Sitemap: https://cutlab-studio.vercel.app/sitemap.xml"]],
-  ["/sitemap.xml", 200, ["https://cutlab-studio.vercel.app", "https://cutlab-studio.vercel.app/privacy", "https://cutlab-studio.vercel.app/contact"]],
+  ["/robots.txt", 200, ["User-Agent: *", "Disallow: /projects", `Sitemap: ${siteUrl}/sitemap.xml`]],
+  ["/sitemap.xml", 200, [`${siteUrl}`, `${siteUrl}/privacy`, `${siteUrl}/contact`]],
   ["/missing-route", 404, ["Page not found"]]
 ];
 
@@ -495,7 +496,7 @@ for (const [route, expectedStatus, expectedText] of routes) {
     }
   }
 
-  if (route === "/sitemap.xml" && body.includes("https://cutlab-studio.vercel.app/projects")) {
+  if (route === "/sitemap.xml" && body.includes(`${siteUrl}/projects`)) {
     failures += 1;
     console.error("/sitemap.xml exposes the private projects workspace");
   }
@@ -535,12 +536,12 @@ for (const [route, expectedStatus, expectedText] of routes) {
       ["<title>Frame Desk | Video Production Workspace for Editors</title>", "document title"],
       ['name="description" content="Plan edits, track deadlines, manage client feedback, organize media, and monitor production work in one focused workspace built for video editors."', "description meta tag"],
       ['property="og:title" content="Frame Desk | Video Production Workspace for Editors"', "Open Graph title"],
-      ['property="og:url" content="https://cutlab-studio.vercel.app"', "Open Graph URL"],
+      [`property="og:url" content="${siteUrl}"`, "Open Graph URL"],
       ['property="og:site_name" content="Frame Desk"', "Open Graph site name"],
       ['property="og:image"', "Open Graph image"],
-      ['content="https://cutlab-studio.vercel.app/og-image.png"', "served Open Graph image URL"],
+      [`content="${siteUrl}/og-image.png"`, "served Open Graph image URL"],
       ['name="twitter:card" content="summary_large_image"', "Twitter card"],
-      ['rel="canonical" href="https://cutlab-studio.vercel.app"', "canonical URL"],
+      [`rel="canonical" href="${siteUrl}"`, "canonical URL"],
       ['type="application/ld+json"', "structured data"],
       ['href="/brand/icons/app-icon-dark-32.png"', "PNG icon link"],
       ["data-clerk-modal-centering", "Clerk modal centering style tag"]

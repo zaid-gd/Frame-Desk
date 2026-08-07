@@ -18,7 +18,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Sparkles,
   Users,
   UsersRound,
@@ -32,7 +31,6 @@ import { useData } from "@/lib/data-context";
 import { useOptionalAuth } from "@/lib/optional-auth";
 import type { SettingsState } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
-import { openPrivacyPreferences, PrivacyPreferencesButton } from "@/components/privacy-controls";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -463,7 +461,6 @@ function DesktopSidebar({
               <Link className="hover:text-[var(--app-ink)]" href="/privacy">Privacy</Link>
               <Link className="hover:text-[var(--app-ink)]" href="/terms">Terms</Link>
               <Link className="hover:text-[var(--app-ink)]" href="/accessibility">Accessibility</Link>
-              <PrivacyPreferencesButton className="text-left hover:text-[var(--app-ink)]" />
             </nav>
             <p className="mt-1">© {new Date().getFullYear()} Frame Desk</p>
           </footer>
@@ -635,14 +632,6 @@ function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; c
           <Link href="/terms">
             <FileText /> Terms of Service
           </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            setOpen(false);
-            window.setTimeout(openPrivacyPreferences, 0);
-          }}
-        >
-          <SlidersHorizontal /> Privacy choices
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         {isAuthEnabled ? (
@@ -822,7 +811,6 @@ function MobileNavigation({
               <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/privacy" onClick={() => onOpenChange(false)}>Privacy</Link>
               <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/terms" onClick={() => onOpenChange(false)}>Terms</Link>
               <Link className="min-h-12 rounded-md border border-[var(--app-border)] p-3" href="/accessibility" onClick={() => onOpenChange(false)}>Accessibility</Link>
-              <PrivacyPreferencesButton className="min-h-12 rounded-md border border-[var(--app-border)] p-3 text-left" />
             </div>
             <p className="mt-3 px-1 text-xs text-[var(--app-subtle)]">© {new Date().getFullYear()} Frame Desk</p>
           </div>
