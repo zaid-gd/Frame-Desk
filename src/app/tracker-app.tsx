@@ -428,6 +428,7 @@ export function TrackerApp({
     resourceLinks,
     setResourceLinks,
     salaryBatches,
+    isAuthEnabled,
     isSignedIn,
     isAuthLoaded,
     toast,
@@ -649,6 +650,11 @@ export function TrackerApp({
   }
 
   function launchAccountFlow(mode: "sign-up" | "sign-in") {
+    if (!isAuthEnabled) {
+      setAuthChoiceOpen(false);
+      notify("Sign-in is unavailable until Clerk authentication is configured.", "warning");
+      return;
+    }
     setAuthChoiceOpen(false);
     trackOnboardingEvent("workspace_mode_selected", { variant: onboardingVariant, mode: "account", elapsedMs: Date.now() - onboardingStartedAt.current });
     if (mode === "sign-up") {
@@ -1079,6 +1085,7 @@ export function TrackerApp({
 }
 
 function AccountSettingsPage() {
+  const { isAuthEnabled } = useData();
   const { isSignedIn, isLoaded, openSignIn, openSignUp } = useOptionalAuth();
 
   return (
@@ -1121,10 +1128,16 @@ function AccountSettingsPage() {
               <p className="text-sm leading-6 text-muted-foreground">
                 Local mode does not have an account record, email, password, or connected login provider. Sign in or create an account to manage private account settings.
               </p>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <OwnedButton type="button" onClick={() => openSignUp()}>Create account</OwnedButton>
-                <OwnedButton type="button" variant="outline" onClick={() => openSignIn()}>Sign in</OwnedButton>
-              </div>
+              {isAuthEnabled ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <OwnedButton type="button" onClick={() => openSignUp()}>Create account</OwnedButton>
+                  <OwnedButton type="button" variant="outline" onClick={() => openSignIn()}>Sign in</OwnedButton>
+                </div>
+              ) : (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Sign-in is not configured for this deployment. Use local mode, or add the Clerk public key to enable accounts.
+                </p>
+              )}
             </div>
           ) : (
             <div className="p-2.5 md:p-3.5">
@@ -1150,10 +1163,12 @@ function AccountSettingsPage() {
                   Edit public profile
                 </Link>
               </OwnedButton>
-            ) : (
+            ) : isAuthEnabled ? (
               <OwnedButton type="button" variant="outline" onClick={() => openSignIn()} className="shrink-0">
                 Sign in to edit
               </OwnedButton>
+            ) : (
+              <span className="text-sm text-muted-foreground">Account sign-in is not configured.</span>
             )}
           </div>
         </ContentSection>

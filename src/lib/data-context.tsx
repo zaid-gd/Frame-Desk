@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { useOptionalAuth } from "@/lib/optional-auth";
 import type { WorkItem, SettingsState, SalaryBatch, SalaryState, TeamMember, IntegrationConfig, ResourceLink, SavedProjectTemplate } from "./types";
 import { normalizeIntegrationLinks } from "./integrations";
 import { sampleStudioProjects, sampleStudioResources, sampleStudioSettings } from "./sample-studio";
@@ -718,14 +719,14 @@ interface DataContextValue {
 
 const DataContext = createContext<DataContextValue | null>(null);
 
-export function DataProvider({ children, mode = "local" }: { children: React.ReactNode; mode?: "local" | "cloud" | "sample" }) {
+export function DataProvider({ children, mode = "local", authEnabled = false }: { children: React.ReactNode; mode?: "local" | "cloud" | "sample"; authEnabled?: boolean }) {
   if (mode === "cloud") {
     return <CloudDataProvider>{children}</CloudDataProvider>;
   }
   if (mode === "sample") {
     return <SampleDataProvider>{children}</SampleDataProvider>;
   }
-  return <LocalDataProvider>{children}</LocalDataProvider>;
+  return <LocalDataProvider authEnabled={authEnabled}>{children}</LocalDataProvider>;
 }
 
 function SampleDataProvider({ children }: { children: React.ReactNode }) {
@@ -762,7 +763,8 @@ function SampleDataProvider({ children }: { children: React.ReactNode }) {
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
-function LocalDataProvider({ children }: { children: React.ReactNode }) {
+function LocalDataProvider({ children, authEnabled }: { children: React.ReactNode; authEnabled: boolean }) {
+  const { isLoaded, isSignedIn } = useOptionalAuth();
   const [items, setItemsState] = useState<WorkItem[]>([]);
   const [settings, setSettingsState] = useState<SettingsState>(() => freshDefaultSettings());
   const [resourceLinks, setResourceLinksState] = useState<ResourceLink[]>([]);
@@ -851,9 +853,9 @@ function LocalDataProvider({ children }: { children: React.ReactNode }) {
     salaryBatches,
     reconcileSalaryBatches,
     updateSalaryBatchPayment,
-    isAuthEnabled: false,
-    isSignedIn: false,
-    isAuthLoaded: true,
+    isAuthEnabled: authEnabled,
+    isSignedIn: authEnabled && Boolean(isSignedIn),
+    isAuthLoaded: authEnabled ? isLoaded : true,
     toast,
     setToast,
   };
