@@ -204,9 +204,11 @@ For deployment from a machine authenticated with Wrangler:
 npm run deploy
 ```
 
-Cloudflare Workers Builds should run `npx opennextjs-cloudflare build` as the
-build command and `npx wrangler deploy` as the deploy command. Configure these
-values in the Worker’s build variables and runtime settings:
+Cloudflare Workers Builds must run `npx opennextjs-cloudflare build` as the
+build command and `npx opennextjs-cloudflare deploy` as the deploy command.
+Do not use `npm run build` followed by `npx wrangler deploy`: that produces a
+normal Next build but skips the OpenNext Worker bundle. Configure these values
+in the Worker’s build variables and runtime settings:
 
 - `NEXT_PUBLIC_CONVEX_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
