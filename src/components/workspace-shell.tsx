@@ -12,6 +12,8 @@ import {
   Images,
   LayoutDashboard,
   Library,
+  LogIn,
+  LogOut,
   MessageSquareText,
   MoreHorizontal,
   Plus,
@@ -21,6 +23,7 @@ import {
   Sparkles,
   Users,
   UsersRound,
+  UserPlus,
   Workflow,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -583,6 +586,21 @@ function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; c
           <p className="text-xs font-normal text-muted-foreground">{handle}</p>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {!isSignedIn ? (
+          <>
+            <DropdownMenuItem
+              disabled={!isAuthEnabled}
+              onSelect={() => openSignIn()}
+              className="bg-primary text-primary-foreground focus:bg-primary/90 focus:text-primary-foreground"
+            >
+              <LogIn /> Sign in
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={!isAuthEnabled} onSelect={() => openSignUp()}>
+              <UserPlus /> Create account
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem asChild>
           <Link
             href="/profile"
@@ -634,18 +652,13 @@ function ProfileMenu({ settings, collapsed, page }: { settings: SettingsState; c
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {isAuthEnabled ? (
-          isSignedIn ? (
-            <DropdownMenuItem onSelect={() => void signOut()}>Sign out</DropdownMenuItem>
-          ) : (
-            <>
-              <DropdownMenuItem onSelect={() => openSignIn()}>Sign in</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openSignUp()}>Create account</DropdownMenuItem>
-            </>
-          )
-        ) : (
+        {isSignedIn ? (
+          <DropdownMenuItem onSelect={() => void signOut()}>
+            <LogOut /> Sign out
+          </DropdownMenuItem>
+        ) : isAuthEnabled ? null : (
           <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-            Local mode is active on this device.
+            Sign-in needs Clerk and Convex configuration.
           </DropdownMenuLabel>
         )}
       </DropdownMenuContent>

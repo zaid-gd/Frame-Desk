@@ -220,6 +220,18 @@ environment, not the Worker. Set `NEXT_PUBLIC_SITE_URL` to the production
 custom domain so metadata, canonical links, robots.txt, and sitemap.xml use
 the deployed address.
 
+After deployment, verify that the access wall and Clerk modal work together:
+
+```bash
+FRAME_DESK_VERIFY_URL=https://your-worker.example \
+FRAME_DESK_ACCESS_PASSWORD=your-access-password \
+npm run verify:cloudflare-auth
+```
+
+The check keeps the password in the process environment and fails if the app
+shows its incomplete Clerk/Convex configuration warning instead of opening
+Clerk sign-in.
+
 ## Architecture Snapshot
 
 | Layer | Stack |

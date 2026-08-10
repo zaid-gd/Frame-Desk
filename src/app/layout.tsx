@@ -181,7 +181,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a className="skip-link" href="#main-content">
           Skip to workspace content
         </a>
-        <Providers>{children}</Providers>
+        <Providers
+          clerkPublishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+          convexUrl={process.env.NEXT_PUBLIC_CONVEX_URL}
+        >
+          {children}
+        </Providers>
       </body>
     </html>
   );

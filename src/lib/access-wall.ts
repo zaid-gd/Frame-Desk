@@ -1,5 +1,5 @@
 export const ACCESS_COOKIE_NAME = "cutlab_access";
-export const ACCESS_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
+export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60 * 24;
 
 const TOKEN_VERSION = "v1";
 const encoder = new TextEncoder();
@@ -47,7 +47,7 @@ export async function createAccessToken(
   password: string,
   now = Date.now(),
 ) {
-  const expiresAt = Math.floor(now / 1000) + ACCESS_COOKIE_MAX_AGE_SECONDS;
+  const expiresAt = Math.floor(now / 1000) + ACCESS_TOKEN_TTL_SECONDS;
   const payload = `${TOKEN_VERSION}.${expiresAt}`;
   return `${payload}.${await sign(payload, password)}`;
 }

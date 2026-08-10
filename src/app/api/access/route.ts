@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  ACCESS_COOKIE_MAX_AGE_SECONDS,
   ACCESS_COOKIE_NAME,
   createAccessToken,
   getAccessPassword,
@@ -56,7 +55,6 @@ export async function POST(request: NextRequest) {
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: ACCESS_COOKIE_MAX_AGE_SECONDS,
   });
   return response;
 }

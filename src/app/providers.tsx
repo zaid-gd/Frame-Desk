@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ClerkProvider, useAuth } from "@clerk/nextjs";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ConvexProviderWithAuth, ConvexReactClient } from "convex/react";
@@ -8,15 +9,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "sonner";
 import { ClerkAuthBridge } from "@/lib/optional-auth";
 
-const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
-const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const hasConvexConfig = Boolean(convexUrl);
-const hasClerkConfig = Boolean(clerkPublishableKey);
-const hasCloudConfig = hasConvexConfig && hasClerkConfig;
-// TrackerApp uses Convex hooks for both local and cloud UI paths. Keep those
-// hooks inside a provider during static rendering, while the local data mode
-// still avoids all cloud queries when credentials are absent.
-const convex = new ConvexReactClient(convexUrl || "https://placeholder.convex.cloud");
+type ProvidersProps = {
+  children: React.ReactNode;
+  clerkPublishableKey?: string;
+  convexUrl?: string;
+};
 
 function useLocalConvexAuth() {
   return {
@@ -41,9 +38,20 @@ const clerkAppearance = {
   },
 };
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, clerkPublishableKey, convexUrl }: ProvidersProps) {
+  const hasConvexConfig = Boolean(convexUrl);
+  const hasClerkConfig = Boolean(clerkPublishableKey);
+  const hasCloudConfig = hasConvexConfig && hasClerkConfig;
+  // Cloudflare runtime variables are not inlined into client bundles. The
+  // server layout passes the public settings as props so hydration uses the
+  // same values as the Worker render.
+  const convex = useMemo(
+    () => new ConvexReactClient(convexUrl || "https://placeholder.convex.cloud"),
+    [convexUrl],
+  );
+
   const app = (
-    <DataProvider mode={hasCloudConfig ? "cloud" : "local"} authEnabled={hasClerkConfig}>
+    <DataProvider mode={hasCloudConfig ? "cloud" : "local"} authEnabled={hasCloudConfig}>
       <TooltipProvider delayDuration={250}>
         {children}
         <Toaster
@@ -61,7 +69,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     </DataProvider>
   );
 
-  if (!clerkPublishableKey) {
+  if (!hasCloudConfig) {
     return (
       <ConvexProviderWithAuth client={convex} useAuth={useLocalConvexAuth}>
         {app}

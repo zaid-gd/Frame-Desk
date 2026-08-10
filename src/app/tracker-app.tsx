@@ -652,7 +652,7 @@ export function TrackerApp({
   function launchAccountFlow(mode: "sign-up" | "sign-in") {
     if (!isAuthEnabled) {
       setAuthChoiceOpen(false);
-      notify("Sign-in is unavailable until Clerk authentication is configured.", "warning");
+      notify("Sign-in is unavailable until Clerk and Convex are configured.", "warning");
       return;
     }
     setAuthChoiceOpen(false);
@@ -1135,7 +1135,7 @@ function AccountSettingsPage() {
                 </div>
               ) : (
                 <p role="status" className="text-sm text-muted-foreground">
-                  Sign-in is not configured for this deployment. Use local mode, or add the Clerk public key to enable accounts.
+                  Account sync is not configured for this deployment. Use local mode, or add the Clerk and Convex public settings to enable accounts.
                 </p>
               )}
             </div>
@@ -1286,7 +1286,8 @@ function WelcomeChoiceDialog({
     <OwnedDialog open={open} onOpenChange={() => {}}>
       <OwnedDialogContent
         showCloseButton={false}
-        className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-[var(--app-border)] bg-[var(--app-panel)] text-[var(--app-ink)] sm:max-w-lg"
+        data-testid="welcome-choice-dialog"
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-[var(--app-border)] bg-[var(--app-panel)] p-5 text-[var(--app-ink)] sm:p-6 lg:aspect-video lg:max-w-[960px] lg:grid-rows-[auto_1fr] lg:overflow-hidden"
         onEscapeKeyDown={(event) => event.preventDefault()}
         onPointerDownOutside={(event) => event.preventDefault()}
       >
@@ -1296,41 +1297,44 @@ function WelcomeChoiceDialog({
             Explore a populated production workflow first. Choose where your own workspace lives only when you are ready.
           </OwnedDialogDescription>
         </OwnedDialogHeader>
-        <div className="grid gap-4">
-          <section className="rounded-lg border border-[var(--app-accent)] bg-card p-[18px] text-card-foreground">
-            <h3 className="text-lg font-semibold">Experience the workflow</h3>
-            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">Open a read-only studio with an active deadline, a client review, recent activity, and a paid delivery. No account required.</p>
-            <OwnedButton asChild className="mt-4 min-h-12 w-full">
+        <div className="grid min-h-0 gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="flex min-h-0 flex-col justify-between rounded-lg border bg-card p-5 text-card-foreground">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-highlight)]">Guided preview</p>
+              <h3 className="mt-2 text-xl font-semibold">Experience the workflow</h3>
+              <p className="mt-2 max-w-[48ch] text-sm leading-relaxed text-muted-foreground">Open a read-only studio with an active deadline, a client review, recent activity, and a paid delivery. No account required.</p>
+            </div>
+            <OwnedButton asChild variant="outline" className="mt-5 min-h-12 w-full">
               <Link href="/sample-studio">Explore a sample studio</Link>
             </OwnedButton>
           </section>
-          <section className="rounded-lg border bg-card p-4 text-card-foreground">
-            <h3 className="text-base font-semibold">Ready to use your own work?</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <OwnedButton type="button" variant="outline" onClick={onChooseLocal} className="min-h-12">Try on this device</OwnedButton>
-              <OwnedButton type="button" variant="outline" onClick={onCreateAccount} className="min-h-12">Create a synced workspace</OwnedButton>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">Device mode stays in this browser. Clearing site data can remove it. Synced mode requires an account.</p>
-          </section>
 
-          <OwnedAccordion type="multiple" className="grid gap-2">
-            <OwnedAccordionItem value="before-you-start" className="rounded-md border px-3">
-              <OwnedAccordionTrigger className="py-3 text-[13px] font-semibold hover:no-underline">Before you start</OwnedAccordionTrigger>
-              <OwnedAccordionContent className="text-[13px] leading-relaxed text-muted-foreground">
-              Local mode saves projects and settings in this browser, so clearing site data can remove them. Account mode syncs supported project, settings, resource, and salary-batch records. If sync fails, local records are only removed after confirmed uploads. Integrations currently save links and configuration; they are not automatic file sync. Read the <Link href="/privacy" style={{ color: accent }}>Privacy Policy</Link> and <Link href="/terms" style={{ color: accent }}>Terms</Link>.
-              </OwnedAccordionContent>
-            </OwnedAccordionItem>
-            <OwnedAccordionItem value="how-teams-work" className="rounded-md border px-3">
-              <OwnedAccordionTrigger className="py-3 text-[13px] font-semibold hover:no-underline">How teams work</OwnedAccordionTrigger>
-              <OwnedAccordionContent className="text-[13px] leading-relaxed text-muted-foreground">
-              Signed-in editors and producers can share team projects according to their current role permissions. Editors can publish private review links for clients. Connected-service settings are manual links and configuration, not OAuth or automatic transfers.
-              </OwnedAccordionContent>
-            </OwnedAccordionItem>
-          </OwnedAccordion>
+          <div className="grid min-h-0 content-start gap-4">
+            <section className="rounded-lg border border-[var(--app-accent)] bg-card p-5 text-card-foreground shadow-[0_0_0_1px_color-mix(in_srgb,var(--app-accent)_18%,transparent)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--app-highlight)]">Your workspace</p>
+              <h3 className="mt-2 text-xl font-semibold">Pick up where you left off</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Sign in to sync your projects, settings, resources, and team workspace.</p>
+              <OwnedButton type="button" size="lg" onClick={onSignIn} className="mt-4 min-h-12 w-full shadow-[0_10px_28px_color-mix(in_srgb,var(--app-accent)_28%,transparent)]">Sign in</OwnedButton>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <OwnedButton type="button" variant="outline" onClick={onCreateAccount}>Create account</OwnedButton>
+                <OwnedButton type="button" variant="ghost" onClick={onChooseLocal}>Try on this device</OwnedButton>
+              </div>
+            </section>
 
-          <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
-            <p className="text-[13px] text-muted-foreground">Reviewing a video? <Link href="/client-portal" style={{ color: accent }}>Open the private link from your editor</Link>. No account needed.</p>
-            <OwnedButton type="button" variant="ghost" onClick={onSignIn} className="shrink-0 text-muted-foreground">Sign in</OwnedButton>
+            <OwnedAccordion type="multiple" className="grid gap-2">
+              <OwnedAccordionItem value="before-you-start" className="rounded-md border px-3">
+                <OwnedAccordionTrigger className="py-3 text-[13px] font-semibold hover:no-underline">Before you start</OwnedAccordionTrigger>
+                <OwnedAccordionContent className="text-[13px] leading-relaxed text-muted-foreground">
+                Local mode saves projects and settings in this browser, so clearing site data can remove them. Account mode syncs supported project, settings, resource, and salary-batch records. If sync fails, local records are only removed after confirmed uploads. Integrations currently save links and configuration; they are not automatic file sync. Read the <Link href="/privacy" style={{ color: accent }}>Privacy Policy</Link> and <Link href="/terms" style={{ color: accent }}>Terms</Link>.
+                </OwnedAccordionContent>
+              </OwnedAccordionItem>
+              <OwnedAccordionItem value="how-teams-work" className="rounded-md border px-3">
+                <OwnedAccordionTrigger className="py-3 text-[13px] font-semibold hover:no-underline">How teams work</OwnedAccordionTrigger>
+                <OwnedAccordionContent className="text-[13px] leading-relaxed text-muted-foreground">
+                Signed-in editors and producers can share team projects according to their current role permissions. Editors can publish private review links for clients. Connected-service settings are manual links and configuration, not OAuth or automatic transfers.
+                </OwnedAccordionContent>
+              </OwnedAccordionItem>
+            </OwnedAccordion>
           </div>
         </div>
       </OwnedDialogContent>

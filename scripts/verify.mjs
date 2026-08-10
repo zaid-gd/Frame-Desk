@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 const baseUrl = process.env.CUTLAB_VERIFY_URL || "http://localhost:3000";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const accessPassword = process.env.CUTLAB_VERIFY_ACCESS_PASSWORD;
 
 const routes = [
   ["/", 200, ["Dashboard", "Your first production", "Turn one active edit into a clear production plan", "Create first project", "Confirm the deadline and stage"]],
@@ -18,7 +19,7 @@ const routes = [
   ["/integrations", 200, ["Integrations", "Global Integrations", "Project Integrations", "Google Drive", "Google Calendar"]],
   ["/team", 200, ["Team", "Active members"]],
   ["/team-chat", 200, ["Team Chat", "Manage Team"]],
-  ["/settings", 200, ["Settings", "Project Tags", "Integrations", "Appearance"]],
+  ["/settings", 200, ["Settings", "Workspace", "Workflow", "Integrations", "Appearance"]],
   ["/account", 200, ["Account Settings"]],
   ["/profile", 200, ["Frame Desk", "Share Profile"]],
   ["/profile/edit", 200, ["Edit Profile", "Profile Bio"]],
@@ -256,7 +257,7 @@ const sourceChecks = [
   ["next.config.mjs", "async headers()", "production response headers"],
   ["next.config.mjs", "X-Content-Type-Options", "content type sniffing protection"],
   ["next.config.mjs", "Permissions-Policy", "browser permissions policy"],
-  ["src/proxy.ts", "NextResponse.next()", "public route proxy passthrough"],
+  ["src/middleware.ts", "NextResponse.next()", "Cloudflare middleware passthrough"],
   ["convex/auth.config.ts", "CLERK_JWT_ISSUER_DOMAIN", "Convex Clerk auth configuration"],
   ["convex/workItems.ts", ".take(500)", "bounded Convex work item queries"],
   ["convex/workItems.ts", "return items.map", "plain Convex work item query payloads"],
@@ -274,7 +275,12 @@ const sourceChecks = [
   ["src/lib/invoice-reporting.ts", "export function invoiceDraftsToCsv", "invoice draft CSV export"],
   ["docs/security/THIRD_PARTY_INTEGRATION_REVIEW.md", "## Approval Standard", "third-party integration trust gate"],
   ["docs/security/THIRD_PARTY_INTEGRATION_REVIEW.md", "Stripe", "reviewed future payment provider"],
-  ["src/app/providers.tsx", "mode={convex && clerkPublishableKey ? \"cloud\" : \"local\"}", "local-first provider fallback"],
+  ["src/app/layout.tsx", "clerkPublishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}", "runtime Clerk configuration handoff"],
+  ["src/app/layout.tsx", "convexUrl={process.env.NEXT_PUBLIC_CONVEX_URL}", "runtime Convex configuration handoff"],
+  ["src/app/providers.tsx", "mode={hasCloudConfig ? \"cloud\" : \"local\"}", "local-first provider fallback"],
+  ["src/app/tracker-app.tsx", "data-testid=\"welcome-choice-dialog\"", "responsive welcome dialog test seam"],
+  ["src/app/tracker-app.tsx", "lg:aspect-video", "desktop 16:9 welcome dialog"],
+  ["src/components/workspace-shell.tsx", "<LogIn /> Sign in", "profile menu sign-in action"],
   ["convex/schema.ts", "clientPortals: defineTable", "client portal safe snapshot table"],
   ["convex/schema.ts", "portalDeliverables: defineTable", "client portal deliverables table"],
   ["convex/schema.ts", "portalRevisions: defineTable", "client portal revision requests table"],
@@ -331,6 +337,8 @@ const sourceChecks = [
 ];
 
 const forbiddenSourceChecks = [
+  ["src/app/api/access/route.ts", "maxAge:", "persistent access-wall cookie lifetime"],
+  ["src/app/tracker-app.tsx", "Reviewing a video?", "removed onboarding client-portal prompt"],
   ["src/app/tracker-app.tsx", "exportDefaults", "removed export defaults state"],
   ["src/app/tracker-app.tsx", "Export Defaults", "removed export defaults settings panel"],
   ["src/app/tracker-app.tsx", "Workspace Details", "removed workspace setup settings panel"],
@@ -465,11 +473,38 @@ for (const file of routeFiles.filter((file) => file.endsWith(".tsx"))) {
   }
 }
 
+let accessCookie = "";
+if (accessPassword) {
+  const accessResponse = await fetch(`${baseUrl}/api/access`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Sec-Fetch-Site": "same-origin",
+    },
+    body: JSON.stringify({ password: accessPassword }),
+  }).catch((error) => {
+    failures += 1;
+    console.error(`Could not unlock the access wall: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  });
+
+  if (accessResponse) {
+    const setCookie = accessResponse.headers.get("set-cookie") || "";
+    accessCookie = setCookie.split(";", 1)[0];
+    if (accessResponse.status !== 200 || !accessCookie) {
+      failures += 1;
+      console.error(`Access wall verification returned ${accessResponse.status} without an access cookie.`);
+    }
+  }
+}
+
 for (const [route, expectedStatus, expectedText] of routes) {
   const url = `${baseUrl}${route}`;
   let response;
   try {
-    response = await fetch(url);
+    response = await fetch(url, {
+      headers: accessCookie && route !== "/access" ? { Cookie: accessCookie } : undefined,
+    });
   } catch (error) {
     failures += 1;
     console.error(`Could not fetch ${url}: ${error instanceof Error ? error.message : String(error)}`);
