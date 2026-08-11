@@ -56,23 +56,33 @@ export function isValidIntegrationUrl(value: string) {
   }
 }
 
+function hasProperty<Key extends PropertyKey>(value: object, key: Key): value is Record<Key, unknown> {
+  return key in value;
+}
+
+function readProperty(value: object, key: string): unknown {
+  return hasProperty(value, key) ? value[key] : undefined;
+}
+
 export function normalizeIntegrationLink(value: unknown): IntegrationLink {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { ...emptyIntegrationLink };
-  const record = value as Record<string, unknown>;
+  const url = readProperty(value, "url");
+  const label = readProperty(value, "label");
+  const notes = readProperty(value, "notes");
+  const updatedAt = readProperty(value, "updatedAt");
   return {
-    url: typeof record.url === "string" ? normalizeUrl(record.url) : "",
-    label: typeof record.label === "string" ? record.label.trim() : "",
-    notes: typeof record.notes === "string" ? record.notes.trim() : "",
-    updatedAt: typeof record.updatedAt === "string" ? record.updatedAt : ""
+    url: typeof url === "string" ? normalizeUrl(url) : "",
+    label: typeof label === "string" ? label.trim() : "",
+    notes: typeof notes === "string" ? notes.trim() : "",
+    updatedAt: typeof updatedAt === "string" ? updatedAt : ""
   };
 }
 
 export function normalizeIntegrationLinks(value: unknown): IntegrationLinks {
   const links: IntegrationLinks = {};
   if (!value || typeof value !== "object" || Array.isArray(value)) return links;
-  const record = value as Record<string, unknown>;
   for (const service of integrationServices) {
-    const link = normalizeIntegrationLink(record[service.id]);
+    const link = normalizeIntegrationLink(readProperty(value, service.id));
     if (link.url || link.label || link.notes) {
       links[service.id] = link;
     }

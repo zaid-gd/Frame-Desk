@@ -199,6 +199,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function hasProperty<Key extends PropertyKey>(value: object, key: Key): value is Record<Key, unknown> {
+  return key in value;
+}
+
 function stringSetting(value: unknown, fallback: string) {
   return typeof value === "string" && value.trim() ? value : fallback;
 }
@@ -424,10 +428,12 @@ function normalizeRolePermissions(value: unknown, legacyEditorPerms?: unknown): 
 
   if (isPlainRecord(value)) {
     for (const role of teamRoleOptions) {
-      if (isPlainRecord(value[role])) {
+      const storedRolePermissions = value[role];
+      if (isPlainRecord(storedRolePermissions)) {
         const rolePerms: Record<string, boolean> = {};
         for (const perm of permissionKeys) {
-          rolePerms[perm] = typeof (value[role] as Record<string, unknown>)[perm] === "boolean" ? (value[role] as Record<string, unknown>)[perm] as boolean : defaultRolePermissions[role]?.[perm] ?? false;
+          const storedPermission = storedRolePermissions[perm];
+          rolePerms[perm] = typeof storedPermission === "boolean" ? storedPermission : defaultRolePermissions[role]?.[perm] ?? false;
         }
         result[role] = rolePerms;
       }
@@ -604,7 +610,7 @@ function isDoneStatus(status: string) {
 
 function readObjectString(value: unknown, key: string) {
   if (!value || typeof value !== "object") return "";
-  const candidate = (value as Record<string, unknown>)[key];
+  const candidate = hasProperty(value, key) ? value[key] : undefined;
   return typeof candidate === "string" ? candidate : "";
 }
 
