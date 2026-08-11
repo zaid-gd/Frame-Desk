@@ -26,10 +26,10 @@ export function WorkspacePage({
       data-mode={mode}
       data-family={family}
       className={cn(
-        "mx-auto w-full max-w-[1920px] min-w-0 px-4 pb-8 pt-4 sm:px-5 lg:px-6 lg:pb-12 lg:pt-5",
+        "mx-auto w-full max-w-[1920px] min-w-0 px-4 pb-8 pt-5 sm:px-6 lg:px-8 lg:pb-12 lg:pt-6",
         mode === "document"
           ? ""
-          : "flex min-h-0 flex-col gap-4 lg:h-full lg:overflow-hidden lg:pb-5",
+          : "flex min-h-0 flex-col gap-5 lg:h-full lg:overflow-hidden lg:pb-6",
         className,
       )}
       {...props}

@@ -1,10 +1,10 @@
 export const integrationServices = [
-  { id: "googleDrive", name: "Google Drive", shortName: "Drive", description: "Project folders, briefs, exports, and shared deliverables.", color: "#4285f4", icon: "G" },
-  { id: "frameIo", name: "Frame.io", shortName: "Frame", description: "Review links, client comments, and approval pages.", color: "#8b5cf6", icon: "F" },
-  { id: "dropbox", name: "Dropbox", shortName: "Dropbox", description: "Shared file folders and delivery packages.", color: "#0061ff", icon: "D" },
-  { id: "oneDrive", name: "OneDrive", shortName: "OneDrive", description: "Microsoft cloud folders and client handoff links.", color: "#0078d4", icon: "O" },
-  { id: "googleCalendar", name: "Google Calendar", shortName: "Calendar", description: "Delivery schedules, review calls, and deadline calendars.", color: "#34a853", icon: "C" },
-  { id: "slack", name: "Slack", shortName: "Slack", description: "Workspace, channel, and project discussion links.", color: "#4a154b", icon: "S" }
+  { id: "googleDrive", name: "Google Drive", shortName: "Drive", description: "Project folders, briefs, exports, and shared deliverables.", color: "var(--brand-google-drive)", icon: "G" },
+  { id: "frameIo", name: "Frame.io", shortName: "Frame", description: "Review links, client comments, and approval pages.", color: "var(--brand-frame-io)", icon: "F" },
+  { id: "dropbox", name: "Dropbox", shortName: "Dropbox", description: "Shared file folders and delivery packages.", color: "var(--brand-dropbox)", icon: "D" },
+  { id: "oneDrive", name: "OneDrive", shortName: "OneDrive", description: "Microsoft cloud folders and client handoff links.", color: "var(--brand-one-drive)", icon: "O" },
+  { id: "googleCalendar", name: "Google Calendar", shortName: "Calendar", description: "Delivery schedules, review calls, and deadline calendars.", color: "var(--brand-google-calendar)", icon: "C" },
+  { id: "slack", name: "Slack", shortName: "Slack", description: "Workspace, channel, and project discussion links.", color: "var(--brand-slack)", icon: "S" }
 ] as const;
 
 export type IntegrationServiceId = (typeof integrationServices)[number]["id"];

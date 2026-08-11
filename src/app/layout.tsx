@@ -101,37 +101,8 @@ const themeBootScript = `
     var inkContrast = (Math.max(accentLuminance, inkLuminance) + 0.05) / (Math.min(accentLuminance, inkLuminance) + 0.05);
     var accentForeground = inkContrast >= whiteContrast ? "#042F2E" : "#FFFFFF";
     var root = document.documentElement;
-    var vars = {
-      "--app-accent": accent,
-      "--app-accent-foreground": accentForeground,
-      "--app-highlight": isDark ? "#2DD4BF" : "#0F766E",
-      "--app-canvas": isDark ? "#0B0F14" : "#F8FAFC",
-      "--app-panel": isDark ? "#11161D" : "#FFFFFF",
-      "--app-sidebar": isDark ? "#0F141A" : "#F1F5F9",
-      "--app-soft-panel": isDark ? "#1A212B" : "#F1F5F9",
-      "--app-header-panel": isDark ? "#141B23" : "#FFFFFF",
-      "--app-active": isDark ? "rgba(20,184,166,0.16)" : "rgba(20,184,166,0.16)",
-      "--app-hover": isDark ? "rgba(148,163,184,0.08)" : "rgba(15,23,42,0.05)",
-      "--app-ink": isDark ? "#F1F5F9" : "#0F172A",
-      "--app-muted": isDark ? "#94A3B8" : "#64748B",
-      "--app-subtle": isDark ? "#64748B" : "#94A3B8",
-      "--app-border": isDark ? "#2A3340" : "#E2E8F0",
-      "--app-strong-border": isDark ? "#3B4756" : "#CBD5E1",
-      "--app-control": isDark ? "#0F141A" : "#FFFFFF",
-      "--app-success": isDark ? "#22C55E" : "#16A34A",
-      "--app-warning": isDark ? "#FBBF24" : "#D97706",
-      "--app-danger": isDark ? "#EF4444" : "#DC2626",
-      "--app-success-bg": isDark ? "rgba(34,197,94,0.14)" : "rgba(22,163,74,0.10)",
-      "--app-warning-bg": isDark ? "rgba(251,191,36,0.14)" : "rgba(217,119,6,0.10)",
-      "--app-danger-bg": isDark ? "rgba(239,68,68,0.14)" : "rgba(220,38,38,0.10)",
-      "--app-progress-track": isDark ? "#26313D" : "#E2E8F0",
-      "--app-chart-grid": isDark ? "#26313D" : "#E2E8F0",
-      "--app-avatar-surface": isDark ? "#1A212B" : "#E2E8F0",
-      "--app-thumb-icon": isDark ? "rgba(241,245,249,0.38)" : "rgba(15,23,42,0.36)",
-      "--app-shadow-1": isDark ? "0 10px 30px rgba(0,0,0,0.16)" : "0 1px 2px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.04)",
-      "--app-shadow-2": isDark ? "0 20px 56px rgba(0,0,0,0.30)" : "0 18px 50px rgba(16,24,40,0.12)"
-    };
-    Object.keys(vars).forEach(function (key) { root.style.setProperty(key, vars[key]); });
+    root.style.setProperty("--app-accent", accent);
+    root.style.setProperty("--app-accent-foreground", accentForeground);
     root.style.colorScheme = isDark ? "dark" : "light";
     root.dataset.theme = isDark ? "dark" : "light";
     root.classList.toggle("dark", isDark);
@@ -173,8 +144,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="antialiased"
         style={{
           margin: 0,
-          background: "var(--app-canvas, #0B0F14)",
-          color: "var(--app-ink, #F1F5F9)",
+          background: "var(--app-canvas)",
+          color: "var(--app-ink)",
           fontFamily: "var(--font-geist-sans), Geist, sans-serif"
         }}
       >

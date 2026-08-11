@@ -1,8 +1,44 @@
-# CutLab Studio Design System
+# Frame Desk design system
+
+This index defines the unified UI contract for the Frame Desk workspace. It keeps the current Next.js, Tailwind, shadcn/ui, Radix, Lucide, Motion, TanStack Table, Recharts, and existing fonts. The implementation must preserve current routes, data flows, local/cloud modes, permissions, and feature actions.
+
+## System sections
+
+- [Overview](system/overview.md)
+- [Layout](system/layout.md)
+- [Navigation](system/navigation.md)
+- [Components](system/components.md)
+- [Typography](system/typography.md)
+- [Spacing and density](system/spacing-density.md)
+- [Color and themes](system/color-themes.md)
+- [Interactions and motion](system/interactions-motion.md)
+- [States and feedback](system/states-feedback.md)
+- [Responsive behavior](system/responsive.md)
+- [Accessibility](system/accessibility.md)
+
+## Feature contracts
+
+- [Dashboard](features/dashboard.md)
+- [Projects](features/projects.md)
+- [Clients](features/clients.md)
+- [Calendar and timeline](features/calendar-timeline.md)
+- [Media and reviews](features/media-reviews.md)
+- [Templates and resources](features/templates-resources.md)
+- [Reports](features/reports.md)
+- [Team chat](features/team-chat.md)
+- [Integrations and settings](features/integrations-settings.md)
+- [Profiles and portals](features/profiles-portals.md)
+- [Access and support](features/access-support.md)
+
+The research basis is [frontend UI best practices](../research/frontend-ui-best-practices-2026.md), [competitor UI patterns](../research/competitor-ui-patterns-2026.md), and the [current frontend audit](current-frontend-audit.md). The implementation order and acceptance gates live in [.scratch/unified-frontend-redesign/spec.md](../../.scratch/unified-frontend-redesign/spec.md).
+
+---
+
+## Existing brand foundations
 
 The brand-kit images in `assets/` are the visual source of truth. Product code should consume the shared tokens and components rather than copying color or typography values into individual routes.
 
-## Foundations
+## Reference-board foundations
 
 - Dark-first canvas: `#0C0F12`
 - Primary surface: `#1A1F24`
@@ -13,13 +49,13 @@ The brand-kit images in `assets/` are the visual source of truth. Product code s
 - Warning: `#F5A623`
 - Error: `#FF5B5B`
 - Display type: Space Grotesk, semibold or bold
-- UI and body type: Inter, regular through semibold
+- Current UI and body type: Geist Sans, regular through semibold
 - Spacing follows a 4px/8px rhythm
 - Standard controls and panels use an 8px radius
 - Borders are cool, low-contrast, and 1px
 - Shadows are reserved for overlays and dialogs
 
-The implementation source is [`src/app/design-system.ts`](../src/app/design-system.ts). Global MUI behavior is defined in [`src/app/theme.ts`](../src/app/theme.ts).
+The implementation source is [`src/app/design-system.ts`](../../src/app/design-system.ts), with global tokens in [`src/app/globals.css`](../../src/app/globals.css).
 
 ## Product Language
 
@@ -48,8 +84,8 @@ Related destinations remain addressable routes but appear as contextual navigati
 ## Shared Components
 
 - `CutLabMark` and `CutLabLockup` provide the product identity.
-- `cutlabPanelSx` provides the standard bordered surface.
-- `cutlabOutlineButtonSx` provides the standard secondary action.
-- `EmptyPanel`, `StatCard`, `StatusChip`, and MUI theme overrides provide consistent application primitives.
+- The `workspace-page` module provides headers, toolbars, sections, metrics, tables, pane layouts, and empty states.
+- Owned shadcn/Radix components under `src/components/ui/` provide controls, menus, dialogs, sheets, tabs, tooltips, and feedback.
+- Feature modules compose these shared parts without route-local color or spacing systems.
 
 New routes should reuse these foundations before introducing route-specific styling.

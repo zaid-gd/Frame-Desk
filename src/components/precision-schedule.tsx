@@ -13,6 +13,7 @@ import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusColor, projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,22 +40,6 @@ function formatDate(value: string, format: Intl.DateTimeFormatOptions = { month:
 
 function isDelivered(project: WorkItem) {
   return project.status === "Delivered";
-}
-
-function statusColor(status: WorkItem["status"]) {
-  if (status === "Delivered") return "#2d9b63";
-  if (status === "Review" || status === "Revision" || status === "Client Review") return "#cc7a16";
-  if (status === "Cancelled") return "#d14343";
-  if (status === "In Progress") return "#3478f6";
-  return "#7f8898";
-}
-
-function statusTone(status: WorkItem["status"]) {
-  if (status === "Delivered") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
-  if (status === "Review" || status === "Revision" || status === "Client Review") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300";
-  if (status === "Cancelled") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300";
-  if (status === "In Progress") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300";
-  return "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
 }
 
 function daysUntil(value: string) {
@@ -219,6 +204,8 @@ export function PrecisionCalendar({
           </>
         )}
         secondary={(
+          <div className="flex flex-wrap items-center gap-2">
+          <span className="hidden text-[10px] text-[var(--app-muted)] sm:inline">{monthProjectCount} scheduled</span>
           <div className="inline-flex h-9 rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-0.5" role="group" aria-label="Calendar view">
             {(["month", "week", "agenda"] as const).map((mode) => (
               <button
@@ -234,6 +221,7 @@ export function PrecisionCalendar({
                 {mode}
               </button>
             ))}
+          </div>
           </div>
         )}
       />
@@ -265,20 +253,20 @@ export function PrecisionCalendar({
                   aria-label={`Select ${formatDate(key, { month: "long", day: "numeric", year: "numeric" })} with ${dayProjects.length} scheduled ${dayProjects.length === 1 ? "delivery" : "deliveries"}`}
                   onClick={() => setSelectedDate(key)}
                   className={cn(
-                    "min-h-[84px] border-b border-r border-[var(--app-border)] p-2 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)]",
+                    "min-h-[84px] border-b border-r border-[var(--app-border)] p-1.5 text-left outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:min-h-[108px] sm:p-2",
                     isSelected ? "bg-[var(--app-active)]" : isCurrentMonth ? "bg-[var(--app-panel)]" : "bg-[var(--app-soft-panel)] opacity-55",
                     isToday && !isSelected && "shadow-[inset_0_0_0_2px_var(--app-highlight)]",
                   )}
                 >
                   <span className="flex items-center justify-between gap-2">
                     <span className={cn("text-[13px] font-semibold", (isSelected || isToday) ? "text-[var(--app-highlight)]" : "text-[var(--app-ink)]")}>{day.date.getDate()}</span>
-                    {dayProjects.length ? <span className="grid h-5 min-w-5 place-items-center rounded bg-[var(--app-active)] px-1 text-[11px] font-semibold text-[var(--app-highlight)]">{dayProjects.length}</span> : null}
+                    {dayProjects.length ? <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[var(--app-active)] px-1 text-[11px] font-semibold text-[var(--app-highlight)]">{dayProjects.length}</span> : null}
                   </span>
                   <span className="mt-2 block space-y-1">
                     {dayProjects.slice(0, 1).map((project) => {
                       const palette = statusPalette(project.status);
                       return (
-                        <span key={project.id} className="block truncate rounded px-1.5 py-1 text-[11px] font-semibold" style={{ background: palette.bg, color: palette.fg }}>
+                          <span key={project.id} className="block truncate rounded border border-black/5 px-1.5 py-1 text-[11px] font-semibold" style={{ background: palette.bg, color: palette.fg }}>
                           {project.title}
                         </span>
                       );
@@ -314,7 +302,7 @@ export function PrecisionCalendar({
                       <span className="block truncate text-sm font-semibold">{project?.title ?? "No scheduled delivery"}</span>
                       <span className="mt-0.5 block truncate text-xs text-[var(--app-muted)]">{project ? project.client || project.workType : "Open production time"}</span>
                     </span>
-                    {project ? <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge> : null}
+                    {project ? <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge> : null}
                   </button>
                 ))}
               </div>
@@ -338,7 +326,7 @@ export function PrecisionCalendar({
                       <p className="truncate text-sm font-semibold">{project.title}</p>
                       <p className="mt-1 truncate text-xs text-[var(--app-muted)]">{project.client || project.workType}</p>
                     </div>
-                    <Badge variant="outline" className={cn("h-5 shrink-0 rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
+                    <Badge variant="outline" className={cn("h-5 shrink-0 rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge>
                   </div>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
                     <div className="h-full rounded-full bg-[var(--app-highlight)]" style={{ width: `${projectProgress(project.status)}%` }} />
@@ -411,6 +399,7 @@ export function PrecisionTimeline({
   }, [visibleProjects]);
   const active = projects.filter((project) => !isDelivered(project) && project.status !== "Cancelled").length;
   const review = projects.filter((project) => ["Review", "Revision", "Client Review"].includes(project.status)).length;
+  const delivered = projects.filter(isDelivered).length;
 
   return (
     <WorkspacePage family="data-index">
@@ -419,10 +408,10 @@ export function PrecisionTimeline({
         title="Delivery timeline"
         description="A chronological view of project milestones, reviews, and completed deliveries."
         actions={(
-          <div className="flex gap-4 text-xs" aria-label="Timeline summary">
-          <span><strong className="text-base tabular-nums">{active}</strong><span className="ml-1 text-[var(--app-muted)]">active</span></span>
-          <span><strong className="text-base tabular-nums">{review}</strong><span className="ml-1 text-[var(--app-muted)]">in review</span></span>
-          <span><strong className="text-base tabular-nums">{projects.filter(isDelivered).length}</strong><span className="ml-1 text-[var(--app-muted)]">delivered</span></span>
+          <div className="flex flex-wrap items-center gap-2 text-xs" aria-label="Timeline summary">
+          <span className="rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-2.5 py-1.5"><strong className="text-base tabular-nums text-[var(--app-ink)]">{active}</strong><span className="ml-1 text-[var(--app-muted)]">active</span></span>
+          <span className="rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-2.5 py-1.5"><strong className="text-base tabular-nums text-[var(--app-warning)]">{review}</strong><span className="ml-1 text-[var(--app-muted)]">in review</span></span>
+          <span className="rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] px-2.5 py-1.5"><strong className="text-base tabular-nums text-[var(--app-success)]">{delivered}</strong><span className="ml-1 text-[var(--app-muted)]">delivered</span></span>
           </div>
         )}
       />
@@ -442,7 +431,8 @@ export function PrecisionTimeline({
               filter === option && "bg-[var(--app-active)] text-[var(--app-highlight)]",
             )}
           >
-            {option}
+            <span>{option}</span>
+            <span className="ml-1 text-[10px] tabular-nums opacity-70">{option === "All" ? projects.length : option === "Active" ? active : option === "Review" ? review : delivered}</span>
           </button>
         ))}
           </div>
@@ -482,10 +472,11 @@ export function PrecisionTimeline({
                       animate={{ opacity: 1, x: 0 }}
                       transition={reduceMotion ? { duration: 0 } : { ...revealTransition, delay: (groupIndex * 0.035) + (projectIndex * 0.025) }}
                       whileTap={reduceMotion ? undefined : { scale: 0.995 }}
+                      aria-label={`${project.title}, ${project.status}, due ${formatDate(project.dueDate, { month: "long", day: "numeric", year: "numeric" })}`}
                       className="relative grid w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[120px_minmax(0,1fr)_120px_90px] sm:items-center"
                       onClick={() => onViewProject(project)}
                     >
-                      <span className="absolute -left-[31px] top-1/2 grid size-3 -translate-y-1/2 place-items-center rounded-full border-2 border-[var(--app-panel)]" style={{ background: statusColor(project.status) }} />
+                      <span className="absolute -left-[31px] top-1/2 grid size-3 -translate-y-1/2 place-items-center rounded-full border-2 border-[var(--app-panel)]" style={{ background: projectStatusColor(project.status) }} />
                       <span>
                         <span className="block text-[10px] font-semibold uppercase text-[var(--app-subtle)]">{isDelivered(project) ? "Delivered" : "Expected"}</span>
                         <span className="mt-1 block text-xs font-medium">{formatDate(project.dueDate, { month: "short", day: "numeric" })}</span>
@@ -494,10 +485,10 @@ export function PrecisionTimeline({
                         <span className="block truncate text-[13px] font-semibold">{project.title}</span>
                         <span className="mt-1 block truncate text-[11px] text-[var(--app-muted)]">{project.client || project.workType} · {project.notes || "No note"}</span>
                       </span>
-                      <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
+                      <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge>
                       <span className="flex items-center justify-end gap-1 text-[10px] text-[var(--app-muted)]">
                         {isDelivered(project) ? <CheckCircle2 className="size-3.5 text-[var(--app-success)]" /> : <Clock3 className="size-3.5" />}
-                        {isDelivered(project) ? "Complete" : `${Math.max(0, daysUntil(project.dueDate))}d`}
+                        {isDelivered(project) ? "Complete" : daysUntil(project.dueDate) < 0 ? "Overdue" : `${Math.max(0, daysUntil(project.dueDate))}d`}
                       </span>
                     </motion.button>
                   ))}

@@ -8,5 +8,4 @@ export { PageEmptyState } from "./page-empty-state";
 export { PageHeader } from "./page-header";
 export { PageToolbar } from "./page-toolbar";
 export { SplitPane } from "./split-pane";
-export { ThreePane } from "./three-pane";
 export { WorkspacePage } from "./workspace-page";

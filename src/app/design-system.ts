@@ -46,6 +46,25 @@ export const cutlab = {
   font: {
     heading: "var(--font-space-grotesk), var(--font-geist-sans), Geist, sans-serif",
     body: "var(--font-geist-sans), Geist, sans-serif"
+  },
+  typography: {
+    display: "clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem)",
+    title: "clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem)",
+    body: "0.875rem",
+    label: "0.75rem",
+    lineBody: 1.5,
+    lineTight: 1.2
+  },
+  motion: {
+    fast: "120ms",
+    base: "180ms",
+    slow: "280ms",
+    easeStandard: "cubic-bezier(0.2, 0, 0, 1)",
+    easeOut: "cubic-bezier(0.16, 1, 0.3, 1)"
+  },
+  density: {
+    compact: { controlHeight: 32, rowHeight: 48, sectionGap: 16 },
+    comfortable: { controlHeight: 48, rowHeight: 58, sectionGap: 24 }
   }
 } as const;
 
@@ -71,53 +90,9 @@ function accentForeground(accent: string) {
   return inkContrast >= whiteContrast ? "#042F2E" : "#FFFFFF";
 }
 
-export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.color.teal) {
+export function cutlabThemeVariables(accent: string = cutlab.color.teal) {
   return {
     "--app-accent": accent,
     "--app-accent-foreground": accentForeground(accent),
-    "--app-highlight": isDark ? cutlab.color.cyan : "#0F766E",
-    "--app-canvas": isDark ? cutlab.color.charcoal : "#F8FAFC",
-    "--app-panel": isDark ? cutlab.color.graphite : "#FFFFFF",
-    "--app-sidebar": isDark ? "#0F141A" : "#F1F5F9",
-    "--app-soft-panel": isDark ? cutlab.color.slate : "#F1F5F9",
-    "--app-header-panel": isDark ? "#141B23" : "#FFFFFF",
-    "--app-active": isDark ? "rgba(20, 184, 166, 0.16)" : "rgba(20, 184, 166, 0.16)",
-    "--app-hover": isDark ? "rgba(148, 163, 184, 0.08)" : "rgba(15, 23, 42, 0.05)",
-    "--app-ink": isDark ? cutlab.color.softWhite : "#0F172A",
-    "--app-muted": isDark ? cutlab.color.mist : "#64748B",
-    "--app-subtle": isDark ? "#64748B" : "#94A3B8",
-    "--app-border": isDark ? cutlab.color.steel : "#E2E8F0",
-    "--app-strong-border": isDark ? "#3B4756" : "#CBD5E1",
-    "--app-control": isDark ? "#0F141A" : "#FFFFFF",
-    "--app-success": isDark ? cutlab.color.success : "#16A34A",
-    "--app-warning": isDark ? cutlab.color.warning : "#D97706",
-    "--app-danger": isDark ? cutlab.color.error : "#DC2626",
-    "--app-success-bg": isDark ? "rgba(34, 197, 94, 0.14)" : "rgba(22, 163, 74, 0.1)",
-    "--app-warning-bg": isDark ? "rgba(251, 191, 36, 0.14)" : "rgba(217, 119, 6, 0.1)",
-    "--app-danger-bg": isDark ? "rgba(239, 68, 68, 0.14)" : "rgba(220, 38, 38, 0.1)",
-    "--app-progress-track": isDark ? "#26313D" : "#E2E8F0",
-    "--app-chart-grid": isDark ? "#26313D" : "#E2E8F0",
-    "--app-avatar-surface": isDark ? cutlab.color.slate : "#E2E8F0",
-    "--app-thumb-icon": isDark ? "rgba(244,246,248,0.38)" : "rgba(23,26,33,0.36)",
-    "--app-shadow-1": cutlab.shadow[1],
-    "--app-shadow-2": cutlab.shadow[2],
-    "--background": "var(--app-canvas)",
-    "--foreground": "var(--app-ink)",
-    "--card": "var(--app-panel)",
-    "--card-foreground": "var(--app-ink)",
-    "--popover": "var(--app-panel)",
-    "--popover-foreground": "var(--app-ink)",
-    "--primary": "var(--app-accent)",
-    "--primary-foreground": "var(--app-accent-foreground)",
-    "--secondary": "var(--app-soft-panel)",
-    "--secondary-foreground": "var(--app-ink)",
-    "--muted": "var(--app-soft-panel)",
-    "--muted-foreground": "var(--app-muted)",
-    "--accent": "var(--app-soft-panel)",
-    "--accent-foreground": "var(--app-ink)",
-    "--destructive": "var(--app-danger)",
-    "--border": "var(--app-border)",
-    "--input": "var(--app-border)",
-    "--ring": "var(--app-accent)"
   } as Record<string, string>;
 }

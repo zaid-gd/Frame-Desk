@@ -22,7 +22,7 @@ export function MasterDetail({
       data-slot="master-detail"
       data-variant={variant}
       className={cn(
-        "grid min-h-0 min-w-0 gap-4",
+        "grid min-h-0 min-w-0 gap-5",
         variant === "navigation" && "lg:grid-cols-[320px_minmax(0,1fr)]",
         variant === "detail-rail" && "lg:grid-cols-[minmax(0,1fr)_320px]",
         inspector && variant === "navigation" && "xl:grid-cols-[320px_minmax(0,1fr)_320px]",

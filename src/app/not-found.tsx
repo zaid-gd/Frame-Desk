@@ -6,16 +6,17 @@ import { Button } from "@/components/ui/button";
 
 export default function NotFound() {
   return (
-    <main className="grid min-h-dvh place-items-center bg-background px-4 text-foreground">
-      <section className="w-full max-w-[500px] rounded-lg border border-border bg-card p-6 text-card-foreground">
+    <main id="main-content" className="grid min-h-dvh place-items-center bg-[var(--surface-canvas)] px-4 py-8 text-[var(--text-primary)]">
+      <section className="w-full max-w-[560px] rounded-[var(--radius-panel)] border border-[var(--app-border)] bg-[var(--surface-panel)] p-6 text-[var(--text-primary)] shadow-[var(--shadow-panel)] md:p-8" aria-labelledby="not-found-heading">
         <div className="space-y-4">
           <div>
-            <h1 className="font-[family-name:var(--font-space-grotesk)] text-[26px] font-bold">Page not found</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Frame Desk</p>
+            <h1 id="not-found-heading" className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[30px] font-bold leading-tight">Page not found</h1>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
               This Frame Desk route does not exist. Return to the dashboard to keep tracking work.
             </p>
           </div>
-          <Button asChild className="w-fit bg-[var(--app-accent)] text-[var(--app-accent-foreground)] hover:bg-[var(--app-highlight)]">
+          <Button asChild className="min-h-11 w-fit bg-[var(--app-highlight)] text-white hover:bg-[var(--app-accent)]">
             <Link href="/">Back to Dashboard</Link>
           </Button>
         </div>

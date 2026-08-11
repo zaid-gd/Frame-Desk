@@ -24,7 +24,7 @@ export function DataTableFrame({
     <section
       data-slot="data-table-frame"
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card text-card-foreground",
+        "flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm shadow-black/[0.02]",
         bounded && "min-h-0",
         className,
       )}
@@ -36,7 +36,7 @@ export function DataTableFrame({
         aria-label={bodyLabel}
         tabIndex={bounded && bodyLabel ? 0 : undefined}
         className={cn(
-          "min-w-0 overflow-x-auto",
+          "min-w-0 overscroll-contain overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           bounded && "min-h-0 flex-1 overflow-y-auto",
           bodyClassName,
         )}

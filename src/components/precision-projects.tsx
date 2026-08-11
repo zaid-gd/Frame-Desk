@@ -34,6 +34,7 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,16 +110,14 @@ function money(value: number, currency: string) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
-function statusTone(status: WorkItem["status"]) {
-  if (status === "Delivered") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
-  if (["Review", "Revision", "Client Review"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300";
-  if (status === "In Progress") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300";
-  if (status === "Cancelled") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300";
-  return "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-}
-
 function projectColor(project: WorkItem) {
-  const palette = ["#dce8f7", "#e9e2d6", "#dce9df", "#e5e1ef", "#e8e8e8"];
+  const palette = [
+    "var(--media-package-1)",
+    "var(--media-package-2)",
+    "var(--media-package-3)",
+    "var(--media-package-4)",
+    "var(--media-package-5)",
+  ];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
@@ -160,7 +159,7 @@ function ProjectVideoThumbnail({
       style={{ background: projectColor(project) }}
     >
       <span className="absolute -right-3 top-1/2 h-[130%] w-[52%] -translate-y-1/2 rotate-12 bg-[var(--app-accent)] opacity-45" />
-      <span className="absolute inset-x-2 top-2 flex items-center justify-between text-slate-900/60 dark:text-white/80">
+      <span className="absolute inset-x-2 top-2 flex items-center justify-between text-[var(--app-thumb-icon)]">
         <Film className="size-3.5" />
         <span className="size-1.5 rounded-full bg-current opacity-60" />
       </span>
@@ -242,7 +241,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
     }),
     columnHelper.accessor("status", {
       header: "Status",
-      cell: (info) => <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(info.getValue()))}>{info.getValue()}</Badge>,
+      cell: (info) => <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(info.getValue()))}>{info.getValue()}</Badge>,
     }),
     columnHelper.display({
       id: "progress",
@@ -345,17 +344,19 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         <>
         <div className="relative inline-flex w-fit rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] p-0.5">
           <button
+            type="button"
             aria-pressed={scope === "personal"}
-            className={cn("relative rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98]", scope === "personal" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
+            className={cn("relative min-h-9 rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98]", scope === "personal" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
             onClick={() => setScope("personal")}
           >
             {scope === "personal" ? <motion.span layoutId="project-scope" className="absolute inset-0 rounded bg-[var(--app-active)]" /> : null}
             <span className="relative">My Projects <span className="ml-1 text-[10px]">{props.personalProjects.length}</span></span>
           </button>
           <button
+            type="button"
             disabled={!hasTeam}
             aria-pressed={scope === "team"}
-            className={cn("relative rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98] disabled:opacity-40", scope === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
+            className={cn("relative min-h-9 rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98] disabled:opacity-40", scope === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
             onClick={() => setScope("team")}
           >
             {scope === "team" ? <motion.span layoutId="project-scope" className="absolute inset-0 rounded bg-[var(--app-active)]" /> : null}
@@ -440,7 +441,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
 
           {projects.length ? (
             <>
-            <div className="divide-y divide-[var(--app-border)] lg:hidden">
+            <div className="divide-y divide-[var(--app-border)] lg:hidden" aria-label="Project cards">
               {table.getRowModel().rows.map((row) => (
                 <button
                   key={row.id}
@@ -466,7 +467,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                   </span>
                   <Badge
                     variant="outline"
-                    className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(row.original.status))}
+                    className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(row.original.status))}
                   >
                     {row.original.status}
                   </Badge>
@@ -480,7 +481,8 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
               tabIndex={0}
               aria-label="Scrollable project library"
             >
-              <table className="w-full table-fixed border-collapse">
+              <table className="w-full table-fixed border-collapse" aria-label={`${scope === "team" ? "Team" : "Personal"} project library`}>
+                <caption className="sr-only">Projects with due date, status, progress, and value. Select a row to inspect it.</caption>
                 <thead>
                   {table.getHeaderGroups().map((group) => (
                     <tr key={group.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]">
@@ -523,6 +525,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                       data-testid="project-row"
                       data-project-title={row.original.title}
                       aria-selected={selected?.id === row.original.id}
+                      aria-label={`Select ${row.original.title}. ${row.original.status}. Due ${formatDate(row.original.dueDate)}.`}
                       className={cn(
                         "h-[var(--workspace-row-height,70px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)] active:bg-[var(--app-active)]",
                         selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
@@ -724,7 +727,7 @@ function ProjectInspector({
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold">{project.title}</h2>
             <p className="mt-0.5 truncate text-[11px] text-[var(--app-muted)]">{project.client || "No client"}</p>
-            <Badge variant="outline" className={cn("mt-2 h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(project.status))}>{project.status}</Badge>
+            <Badge variant="outline" className={cn("mt-2 h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(project.status))}>{project.status}</Badge>
           </div>
         </div>
       </div>
@@ -778,7 +781,7 @@ function ProjectTableSkeleton({ reduceMotion }: { reduceMotion: boolean | null }
       {Array.from({ length: 4 }, (_, index) => (
         <motion.div
           key={index}
-          className="grid h-[58px] grid-cols-[280px_100px_120px_100px_1fr] items-center gap-5 border-b border-[var(--app-border)] px-3"
+          className="grid h-[58px] grid-cols-[minmax(180px,1.6fr)_minmax(80px,0.7fr)_minmax(100px,0.9fr)_minmax(72px,0.7fr)_minmax(100px,1fr)] items-center gap-3 border-b border-[var(--app-border)] px-3"
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={reduceMotion ? { opacity: 0.65 } : { opacity: [0.45, 0.8, 0.45] }}
           transition={reduceMotion ? { duration: 0 } : { duration: 1.2, delay: index * 0.06, repeat: Infinity }}

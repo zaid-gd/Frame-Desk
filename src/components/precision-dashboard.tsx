@@ -38,6 +38,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SalaryBatch, WorkItem, SettingsState } from "@/lib/types";
 import type { ProjectStatus } from "@/lib/domain-values";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -260,7 +261,13 @@ function relativeActivityTime(value: string) {
 }
 
 function projectColor(project: WorkItem) {
-  const palette = ["#E1F3FE", "#EDF3EC", "#FBF3DB", "#FDEBEC", "#F0EEE9"];
+  const palette = [
+    "var(--media-package-1)",
+    "var(--media-package-2)",
+    "var(--media-package-3)",
+    "var(--media-package-4)",
+    "var(--media-package-5)",
+  ];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
@@ -268,22 +275,12 @@ function projectColor(project: WorkItem) {
 
 /** Muted pastel status chips — scarce color, uppercase meta. */
 function StatusBadge({ status }: { status: WorkItem["status"] }) {
-  const tone = status === "Delivered"
-    ? "border-transparent bg-[#EDF3EC] text-[#346538] dark:bg-[var(--app-success-bg)] dark:text-[var(--app-success)]"
-    : status === "Review" || status === "Revision" || status === "Client Review"
-      ? "border-transparent bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
-      : status === "Cancelled"
-        ? "border-transparent bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
-        : status === "In Progress"
-          ? "border-transparent bg-[var(--app-active)] text-[var(--app-highlight)]"
-          : "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-
   return (
     <Badge
       variant="outline"
       className={cn(
         "h-5 rounded-full border px-2 text-[10px] font-medium uppercase tracking-[0.05em]",
-        tone,
+        projectStatusTone(status),
       )}
     >
       {status}
@@ -294,9 +291,9 @@ function StatusBadge({ status }: { status: WorkItem["status"] }) {
 function PriorityBadge({ project }: { project: WorkItem }) {
   const priority = priorityFor(project);
   const tone = priority === "Urgent" || priority === "High"
-    ? "bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
+    ? "bg-[var(--status-danger-bg)] text-[var(--status-danger)]"
     : priority === "Medium"
-      ? "bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
+      ? "bg-[var(--status-warning-bg)] text-[var(--status-warning)]"
       : "bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
   return (
     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em]", tone)}>
@@ -809,7 +806,8 @@ export function PrecisionDashboard(props: DashboardProps) {
                   })}
                 </div>
                 <div className="hidden overflow-x-auto sm:block">
-                  <table className="w-full min-w-[700px] border-collapse">
+                  <table className="w-full min-w-[700px] border-collapse" aria-label="Project ledger">
+                    <caption className="sr-only">Recent projects with type, due date, status, progress, value, and actions.</caption>
                     <thead>
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]/60">
@@ -853,6 +851,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                           data-project-title={row.original.title}
                           data-project-id={row.original.id}
                           aria-selected={selected?.id === row.original.id}
+                          aria-label={`Select ${row.original.title}. ${row.original.status}. Due ${formatDate(row.original.dueDate, { month: "short", day: "numeric" })}.`}
                           className={cn(
                             "h-[var(--workspace-row-height,58px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
                             selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
@@ -1004,7 +1003,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               <button
                 type="button"
                 className={cn(
-                  "relative rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors",
+                  "relative min-h-7 rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
                   activityMode === "recent" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "recent"}
@@ -1018,7 +1017,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               <button
                 type="button"
                 className={cn(
-                  "relative rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors",
+                  "relative min-h-7 rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
                   activityMode === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "team"}
