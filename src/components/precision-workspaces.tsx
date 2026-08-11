@@ -235,6 +235,7 @@ export function PrecisionClients({
                   "relative flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)]",
                   selected?.name === client.name && "bg-[var(--app-active)]",
                 )}
+                aria-label={`${client.name}, ${client.projects.length} projects, ${client.active} active`}
                 onClick={() => setSelectedName(client.name)}
               >
                 {selected?.name === client.name ? (
@@ -303,6 +304,7 @@ export function PrecisionClients({
                       transition={reduceMotion ? { duration: 0 } : { ...revealTransition, delay: Math.min(index * 0.025, 0.15) }}
                       whileTap={reduceMotion ? undefined : { scale: 0.995 }}
                       className="grid w-full gap-2 px-3 py-3 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[minmax(0,1fr)_120px_100px_auto] sm:items-center"
+                      aria-label={`Open ${project.title}`}
                       onClick={() => onViewProject(project)}
                     >
                       <span className="min-w-0"><span className="block truncate text-xs font-semibold">{project.title}</span><span className="mt-0.5 block truncate text-[10px] text-[var(--app-muted)]">{project.notes || project.workType}</span></span>
@@ -446,6 +448,9 @@ export function PrecisionFeedback({
                     )}
                     onClick={() => setSelectedId(project.id)}
                     onDoubleClick={() => onViewProject(project)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) onViewProject(project);
+                    }}
                   >
                 <span className="min-w-0"><span className="block truncate text-[13px] font-semibold">{project.title}</span><span className="mt-1 block truncate text-[11px] text-[var(--app-muted)]">{project.client || project.workType} · {project.notes || "No review note"}</span></span>
                 <span className="text-[11px] text-[var(--app-muted)]">Due {formatDate(project.dueDate)}</span>
@@ -624,7 +629,7 @@ export function PrecisionReports({
         title="Reports"
         description="Earnings, delivery throughput, work mix, and salary batch payout state."
         actions={(
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Select value={period} onValueChange={(value) => setPeriod(value as PayoutPeriod)}>
             <SelectTrigger className="h-8 w-[138px] text-xs" aria-label="Payout period">
               <SelectValue />
@@ -710,6 +715,11 @@ export function PrecisionReports({
               <div className="grid h-full place-items-center text-xs text-[var(--app-muted)]">Delivered projects will create the earnings trend.</div>
             )}
           </motion.div>
+          <p className="mt-3 rounded-md bg-[var(--app-soft-panel)] px-3 py-2 text-[11px] leading-4 text-[var(--app-muted)]" aria-label="Earnings trend summary">
+            {trendData.length
+              ? `${trendData.reduce((sum, item) => sum + item.delivered, 0)} delivered edits generated ${money(trendData.reduce((sum, item) => sum + item.earned, 0), settings.currencyCode)} across ${trendData.length} month${trendData.length === 1 ? "" : "s"}.`
+              : "No delivery data is available for this period yet."}
+          </p>
         </motion.section>
         )}
         secondary={(
@@ -720,7 +730,7 @@ export function PrecisionReports({
           className="rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)] p-4"
         >
           <div><h2 className="text-sm font-semibold">Work mix</h2><p className="mt-0.5 text-[10px] text-[var(--app-muted)]">Distribution across project types.</p></div>
-          <div className="mt-3 h-[190px]">
+          <div className="mt-3 h-[190px]" role="img" aria-label={mixData.length ? `Work mix: ${mixData.map((item) => `${item.name}, ${item.value} projects`).join("; ")}` : "No work mix data available"}>
             {mixData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -730,7 +740,7 @@ export function PrecisionReports({
                   <ChartTooltip contentStyle={{ background: "var(--app-panel)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
-            ) : null}
+            ) : <div className="grid h-full place-items-center rounded-md border border-dashed border-[var(--app-border)] px-4 text-center text-xs text-[var(--app-muted)]">Delivered projects will build this breakdown.</div>}
           </div>
           <div className="space-y-2">
             {mixData.map((item, index) => (

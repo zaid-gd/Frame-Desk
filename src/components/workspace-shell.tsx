@@ -16,6 +16,8 @@ import {
   LogOut,
   MessageSquareText,
   MoreHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Settings,
@@ -191,7 +193,7 @@ export function WorkspaceShell({
   const goChordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reduceMotion = useHydratedReducedMotion();
   const router = useRouter();
-  const collapsed = true;
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -243,18 +245,26 @@ export function WorkspaceShell({
 
   return (
     <div className="min-h-dvh bg-[var(--app-canvas)] text-[var(--app-ink)] lg:h-dvh lg:overflow-hidden lg:bg-[var(--app-sidebar)]">
-      <DesktopSidebar page={page} settings={settings} starterNavigation={starterNavigation} />
+      <DesktopSidebar
+        page={page}
+        settings={settings}
+        starterNavigation={starterNavigation}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+      />
 
       <div
         className={cn(
-          "min-h-dvh transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "min-h-dvh transition-[padding] ease-[cubic-bezier(0.22,1,0.36,1)]",
+          reduceMotion ? "duration-0" : "duration-300",
           collapsed ? "lg:pl-[60px]" : "lg:pl-[224px]",
         )}
       >
         <header
           className={cn(
-            "fixed inset-x-0 top-0 z-30 flex h-12 items-center bg-[var(--app-sidebar)] px-2.5 transition-[left] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between lg:px-3",
-            "lg:left-[60px]",
+            "fixed inset-x-0 top-0 z-30 flex h-12 items-center bg-[var(--app-sidebar)] px-2.5 transition-[left] ease-[cubic-bezier(0.22,1,0.36,1)] lg:justify-between lg:px-3",
+            reduceMotion ? "duration-0" : "duration-300",
+            collapsed ? "lg:left-[60px]" : "lg:left-[224px]",
           )}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 lg:flex-none">
@@ -264,8 +274,8 @@ export function WorkspaceShell({
               </span>
             </div>
             <p className="truncate text-sm font-semibold lg:hidden">{title}</p>
-            <p className="hidden items-center gap-1.5 text-xs lg:flex">
-              <span className="text-[var(--app-subtle)]">Frame Desk</span>
+            <p className="hidden items-center gap-1.5 text-xs lg:flex" aria-label={`Current location: ${title}`}>
+              <span className="font-medium text-[var(--app-subtle)]">Frame Desk</span>
               <span aria-hidden="true" className="text-[var(--app-border)]">/</span>
               <span className="font-medium text-[var(--app-ink)]">{title}</span>
             </p>
@@ -277,6 +287,7 @@ export function WorkspaceShell({
               "hidden h-8 w-[min(38vw,440px)] justify-start border-[var(--app-border)] bg-[var(--app-control)] px-2.5 text-xs text-[var(--app-muted)] shadow-none transition-[left,background-color,border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-[var(--app-strong-border)] hover:bg-[var(--app-soft-panel)] hover:shadow-[0_1px_2px_color-mix(in_srgb,var(--app-ink)_8%,transparent)] lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2",
             )}
             onClick={() => setCommandOpen(true)}
+            aria-label="Search pages and workspace actions (Ctrl K)"
           >
             <Search className="size-3.5" />
             <span className="truncate">Search pages and workspace actions</span>
@@ -286,6 +297,15 @@ export function WorkspaceShell({
           </Button>
 
           <div className="ml-3 flex items-center gap-1.5 lg:ml-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label="Search pages and workspace actions (Ctrl K)"
+              onClick={() => setCommandOpen(true)}
+            >
+              <Search className="size-[18px]" />
+            </Button>
             <motion.div
               whileHover={canCreateProject && !reduceMotion ? { y: -1 } : undefined}
               whileTap={canCreateProject && !reduceMotion ? { scale: 0.98, y: 0 } : undefined}
@@ -316,7 +336,11 @@ export function WorkspaceShell({
           id="main-content"
           data-testid="workspace-content-surface"
           tabIndex={-1}
-          className="workspace-scrollbar-hidden h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto bg-[var(--app-canvas)] pt-12 outline-none lg:fixed lg:bottom-1.5 lg:left-[66px] lg:right-1.5 lg:top-[54px] lg:h-auto lg:min-h-0 lg:overscroll-contain lg:rounded-xl lg:border lg:border-[var(--app-border)] lg:pt-0"
+          className={cn(
+            "workspace-scrollbar-hidden h-[calc(100dvh_-_68px_-_env(safe-area-inset-bottom))] overflow-y-auto bg-[var(--app-canvas)] pt-12 outline-none lg:fixed lg:bottom-1.5 lg:right-1.5 lg:top-[54px] lg:h-auto lg:min-h-0 lg:overscroll-contain lg:rounded-xl lg:border lg:border-[var(--app-border)] lg:pt-0 lg:transition-[left] lg:ease-[cubic-bezier(0.22,1,0.36,1)]",
+            reduceMotion ? "lg:duration-0" : "lg:duration-300",
+            collapsed ? "lg:left-[66px]" : "lg:left-[230px]",
+          )}
         >
           <div className="min-h-full lg:h-full">
             {children}
@@ -347,13 +371,16 @@ function DesktopSidebar({
   page,
   settings,
   starterNavigation,
+  collapsed,
+  onCollapsedChange,
 }: {
   page: ShellPage;
   settings: SettingsState;
   starterNavigation: boolean;
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
 }) {
   const reduceMotion = useHydratedReducedMotion();
-  const collapsed = true;
   const [showAllTools, setShowAllTools] = useState(false);
   const visibleGroups = starterNavigation && !showAllTools
     ? routeGroups.map((group) => ({ ...group, items: group.items.filter((item) => starterPages.has(item.page) || item.page === page) })).filter((group) => group.items.length)
@@ -362,7 +389,7 @@ function DesktopSidebar({
   return (
     <motion.aside
       initial={false}
-      animate={{ width: 60 }}
+      animate={{ width: collapsed ? 60 : 224 }}
       transition={reduceMotion ? { duration: 0 } : shellTransition}
       className="fixed inset-y-0 left-0 z-40 hidden overflow-hidden bg-[var(--app-sidebar)] lg:flex lg:flex-col"
     >
@@ -374,7 +401,8 @@ function DesktopSidebar({
           aria-label="Go to dashboard"
           className={cn(
             "min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--app-sidebar)]",
-            "flex h-full w-12 items-center justify-center overflow-hidden",
+            "flex h-full items-center overflow-hidden",
+            collapsed ? "w-12 justify-center" : "w-full justify-start px-2",
           )}
         >
           <motion.div
@@ -456,6 +484,19 @@ function DesktopSidebar({
       </nav>
 
       <div className="border-t border-[var(--app-border)] p-1.5">
+        <button
+          type="button"
+          className={cn(
+            "mb-1 flex min-h-9 w-full items-center rounded-md text-xs font-semibold text-[var(--app-muted)] outline-none hover:bg-[var(--app-hover)] hover:text-[var(--app-ink)] focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
+            collapsed ? "justify-center px-0" : "gap-2.5 px-2.5",
+          )}
+          onClick={() => onCollapsedChange(!collapsed)}
+          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+          aria-expanded={!collapsed}
+        >
+          {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+          {!collapsed ? <span>Collapse sidebar</span> : null}
+        </button>
         <ProfileMenu settings={settings} collapsed={collapsed} page={page} />
         {!collapsed ? (
           <footer className="mt-2 border-t border-[var(--app-border)] px-2 pt-2 text-[11px] leading-5 text-[var(--app-subtle)]">

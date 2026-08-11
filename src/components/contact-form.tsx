@@ -24,15 +24,16 @@ export function ContactForm() {
     <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
       <div className="grid gap-2">
         <label className="text-base font-semibold" htmlFor="contact-name">Name</label>
-        <input className={fieldClass} id="contact-name" name="name" autoComplete="name" required />
+        <input className={fieldClass} id="contact-name" name="name" autoComplete="name" required maxLength={120} />
       </div>
       <div className="grid gap-2">
         <label className="text-base font-semibold" htmlFor="contact-email">Email</label>
-        <input className={fieldClass} id="contact-email" name="email" type="email" autoComplete="email" required />
+        <input className={fieldClass} id="contact-email" name="email" type="email" autoComplete="email" required maxLength={254} />
       </div>
       <div className="grid gap-2">
         <label className="text-base font-semibold" htmlFor="contact-message">How can we help?</label>
-        <textarea className={`${fieldClass} min-h-36 resize-y`} id="contact-message" name="message" required />
+        <textarea className={`${fieldClass} min-h-36 resize-y`} id="contact-message" name="message" required maxLength={4000} aria-describedby="contact-message-help" />
+        <p id="contact-message-help" className="text-sm text-[var(--app-muted)]">Do not include passwords, API keys, or private client files.</p>
       </div>
       <div>
         <button
@@ -42,7 +43,7 @@ export function ContactForm() {
           Prepare email
         </button>
       </div>
-      {status ? <p className="text-sm leading-6 text-[var(--app-muted)]" role="status">{status}</p> : null}
+      {status ? <p className="text-sm leading-6 text-[var(--app-muted)]" role="status" aria-live="polite">{status}</p> : null}
     </form>
   );
 }

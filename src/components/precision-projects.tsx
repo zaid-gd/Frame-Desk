@@ -345,17 +345,19 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
         <>
         <div className="relative inline-flex w-fit rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] p-0.5">
           <button
+            type="button"
             aria-pressed={scope === "personal"}
-            className={cn("relative rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98]", scope === "personal" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
+            className={cn("relative min-h-9 rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98]", scope === "personal" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
             onClick={() => setScope("personal")}
           >
             {scope === "personal" ? <motion.span layoutId="project-scope" className="absolute inset-0 rounded bg-[var(--app-active)]" /> : null}
             <span className="relative">My Projects <span className="ml-1 text-[10px]">{props.personalProjects.length}</span></span>
           </button>
           <button
+            type="button"
             disabled={!hasTeam}
             aria-pressed={scope === "team"}
-            className={cn("relative rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98] disabled:opacity-40", scope === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
+            className={cn("relative min-h-9 rounded px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)] active:scale-[0.98] disabled:opacity-40", scope === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)] hover:text-[var(--app-ink)]")}
             onClick={() => setScope("team")}
           >
             {scope === "team" ? <motion.span layoutId="project-scope" className="absolute inset-0 rounded bg-[var(--app-active)]" /> : null}
@@ -440,7 +442,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
 
           {projects.length ? (
             <>
-            <div className="divide-y divide-[var(--app-border)] lg:hidden">
+            <div className="divide-y divide-[var(--app-border)] lg:hidden" aria-label="Project cards">
               {table.getRowModel().rows.map((row) => (
                 <button
                   key={row.id}
@@ -480,7 +482,8 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
               tabIndex={0}
               aria-label="Scrollable project library"
             >
-              <table className="w-full table-fixed border-collapse">
+              <table className="w-full table-fixed border-collapse" aria-label={`${scope === "team" ? "Team" : "Personal"} project library`}>
+                <caption className="sr-only">Projects with due date, status, progress, and value. Select a row to inspect it.</caption>
                 <thead>
                   {table.getHeaderGroups().map((group) => (
                     <tr key={group.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]">
@@ -523,6 +526,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                       data-testid="project-row"
                       data-project-title={row.original.title}
                       aria-selected={selected?.id === row.original.id}
+                      aria-label={`Select ${row.original.title}. ${row.original.status}. Due ${formatDate(row.original.dueDate)}.`}
                       className={cn(
                         "h-[var(--workspace-row-height,70px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)] active:bg-[var(--app-active)]",
                         selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
@@ -778,7 +782,7 @@ function ProjectTableSkeleton({ reduceMotion }: { reduceMotion: boolean | null }
       {Array.from({ length: 4 }, (_, index) => (
         <motion.div
           key={index}
-          className="grid h-[58px] grid-cols-[280px_100px_120px_100px_1fr] items-center gap-5 border-b border-[var(--app-border)] px-3"
+          className="grid h-[58px] grid-cols-[minmax(180px,1.6fr)_minmax(80px,0.7fr)_minmax(100px,0.9fr)_minmax(72px,0.7fr)_minmax(100px,1fr)] items-center gap-3 border-b border-[var(--app-border)] px-3"
           initial={reduceMotion ? false : { opacity: 0 }}
           animate={reduceMotion ? { opacity: 0.65 } : { opacity: [0.45, 0.8, 0.45] }}
           transition={reduceMotion ? { duration: 0 } : { duration: 1.2, delay: index * 0.06, repeat: Infinity }}

@@ -3,15 +3,15 @@
   display: grid;
   place-items: center;
   padding: 32px 20px;
-  background: #f7f6f3;
-  color: #191919;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
 }
 
 .panel {
   width: min(100%, 520px);
-  border: 1px solid #e4e2dd;
+  border: 1px solid var(--app-border);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--surface-panel);
   padding: clamp(28px, 7vw, 48px);
 }
 
@@ -19,7 +19,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #363532;
+  color: var(--text-secondary);
   font-family: var(--font-geist-mono), monospace;
   font-size: 11px;
   font-weight: 600;
@@ -31,7 +31,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #cbc8c1;
+  border: 1px solid var(--app-strong-border);
   border-radius: 5px;
   font-size: 12px;
   letter-spacing: 0;
@@ -53,7 +53,7 @@
 .copy h1 {
   margin: 0;
   max-width: 410px;
-  color: #191919;
+  color: var(--text-primary);
   font-size: clamp(30px, 7vw, 42px);
   font-weight: 600;
   letter-spacing: -0.045em;
@@ -62,7 +62,7 @@
 
 .copy > p:last-child {
   margin: 20px 0 0;
-  color: #65635f;
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.65;
 }
@@ -88,10 +88,10 @@
 .controls input {
   min-width: 0;
   height: 44px;
-  border: 1px solid #cbc8c1;
+  border: 1px solid var(--app-strong-border);
   border-radius: 6px;
-  background: #fbfbfa;
-  color: #191919;
+  background: var(--app-control);
+  color: var(--text-primary);
   padding: 0 13px;
   font: inherit;
   outline: none;
@@ -99,20 +99,20 @@
 }
 
 .controls input:focus {
-  border-color: #6c6a66;
-  box-shadow: 0 0 0 3px rgba(25, 25, 25, 0.08);
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 24%, transparent);
 }
 
 .controls input[aria-invalid="true"] {
-  border-color: #9f2f2d;
+  border-color: var(--app-danger);
 }
 
 .controls button {
   height: 44px;
   min-width: 106px;
-  border: 1px solid #191919;
+  border: 1px solid var(--app-highlight);
   border-radius: 6px;
-  background: #191919;
+  background: var(--app-highlight);
   color: #ffffff;
   padding: 0 18px;
   font: inherit;
@@ -122,7 +122,7 @@
 }
 
 .controls button:hover:not(:disabled) {
-  background: #353432;
+  background: var(--app-accent);
 }
 
 .controls button:active:not(:disabled) {
@@ -137,16 +137,16 @@
 .message {
   min-height: 20px;
   margin: 9px 0 0;
-  color: #9f2f2d;
+  color: var(--app-danger);
   font-size: 13px;
   line-height: 1.5;
 }
 
 .note {
   margin: 34px 0 0;
-  border-top: 1px solid #eae8e3;
+  border-top: 1px solid var(--app-border);
   padding-top: 18px;
-  color: #87847e;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -170,62 +170,6 @@
 
   .controls button {
     width: 100%;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .page {
-    background: #0b0f14;
-    color: #f1f5f9;
-  }
-
-  .panel {
-    border-color: #2a3340;
-    background: #11161d;
-  }
-
-  .wordmark,
-  .form label {
-    color: #d6dde6;
-  }
-
-  .mark,
-  .controls input {
-    border-color: #3b4756;
-  }
-
-  .copy h1 {
-    color: #f1f5f9;
-  }
-
-  .eyebrow,
-  .copy > p:last-child,
-  .note {
-    color: #94a3b8;
-  }
-
-  .controls input {
-    background: #0f141a;
-    color: #f1f5f9;
-  }
-
-  .controls input:focus {
-    border-color: #94a3b8;
-    box-shadow: 0 0 0 3px rgba(241, 245, 249, 0.08);
-  }
-
-  .controls button {
-    border-color: #f1f5f9;
-    background: #f1f5f9;
-    color: #11161d;
-  }
-
-  .controls button:hover:not(:disabled) {
-    background: #dce3eb;
-  }
-
-  .note {
-    border-color: #2a3340;
   }
 }
 

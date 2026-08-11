@@ -46,6 +46,25 @@ export const cutlab = {
   font: {
     heading: "var(--font-space-grotesk), var(--font-geist-sans), Geist, sans-serif",
     body: "var(--font-geist-sans), Geist, sans-serif"
+  },
+  typography: {
+    display: "clamp(1.75rem, 1.4rem + 1.4vw, 2.5rem)",
+    title: "clamp(1.25rem, 1.1rem + 0.5vw, 1.5rem)",
+    body: "0.875rem",
+    label: "0.75rem",
+    lineBody: 1.5,
+    lineTight: 1.2
+  },
+  motion: {
+    fast: "120ms",
+    base: "180ms",
+    slow: "280ms",
+    easeStandard: "cubic-bezier(0.2, 0, 0, 1)",
+    easeOut: "cubic-bezier(0.16, 1, 0.3, 1)"
+  },
+  density: {
+    compact: { controlHeight: 32, rowHeight: 48, sectionGap: 16 },
+    comfortable: { controlHeight: 48, rowHeight: 58, sectionGap: 24 }
   }
 } as const;
 
@@ -101,6 +120,18 @@ export function cutlabThemeVariables(isDark: boolean, accent: string = cutlab.co
     "--app-thumb-icon": isDark ? "rgba(244,246,248,0.38)" : "rgba(23,26,33,0.36)",
     "--app-shadow-1": cutlab.shadow[1],
     "--app-shadow-2": cutlab.shadow[2],
+    "--surface-canvas": isDark ? cutlab.color.charcoal : "#F8FAFC",
+    "--surface-panel": isDark ? cutlab.color.graphite : "#FFFFFF",
+    "--surface-panel-raised": isDark ? "#141B23" : "#FFFFFF",
+    "--surface-sunken": isDark ? "#0F141A" : "#F1F5F9",
+    "--surface-overlay": isDark ? cutlab.color.slate : "#FFFFFF",
+    "--text-primary": isDark ? cutlab.color.softWhite : "#0F172A",
+    "--text-secondary": isDark ? "#CBD5E1" : "#475569",
+    "--text-muted": isDark ? cutlab.color.mist : "#64748B",
+    "--text-disabled": isDark ? "#64748B" : "#94A3B8",
+    "--focus-ring": isDark ? cutlab.color.aqua : "#0F766E",
+    "--selected-bg": isDark ? "rgba(20, 184, 166, 0.18)" : "rgba(20, 184, 166, 0.14)",
+    "--disabled-bg": isDark ? cutlab.color.slate : "#F1F5F9",
     "--background": "var(--app-canvas)",
     "--foreground": "var(--app-ink)",
     "--card": "var(--app-panel)",

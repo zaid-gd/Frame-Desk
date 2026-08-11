@@ -809,7 +809,8 @@ export function PrecisionDashboard(props: DashboardProps) {
                   })}
                 </div>
                 <div className="hidden overflow-x-auto sm:block">
-                  <table className="w-full min-w-[700px] border-collapse">
+                  <table className="w-full min-w-[700px] border-collapse" aria-label="Project ledger">
+                    <caption className="sr-only">Recent projects with type, due date, status, progress, value, and actions.</caption>
                     <thead>
                       {table.getHeaderGroups().map((headerGroup) => (
                         <tr key={headerGroup.id} className="border-y border-[var(--app-border)] bg-[var(--app-soft-panel)]/60">
@@ -853,6 +854,7 @@ export function PrecisionDashboard(props: DashboardProps) {
                           data-project-title={row.original.title}
                           data-project-id={row.original.id}
                           aria-selected={selected?.id === row.original.id}
+                          aria-label={`Select ${row.original.title}. ${row.original.status}. Due ${formatDate(row.original.dueDate, { month: "short", day: "numeric" })}.`}
                           className={cn(
                             "h-[var(--workspace-row-height,58px)] cursor-pointer outline-none transition-colors hover:bg-[var(--app-hover)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]",
                             selected?.id === row.original.id && "bg-[var(--app-active)] shadow-[inset_3px_0_0_var(--app-accent)]",
@@ -1004,7 +1006,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               <button
                 type="button"
                 className={cn(
-                  "relative rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors",
+                  "relative min-h-7 rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
                   activityMode === "recent" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "recent"}
@@ -1018,7 +1020,7 @@ export function PrecisionDashboard(props: DashboardProps) {
               <button
                 type="button"
                 className={cn(
-                  "relative rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors",
+                  "relative min-h-7 rounded px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.05em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--app-accent)]",
                   activityMode === "team" ? "text-[var(--app-highlight)]" : "text-[var(--app-muted)]",
                 )}
                 aria-pressed={activityMode === "team"}

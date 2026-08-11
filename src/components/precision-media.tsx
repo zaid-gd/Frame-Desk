@@ -129,6 +129,7 @@ export function PrecisionMedia({
                       )}
                       onClick={() => setCollection(item.id)}
                       aria-pressed={active}
+                      aria-current={active ? "page" : undefined}
                       whileTap={reduceMotion ? undefined : { scale: 0.985 }}
                     >
                       {active ? (
@@ -201,7 +202,7 @@ export function PrecisionMedia({
               </div>
               </PageToolbar>
 
-              <div className="flex h-10 items-center border-b border-[var(--app-border)] px-4">
+              <div className="flex min-h-10 items-center gap-3 border-b border-[var(--app-border)] px-4 py-2">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.h2
                     key={collection}
@@ -222,7 +223,7 @@ export function PrecisionMedia({
                   animate={{ opacity: 1 }}
                   transition={contentTransition}
                 >
-                  {filtered.length} packages
+                  {filtered.length} of {projects.length} packages
                 </motion.span>
               </div>
 
@@ -254,6 +255,7 @@ export function PrecisionMedia({
                                   onClick={() => setSelectedId(project.id)}
                                   onDoubleClick={() => onViewProject(project)}
                                   aria-pressed={active}
+                                  aria-label={`${project.title}, ${project.status}, ${value}% package progress. Double click to open project.`}
                                   initial={reduceMotion ? false : { opacity: 0, y: 5 }}
                                   animate={{ opacity: 1, y: 0 }}
                                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.99 }}
@@ -307,6 +309,7 @@ export function PrecisionMedia({
                                   onClick={() => setSelectedId(project.id)}
                                   onDoubleClick={() => onViewProject(project)}
                                   aria-pressed={active}
+                                  aria-label={`${project.title}, ${project.status}, ${value}% package progress. Double click to open project.`}
                                   initial={reduceMotion ? false : { opacity: 0, scale: 0.985 }}
                                   animate={{ opacity: 1, scale: 1 }}
                                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.985 }}
@@ -369,7 +372,7 @@ export function PrecisionMedia({
             </main>
             )}
             inspector={(
-            <aside className="min-h-[360px] min-w-0 overflow-auto p-4" aria-label="Selected package details">
+            <aside className="min-h-[360px] min-w-0 overflow-auto bg-[var(--app-soft-panel)] p-4 lg:min-h-0" aria-label="Selected package details">
               <AnimatePresence mode="wait" initial={false}>
                 {selected ? (
                   <motion.div
@@ -380,7 +383,10 @@ export function PrecisionMedia({
                     transition={contentTransition}
                   >
                     <MediaPreview project={selected} value={progress(selected)} className="aspect-video w-full" reduceMotion={Boolean(reduceMotion)} large />
-                    <h2 className="mt-4 truncate text-sm font-semibold">{selected.title}</h2>
+                    <div className="mt-4 flex items-start justify-between gap-3">
+                    <h2 className="min-w-0 truncate text-sm font-semibold">{selected.title}</h2>
+                    <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--app-muted)]">{progress(selected)}%</span>
+                    </div>
                     <p className="mt-1 text-[11px] text-[var(--app-muted)]">{selected.client || selected.workType}</p>
                     <Badge variant="outline" className={cn("mt-3 h-5 rounded px-1.5 text-[10px]", statusTone(selected.status))}>{selected.status}</Badge>
                     <div className="mt-4 space-y-3 border-t border-[var(--app-border)] pt-4">

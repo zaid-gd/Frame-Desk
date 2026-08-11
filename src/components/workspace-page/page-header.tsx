@@ -21,18 +21,18 @@ export function PageHeader({
     <header
       data-slot="page-header"
       className={cn(
-        "flex min-w-0 flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between",
+        "flex min-w-0 flex-col gap-5 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between",
         className,
       )}
       {...props}
     >
       <div className="min-w-0">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
             {eyebrow}
           </div>
         ) : null}
-        <h1 className="text-2xl font-semibold leading-tight tracking-[-0.025em] text-foreground">
+        <h1 className="text-[1.7rem] font-semibold leading-tight tracking-[-0.035em] text-foreground sm:text-3xl">
           {title}
         </h1>
         {description ? (

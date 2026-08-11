@@ -1089,7 +1089,7 @@ function AccountSettingsPage() {
   const { isSignedIn, isLoaded, openSignIn, openSignUp } = useOptionalAuth();
 
   return (
-    <WorkspacePage family="administration">
+    <WorkspacePage family="administration" className="[&_[data-slot=content-section]]:shadow-[var(--app-shadow-1)]">
       <PageHeader
         eyebrow="Workspace / Account"
         title="Account Settings"
@@ -1108,13 +1108,13 @@ function AccountSettingsPage() {
           />
         }
       />
-      <PageContent data-family-region="account-administration">
+      <PageContent data-family-region="account-administration" className="space-y-5">
         <MetricStrip columns={2}>
           <MetricItem label="Private account" value={isLoaded ? (isSignedIn ? "Connected" : "Local") : "Loading"} supporting="Login, security, and provider controls" />
           <MetricItem label="Public profile" value={isSignedIn ? "Ready" : "Locked"} supporting="The profile clients and collaborators can see" />
         </MetricStrip>
 
-        <ContentSection title="Private account" description="Authentication and account controls stay inside this signed-in area." bodyMode="flush">
+        <ContentSection title="Private account" description="Authentication and account controls stay inside this signed-in area." bodyMode="flush" className="scroll-mt-6">
           {!isLoaded ? (
             <div role="status" className="grid min-h-[220px] place-items-center p-6">
               <div className="flex flex-col items-center gap-3 text-sm text-[var(--app-muted)]">
@@ -1140,7 +1140,7 @@ function AccountSettingsPage() {
               )}
             </div>
           ) : (
-            <div className="p-2.5 md:p-3.5">
+            <div className="max-h-[min(720px,calc(100dvh-13rem))] overflow-y-auto p-2.5 overscroll-contain md:p-3.5">
               <div className="[&_.cl-card]:shadow-none [&_.cl-cardBox]:w-full [&_.cl-cardBox]:rounded-lg [&_.cl-cardBox]:border [&_.cl-cardBox]:border-[var(--app-border)] [&_.cl-cardBox]:bg-[var(--app-soft-panel)] [&_.cl-cardBox]:shadow-none [&_.cl-navbar]:border-[var(--app-border)] [&_.cl-pageScrollBox]:py-1 [&_.cl-rootBox]:w-full">
                 <UserProfile routing="hash" />
               </div>
@@ -1149,7 +1149,7 @@ function AccountSettingsPage() {
         </ContentSection>
 
         <ContentSection title="Public profile" description="Keep the profile you share with clients separate from private authentication settings.">
-          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="flex flex-col justify-between gap-4 rounded-lg border border-border bg-muted/20 p-4 sm:flex-row sm:items-center">
             <div>
               <p className="text-sm font-semibold">Profile visibility and presentation</p>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -1454,7 +1454,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
       }
       />
 
-      <PageContent>
+      <PageContent className="space-y-5">
       <MetricStrip columns={3}>
         <MetricItem
           label="Resources"
@@ -1483,7 +1483,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
               value={resourceSearch}
               onChange={(event) => setResourceSearch(event.target.value)}
               placeholder="Search resources, links, or projects..."
-              className="h-10 bg-[var(--app-control)] pl-9"
+              className="h-10 bg-[var(--app-control)] pl-9 shadow-none"
             />
           </div>
         }
@@ -1512,7 +1512,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
       >
         <div className="divide-y divide-border">
           {visibleResources.length ? visibleResources.map((resource) => (
-            <article key={resource.id} className="grid items-center gap-4 px-4 py-4 transition-colors hover:bg-[var(--app-soft-panel)] lg:grid-cols-[minmax(0,1.4fr)_160px_minmax(0,1fr)_140px]">
+            <article key={resource.id} className="grid items-start gap-4 px-4 py-4 transition-colors hover:bg-[var(--app-soft-panel)] focus-within:bg-[var(--app-soft-panel)] lg:grid-cols-[minmax(0,1.4fr)_160px_minmax(0,1fr)_140px]">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="grid size-9 shrink-0 place-items-center rounded-md border border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-accent)]" aria-hidden="true">
                   <Link2 className="size-4" />
@@ -1526,11 +1526,11 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
                   {resource.notes ? <p className="mt-1 text-xs leading-relaxed text-[var(--app-muted)]">{resource.notes}</p> : null}
                 </div>
               </div>
-              <p className="text-sm">{resource.projectId ? projectName(resource.projectId) || "Linked project" : "General"}</p>
+              <p className="text-sm text-muted-foreground lg:text-foreground">{resource.projectId ? projectName(resource.projectId) || "Linked project" : "General"}</p>
               <time className="truncate text-xs text-[var(--app-muted)]" dateTime={resource.updatedAt || resource.createdAt}>
                 Updated {formatDate((resource.updatedAt || resource.createdAt).slice(0, 10))}
               </time>
-              <div className="flex gap-1 lg:justify-end">
+              <div className="flex gap-1 lg:justify-end" aria-label={`${resource.title} actions`}>
                 <OwnedButton
                   type="button"
                   variant="ghost"
@@ -1576,7 +1576,7 @@ function ResourcesDesignPage({ resources, projects, setResources, notify }: { re
       </PageContent>
 
       <OwnedDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <OwnedDialogContent className="sm:max-w-xl">
+        <OwnedDialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-xl">
           <OwnedDialogHeader>
             <OwnedDialogTitle>{editingId ? "Edit Resource" : "New Resource"}</OwnedDialogTitle>
             <OwnedDialogDescription>Save a labeled link and optionally attach it to a project.</OwnedDialogDescription>
@@ -1785,7 +1785,7 @@ function TemplatesDesignPage({
         </div>
       }
       />
-      <PageContent>
+      <PageContent className="space-y-5">
       <ContentSection
         title="Template library"
         metadata={<OwnedBadge variant="secondary">{templates.length} templates</OwnedBadge>}
@@ -1796,7 +1796,7 @@ function TemplatesDesignPage({
           <article
             key={template.id}
             data-slot="template-card"
-            className="group flex min-h-[250px] flex-col justify-between rounded-lg border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-4 text-foreground transition-[background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)]"
+            className="group flex min-h-[250px] flex-col justify-between rounded-xl border border-[var(--app-border)] bg-[var(--app-soft-panel)] p-4 text-foreground shadow-[var(--app-shadow-1)] transition-[background-color,border-color,transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-[var(--app-strong-border)] hover:bg-[var(--app-hover)] hover:shadow-[var(--app-shadow-2)] focus-within:border-[var(--app-accent)]"
           >
             <div>
               <header className="flex items-start justify-between gap-4">
@@ -1830,10 +1830,10 @@ function TemplatesDesignPage({
                   <h3 className="text-xs font-semibold text-muted-foreground">Workflow preview</h3>
                   <span className="font-mono text-[10px] text-[var(--app-muted)]">{template.workflowStages.length} stages</span>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label={`${template.name} workflow stages`}>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label={`${template.name} workflow stages`} role="list">
                   {(template.workflowStages.length ? template.workflowStages : ["Add stages after creating the project"]).slice(0, 4).map((stage, index) => (
                     <span key={`${template.id}-${stage}-${index}`} className="inline-flex items-center gap-1.5">
-                      <span className="rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2 py-1 text-[11px] text-foreground">{stage}</span>
+                      <span role="listitem" className="rounded-md border border-[var(--app-border)] bg-[var(--app-panel)] px-2 py-1 text-[11px] text-foreground">{stage}</span>
                       {index < Math.min(template.workflowStages.length, 4) - 1 ? <span aria-hidden="true" className="text-[var(--app-muted)]">→</span> : null}
                     </span>
                   ))}
@@ -1887,7 +1887,7 @@ function TemplatesDesignPage({
       </PageContent>
 
       <OwnedDialog open={builderOpen} onOpenChange={setBuilderOpen}>
-        <OwnedDialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
+        <OwnedDialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto sm:max-w-3xl">
           <OwnedDialogHeader>
             <OwnedDialogTitle>{templateForm.id ? "Edit Custom Template" : "New Custom Template"}</OwnedDialogTitle>
             <OwnedDialogDescription>
@@ -2085,7 +2085,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
       title="Team"
       description="Manage members, shared project comments, notifications, and workspace activity."
       />
-      <PageContent>
+      <PageContent className="space-y-5">
       <MetricStrip columns={4}>
         {[
           {
@@ -2117,18 +2117,18 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
       </MetricStrip>
 
       {teamError ? (
-        <div role="alert" className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive">
+        <div role="alert" className="rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive shadow-sm">
           {teamError}
         </div>
       ) : null}
 
       {!isUserLoaded ? (
-        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
+          <ContentSection bodyClassName="flex min-h-28 items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Checking account status...
         </ContentSection>
       ) : !isSignedIn ? (
-        <ContentSection title="Team access" description="Shared workspaces keep members, project comments, notifications, activity, and chat in sync.">
+        <ContentSection title="Team access" description="Shared workspaces keep members, project comments, notifications, activity, and chat in sync." className="shadow-[var(--app-shadow-1)]">
           <div className="max-w-3xl">
             <h2 className="text-xl font-semibold leading-tight md:text-2xl">Team workspaces require an account</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
@@ -2141,19 +2141,19 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
           </div>
         </ContentSection>
       ) : isConvexAuthLoading ? (
-        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
+        <ContentSection bodyClassName="flex min-h-28 items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Connecting your account to Team sync...
         </ContentSection>
       ) : !isConvexAuthenticated ? (
-        <ContentSection role="alert" className="border-destructive/50 bg-destructive/10 text-destructive" bodyClassName="p-6 md:p-8">
+        <ContentSection role="alert" className="border-destructive/50 bg-destructive/10 text-destructive" bodyClassName="p-6 shadow-sm md:p-8">
           <h2 className="text-xl font-semibold">Team sync is not connected</h2>
           <p className="mt-2 text-sm leading-relaxed">
             Clerk sign-in is loaded, but Convex did not receive an authenticated token. Check `convex/auth.config.ts`, the Clerk JWT template audience, and the Clerk issuer environment variables before running the two-account Team smoke test.
           </p>
         </ContentSection>
       ) : teamData === undefined ? (
-        <ContentSection bodyClassName="flex items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
+        <ContentSection bodyClassName="flex min-h-28 items-center gap-3 p-6 text-sm text-[var(--app-muted)]" role="status">
           <LoaderCircle aria-hidden="true" className="size-5 animate-spin text-primary" />
           Loading team workspace...
         </ContentSection>
@@ -2234,7 +2234,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
               bodyMode="flush"
             >
 
-              <div className="divide-y divide-[var(--app-border)]">
+              <div className="max-h-[min(560px,calc(100dvh-21rem))] divide-y divide-[var(--app-border)] overflow-y-auto overscroll-contain">
                 {teamData.members.map((member) => (
                   <article key={member._id} className="flex flex-col justify-between gap-3 p-4 md:flex-row md:items-center">
                     <div className="min-w-0">
@@ -2334,7 +2334,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                     <p className="text-sm font-semibold">{selectedProject.title}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{selectedProject.client || "No client"} · {selectedProject.status} · Due {formatDate(selectedProject.dueDate, settings.dateFormat)}</p>
                   </div>
-                  <div className="grid max-h-[270px] gap-3 overflow-y-auto" aria-live="polite">
+                  <div className="grid max-h-[min(320px,40dvh)] gap-3 overflow-y-auto overscroll-contain" aria-live="polite">
                     {projectComments === undefined ? (
                       <p className="text-sm text-muted-foreground">Loading comments...</p>
                     ) : projectComments.length ? projectComments.map((comment) => (
@@ -2407,7 +2407,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                   Mark all read
                 </OwnedButton>
               ) : null}
-              bodyClassName="grid gap-2"
+              bodyClassName="grid max-h-[min(460px,50dvh)] gap-2 overflow-y-auto overscroll-contain"
             >
                 {teamData.notifications.length ? teamData.notifications.map((notification) => (
                   <article key={notification._id} className={notification.read ? "flex justify-between gap-3 rounded-md border border-[var(--app-border)] p-3" : "flex justify-between gap-3 rounded-md border border-[var(--app-accent)] bg-[var(--app-active)] p-3"}>
@@ -2445,7 +2445,7 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
             <ContentSection
               title="Activity Feed"
               description="Workspace creation, invites, comments, and project updates."
-              bodyClassName="grid gap-2"
+              bodyClassName="grid max-h-[min(460px,50dvh)] gap-2 overflow-y-auto overscroll-contain"
             >
                 {teamData.activity.length ? teamData.activity.map((activity) => (
                   <article key={activity._id} className="rounded-md border-l-2 border-[var(--app-accent)] bg-[var(--app-soft-panel)] p-3">
@@ -2513,12 +2513,12 @@ function TeamChatPage() {
       title="Team Chat"
       description="Quick handoffs, production updates, and Manage Team access for your current workspace."
       />
-      <PageContent mode="fill">
+      <PageContent mode="fill" className="min-h-0">
       <FillViewport
         bodyLabel="Team chat workspace"
-        bodyClassName="overflow-auto lg:overflow-hidden"
+        bodyClassName="overflow-auto rounded-xl border border-border bg-card shadow-[var(--app-shadow-1)] lg:overflow-hidden"
         header={chatReady && teamData ? (
-          <div data-slot="conversation-header" className="flex flex-col justify-between gap-2 border-b border-[var(--app-border)] bg-[var(--app-panel)] px-4 py-4 sm:flex-row sm:items-center">
+          <div data-slot="conversation-header" className="flex flex-col justify-between gap-3 border-b border-[var(--app-border)] bg-[var(--app-panel)] px-4 py-4 sm:flex-row sm:items-center sm:px-5">
             <div>
               <h2 className="text-lg font-semibold">{teamData.workspace.name}</h2>
               <p className="mt-1 text-xs text-[var(--app-muted)]">{teamData.members.filter((member) => member.status === "active").length} active members · Use @name to notify someone</p>
@@ -2529,7 +2529,7 @@ function TeamChatPage() {
         footer={chatReady && teamData ? (
           <form
             data-slot="conversation-composer"
-            className="border-t border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3"
+            className="border-t border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 sm:p-4"
             onSubmit={(event) => {
               event.preventDefault();
               void submitMessage();
@@ -2569,39 +2569,39 @@ function TeamChatPage() {
         ) : undefined}
       >
       {!isUserLoaded ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[var(--app-shadow-1)]">
           <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
             Checking account status...
           </div>
         </section>
       ) : !isSignedIn ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[var(--app-shadow-1)]">
           <h2 className="text-xl font-semibold">Sign in to open Team Chat</h2>
           <p className="mt-2 text-sm text-muted-foreground">Chat is tied to your authenticated team workspace and is not available in local mode.</p>
           <OwnedButton type="button" className="mt-5" onClick={() => openSignIn()}>Sign In</OwnedButton>
         </section>
       ) : isConvexAuthLoading ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[var(--app-shadow-1)]">
           <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
             Connecting Team Chat...
           </div>
         </section>
       ) : !isConvexAuthenticated ? (
-        <section role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-6 text-destructive shadow-sm">
+        <section role="alert" className="rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-destructive shadow-sm">
           <h2 className="text-lg font-semibold">Team Chat is not connected</h2>
           <p className="mt-2 text-sm">Convex has not received your Clerk session. Sign out and back in, then retry.</p>
         </section>
       ) : teamData === undefined ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[var(--app-shadow-1)]">
           <div role="status" className="flex items-center gap-3 text-sm text-muted-foreground">
             <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
             Loading messages...
           </div>
         </section>
       ) : !teamData ? (
-        <section className="grid min-h-72 place-items-center rounded-lg border border-border bg-card p-6 text-center text-card-foreground shadow-sm">
+        <section className="grid min-h-72 place-items-center rounded-xl border border-border bg-card p-6 text-center text-card-foreground shadow-[var(--app-shadow-1)]">
           <div className="max-w-md">
             <Users className="mx-auto size-8 text-muted-foreground" aria-hidden="true" />
             <h2 className="mt-4 text-lg font-semibold">No team workspace yet</h2>
@@ -2609,13 +2609,13 @@ function TeamChatPage() {
           </div>
         </section>
       ) : !canUseChat ? (
-        <section className="rounded-lg border border-border bg-card p-6 text-card-foreground shadow-sm">
+        <section className="rounded-xl border border-border bg-card p-6 text-card-foreground shadow-[var(--app-shadow-1)]">
           <h2 className="text-xl font-semibold">Chat unavailable for your role</h2>
           <p className="mt-2 text-sm text-muted-foreground">Your current role can access the workspace but does not have permission to view or send chat messages.</p>
         </section>
       ) : (
         <div data-slot="conversation-history" className="min-h-full bg-[var(--app-panel)]">
-          <ol aria-label="Team chat messages" className="flex min-h-full flex-col gap-3 px-3 py-4 md:px-4">
+          <ol aria-label="Team chat messages" className="flex min-h-full flex-col gap-3 px-3 py-5 md:px-5">
             {teamData.chat.length ? teamData.chat.map((chatMessage) => {
               const isOwnMessage = chatMessage.authorUserId === teamData.currentMember.userId;
               return (
@@ -2753,7 +2753,7 @@ function IntegrationsDesignPage({
       title="Integrations"
       description="Manage local service records and save external links for your workspace and individual projects."
       />
-      <PageContent>
+      <PageContent className="space-y-5">
         <PageToolbar
           data-family-toolbar="integrations"
           primary={
@@ -2764,7 +2764,7 @@ function IntegrationsDesignPage({
                 value={integrationSearch}
                 onChange={(event) => setIntegrationSearch(event.target.value)}
                 placeholder="Search services and project links..."
-                className="h-10 bg-[var(--app-control)] pl-9"
+                className="h-10 bg-[var(--app-control)] pl-9 shadow-none"
               />
             </div>
           }
@@ -2792,13 +2792,13 @@ function IntegrationsDesignPage({
           }
         >
 
-          <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
+          <ul className="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border shadow-[var(--app-shadow-1)]">
             {visibleIntegrationNames.map((name) => {
               const config = settings.integrationConfigs[name] ?? emptyIntegrationConfig;
               const connected = Boolean(settings.integrations[name] || config.connected);
               const account = config.account || settings.integrationAccounts[name];
               return (
-                <li key={name} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] sm:flex-row sm:items-center">
+                <li key={name} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] focus-within:bg-[var(--app-hover)] sm:flex-row sm:items-center">
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       aria-hidden="true"
@@ -2884,9 +2884,9 @@ function IntegrationsDesignPage({
           }
         >
           {visibleProjectLinks.length ? (
-            <ul className="mt-4 divide-y divide-border overflow-hidden rounded-lg border border-border">
+            <ul className="mt-4 divide-y divide-border overflow-hidden rounded-xl border border-border shadow-[var(--app-shadow-1)]">
               {visibleProjectLinks.map((project) => (
-                <li key={project.id} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] md:flex-row md:items-center">
+                <li key={project.id} className="flex flex-col justify-between gap-3 bg-[var(--app-soft-panel)] p-4 transition-colors hover:bg-[var(--app-hover)] focus-within:bg-[var(--app-hover)] md:flex-row md:items-center">
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold">{project.title}</h3>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -3321,8 +3321,8 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
         </div>
       }
       />
-      <PageContent mode="fill">
-      <PageToolbar className="lg:hidden">
+      <PageContent mode="fill" className="min-h-0">
+      <PageToolbar className="lg:hidden" data-family-toolbar="settings">
         <OwnedSelect value={activeSection} onValueChange={(value) => setActiveSection(value as typeof activeSection)}>
           <OwnedSelectTrigger aria-label="Choose settings section" className="w-full">
             <OwnedSelectValue />
@@ -3334,7 +3334,7 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
           </OwnedSelectContent>
         </OwnedSelect>
       </PageToolbar>
-      <FillViewport bodyLabel="Settings workspace" bodyClassName="overflow-visible lg:overflow-hidden">
+      <FillViewport bodyLabel="Settings workspace" bodyClassName="overflow-visible rounded-xl border border-border bg-muted/10 lg:overflow-hidden">
       <MasterDetail
         className="min-h-full lg:h-full lg:min-h-0 lg:overflow-hidden"
         master={(
@@ -3342,12 +3342,12 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
           aria-label="Settings sections"
           data-slot="settings-navigation"
           data-navigation-kind="icon-index"
-          className="hidden h-full overflow-hidden rounded-lg border bg-card text-card-foreground lg:flex lg:flex-col"
+          className="hidden h-full overflow-hidden rounded-xl border bg-card text-card-foreground shadow-[var(--app-shadow-1)] lg:flex lg:flex-col"
         >
           <div className="border-b border-border px-4 py-3">
           <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--app-accent)]">Settings index</p>
           </div>
-          <div className="grid flex-1 content-start gap-0.5 p-2">
+          <div className="grid flex-1 content-start gap-1 overflow-y-auto p-2 overscroll-contain">
             {settingsNavigation.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -3355,7 +3355,7 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
                 aria-current={activeSection === id ? "page" : undefined}
                 onClick={() => setActiveSection(id)}
                 className={cn(
-                  "flex min-h-9 items-center gap-3 rounded-md px-3 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "flex min-h-11 items-center gap-3 rounded-lg px-3 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   activeSection === id
                     ? "bg-[var(--app-active)] text-[var(--app-highlight)]"
                     : "text-muted-foreground hover:bg-accent hover:text-primary",
@@ -3373,7 +3373,7 @@ function SettingsDesignPage({ settings, setSettings, notify }: { settings: Setti
         <section
           aria-label={`${settingsNavigation.find((item) => item.id === activeSection)?.label} settings`}
           className={cn(
-            "grid min-h-0 min-w-0 content-start overflow-visible lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pr-1",
+            "grid min-h-0 min-w-0 content-start overflow-visible p-1 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pr-2",
             settings.density === "Compact" ? "gap-2" : "gap-3",
           )}
           tabIndex={0}
@@ -3626,7 +3626,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
       title="Organization Profile"
       description="Studio-level view for team ownership, delivery context, and active work."
       />
-      <PageContent>
+      <PageContent className="space-y-5">
       <MetricStrip columns={4} aria-label="Organization metrics">
         <MetricItem icon={<Building2 aria-hidden="true" />} label="Studio" value={settings.studioName} supporting="Local tracker" />
         <MetricItem icon={<Users aria-hidden="true" />} label="Team Members" value={String(settings.teamMembers.length)} supporting={`${Object.keys(membersByRole).length} active roles`} />
@@ -3637,14 +3637,14 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
       <SplitPane
         ratio="balanced"
         primary={(
-        <section aria-labelledby="organization-team-heading" className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+        <section aria-labelledby="organization-team-heading" className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)]">
           <div className="flex items-center gap-2">
             <Users className="size-5 text-primary" aria-hidden="true" />
             <h2 id="organization-team-heading" className="text-xl font-semibold tracking-tight">Team access</h2>
           </div>
           <p className="mt-1.5 text-[13px] text-muted-foreground">Members and permissions are stored locally for this team.</p>
           {settings.teamMembers.length ? (
-            <ul aria-label="Organization team members" className="mt-4 space-y-2.5">
+            <ul aria-label="Organization team members" className="mt-4 max-h-[min(460px,55dvh)] space-y-2.5 overflow-y-auto overscroll-contain pr-1">
               {settings.teamMembers.map((member) => (
                 <li key={member.id} className="grid grid-cols-[38px_minmax(0,1fr)_auto] items-center gap-3 rounded-md border border-border bg-muted/30 p-2.5">
                   <span aria-hidden="true" className="grid size-9 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -3668,7 +3668,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
         </section>
         )}
         secondary={(
-        <section aria-labelledby="organization-work-heading" className="rounded-lg border border-border bg-card p-5 text-card-foreground shadow-sm">
+        <section aria-labelledby="organization-work-heading" className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)]">
           <div className="flex items-center gap-2">
             <FolderKanban className="size-5 text-primary" aria-hidden="true" />
             <div>
@@ -3677,7 +3677,7 @@ function OrganizationProfilePage({ projects, settings, stats }: { projects: Work
             </div>
           </div>
           {activeProjects.length ? (
-            <ul aria-label="Active organization projects" className="mt-4 divide-y divide-border">
+            <ul aria-label="Active organization projects" className="mt-4 max-h-[min(460px,55dvh)] divide-y divide-border overflow-y-auto overscroll-contain pr-1">
               {activeProjects.map((project) => (
                 <li key={project.id} className="grid items-center gap-2 py-3 md:grid-cols-[minmax(0,1fr)_160px_130px] md:gap-4">
                   <span className="min-w-0">
@@ -3788,10 +3788,10 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
   }
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-[1480px] bg-background px-4 py-6 text-foreground md:px-8 xl:px-10">
-      <header className="flex flex-col items-stretch justify-between gap-4 pb-5 sm:flex-row sm:items-center">
+    <div className="mx-auto min-h-dvh w-full max-w-[1480px] bg-background px-4 py-5 text-foreground md:px-8 md:py-7 xl:px-10">
+      <header className="flex flex-col items-stretch justify-between gap-4 border-b border-border pb-5 sm:flex-row sm:items-center">
         <CutLabLockup compact subtitle="Video editing tracker" />
-        <OwnedButton type="button" variant="outline" onClick={shareProfile}>
+        <OwnedButton type="button" variant="outline" className="min-h-10" onClick={shareProfile}>
           <Share2 aria-hidden="true" />
           {shareCopied ? "Published + Copied" : "Share Profile"}
         </OwnedButton>
@@ -3806,8 +3806,8 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
         </p>
       ) : null}
 
-      <main className="mt-5 border-t">
-        <section aria-labelledby="public-profile-name" className="grid items-center gap-8 py-8 md:py-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.8fr)] lg:gap-14">
+      <main className="mt-5">
+        <section aria-labelledby="public-profile-name" className="grid items-center gap-8 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)] md:p-8 lg:grid-cols-[minmax(0,1.3fr)_minmax(420px,0.8fr)] lg:gap-14">
           <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center">
             <PublicProfileAvatar settings={settings} size={128} fontSize={36} />
             <div>
@@ -3821,14 +3821,14 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
               </div>
             </div>
           </div>
-          <dl className="grid grid-cols-3 divide-x divide-border border-y py-4">
+          <dl className="grid grid-cols-3 divide-x divide-border rounded-xl border bg-muted/20 py-4">
             <ProfileMetric icon={<Play />} label="Active" sublabel="projects" value={String(publicActiveProjects)} />
             <ProfileMetric icon={<CircleCheckBig />} label="Delivered" sublabel="edits" value={String(publicDeliveredEdits)} />
             <ProfileMetric icon={<Clock3 />} label="Turnaround" sublabel="average" value={`${currentTurnaround}d`} />
           </dl>
         </section>
 
-        <section aria-labelledby="recent-work-heading" className="grid items-start gap-6 border-t py-8 md:py-10 xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-12">
+        <section aria-labelledby="recent-work-heading" className="mt-5 grid items-start gap-6 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)] md:p-8 xl:grid-cols-[240px_minmax(0,1fr)] xl:gap-12">
           <div className="xl:sticky xl:top-6">
             <h2 id="recent-work-heading" className="text-2xl font-semibold leading-tight tracking-[-0.025em]">Recent work</h2>
             <p className="mt-2 max-w-[230px] text-[13px] leading-relaxed text-muted-foreground">Recent delivery history and near-term work from the tracker.</p>
@@ -3837,7 +3837,7 @@ function ProfileDesignPage({ projects, stats, settings }: { projects: WorkItem[]
             <ol className="relative md:pl-6" aria-label="Recent project timeline">
               <span aria-hidden="true" className="absolute bottom-3 left-2 top-3 hidden w-0.5 rounded-full bg-border md:block" />
               {timeline.map((project) => (
-                <li key={project.id} className="relative grid items-start gap-3 border-b py-5 md:grid-cols-[120px_minmax(0,1fr)_130px] md:gap-5">
+                <li key={project.id} className="relative grid items-start gap-3 border-b py-5 last:border-b-0 md:grid-cols-[120px_minmax(0,1fr)_130px] md:gap-5">
                   <span
                     aria-hidden="true"
                     className="absolute left-[-24px] top-[22px] hidden size-3.5 rounded-full border-[3px] border-card ring-1 ring-border md:block"
@@ -3898,10 +3898,10 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
         description="Update the identity shown on your public profile."
       />
 
-      <PageContent>
+      <PageContent className="space-y-5">
       <MasterDetail
         master={(
-        <aside aria-label="Profile photo">
+        <aside aria-label="Profile photo" className="rounded-xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)] sm:p-6">
           <div className="grid place-items-center">
             <ProfileEditAvatar settings={settings} />
           </div>
@@ -3912,8 +3912,8 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
             accept="image/*"
             onChange={uploadProfileImage}
           />
-          <div className="mt-4 flex justify-center gap-2">
-            <OwnedButton type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <OwnedButton type="button" variant="outline" className="min-h-10" onClick={() => fileInputRef.current?.click()}>
               <Upload aria-hidden="true" />
               Upload Photo
             </OwnedButton>
@@ -3933,7 +3933,7 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
         </aside>
         )}
         detail={(
-        <div className="grid gap-4">
+        <div className="grid gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-[var(--app-shadow-1)] sm:p-6">
           <div className="grid gap-3 sm:grid-cols-2">
             <FieldLayout label="Profile Name">
               <OwnedInput
@@ -3990,6 +3990,7 @@ function ProfileEditPage({ settings, setSettings }: { settings: SettingsState; s
           <ContentSection
             title="Public Profile Stats"
             description="These are portfolio-facing numbers. They do not need to match your private tracker totals."
+            className="shadow-none"
           >
             <div className="grid gap-3 sm:grid-cols-3">
               <FieldLayout label="Active Projects">
@@ -4227,8 +4228,8 @@ function SettingsPanel({ id, title, subtitle, children }: { id?: string; title: 
         id={id}
         title={title}
         description={subtitle}
-        className="scroll-mt-[76px]"
-        bodyClassName="grid min-w-0 gap-3.5"
+        className="scroll-mt-[76px] shadow-[var(--app-shadow-1)]"
+        bodyClassName="grid min-w-0 gap-3.5 p-4 sm:p-5"
       >
         {children}
       </ContentSection>

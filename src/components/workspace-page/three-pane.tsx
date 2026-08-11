@@ -23,7 +23,7 @@ export function ThreePane({
       data-density={density}
       className={cn(
         "grid min-h-0 min-w-0",
-        density === "default" && "gap-4 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]",
+        density === "default" && "gap-5 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]",
         density === "compact" && "gap-0 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_300px]",
         className,
       )}
