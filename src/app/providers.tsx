@@ -38,6 +38,15 @@ const clerkAppearance = {
   },
 };
 
+const clerkLocalization = {
+  signIn: {
+    start: {
+      title: "Sign in to Frame Desk",
+      titleCombined: "Sign in to Frame Desk",
+    },
+  },
+};
+
 export function Providers({ children, clerkPublishableKey, convexUrl }: ProvidersProps) {
   const hasConvexConfig = Boolean(convexUrl);
   const hasClerkConfig = Boolean(clerkPublishableKey);
@@ -78,7 +87,11 @@ export function Providers({ children, clerkPublishableKey, convexUrl }: Provider
   }
 
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} appearance={clerkAppearance}>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      appearance={clerkAppearance}
+      localization={clerkLocalization}
+    >
       <ClerkAuthBridge>
         {hasConvexConfig ? (
           <ConvexProviderWithClerk client={convex} useAuth={useAuth}>

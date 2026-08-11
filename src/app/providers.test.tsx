@@ -3,8 +3,22 @@ import { describe, expect, test, vi } from "vitest";
 import { Providers } from "./providers";
 
 vi.mock("@clerk/nextjs", () => ({
-  ClerkProvider: ({ children, publishableKey }: { children: React.ReactNode; publishableKey: string }) => (
-    <div data-provider="clerk" data-publishable-key={publishableKey}>{children}</div>
+  ClerkProvider: ({
+    children,
+    localization,
+    publishableKey,
+  }: {
+    children: React.ReactNode;
+    localization: { signIn: { start: { title: string } } };
+    publishableKey: string;
+  }) => (
+    <div
+      data-provider="clerk"
+      data-publishable-key={publishableKey}
+      data-sign-in-title={localization.signIn.start.title}
+    >
+      {children}
+    </div>
   ),
   useAuth: () => ({
     isLoaded: true,
@@ -66,6 +80,7 @@ describe("Providers runtime configuration", () => {
     );
 
     expect(html).toContain('data-provider="clerk"');
+    expect(html).toContain('data-sign-in-title="Sign in to Frame Desk"');
     expect(html).toContain('data-provider="convex-clerk"');
     expect(html).toContain('data-auth-enabled="true"');
     expect(html).toContain('data-data-mode="cloud"');
