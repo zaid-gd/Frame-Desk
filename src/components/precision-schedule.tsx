@@ -13,6 +13,7 @@ import { motion } from "motion/react";
 import { useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusColor, projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,22 +40,6 @@ function formatDate(value: string, format: Intl.DateTimeFormatOptions = { month:
 
 function isDelivered(project: WorkItem) {
   return project.status === "Delivered";
-}
-
-function statusColor(status: WorkItem["status"]) {
-  if (status === "Delivered") return "#2d9b63";
-  if (status === "Review" || status === "Revision" || status === "Client Review") return "#cc7a16";
-  if (status === "Cancelled") return "#d14343";
-  if (status === "In Progress") return "#3478f6";
-  return "#7f8898";
-}
-
-function statusTone(status: WorkItem["status"]) {
-  if (status === "Delivered") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
-  if (status === "Review" || status === "Revision" || status === "Client Review") return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300";
-  if (status === "Cancelled") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300";
-  if (status === "In Progress") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300";
-  return "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
 }
 
 function daysUntil(value: string) {
@@ -317,7 +302,7 @@ export function PrecisionCalendar({
                       <span className="block truncate text-sm font-semibold">{project?.title ?? "No scheduled delivery"}</span>
                       <span className="mt-0.5 block truncate text-xs text-[var(--app-muted)]">{project ? project.client || project.workType : "Open production time"}</span>
                     </span>
-                    {project ? <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge> : null}
+                    {project ? <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge> : null}
                   </button>
                 ))}
               </div>
@@ -341,7 +326,7 @@ export function PrecisionCalendar({
                       <p className="truncate text-sm font-semibold">{project.title}</p>
                       <p className="mt-1 truncate text-xs text-[var(--app-muted)]">{project.client || project.workType}</p>
                     </div>
-                    <Badge variant="outline" className={cn("h-5 shrink-0 rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
+                    <Badge variant="outline" className={cn("h-5 shrink-0 rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge>
                   </div>
                   <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--app-progress-track)]">
                     <div className="h-full rounded-full bg-[var(--app-highlight)]" style={{ width: `${projectProgress(project.status)}%` }} />
@@ -491,7 +476,7 @@ export function PrecisionTimeline({
                       className="relative grid w-full gap-3 px-4 py-4 text-left transition-colors hover:bg-[var(--app-hover)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-highlight)] sm:grid-cols-[120px_minmax(0,1fr)_120px_90px] sm:items-center"
                       onClick={() => onViewProject(project)}
                     >
-                      <span className="absolute -left-[31px] top-1/2 grid size-3 -translate-y-1/2 place-items-center rounded-full border-2 border-[var(--app-panel)]" style={{ background: statusColor(project.status) }} />
+                      <span className="absolute -left-[31px] top-1/2 grid size-3 -translate-y-1/2 place-items-center rounded-full border-2 border-[var(--app-panel)]" style={{ background: projectStatusColor(project.status) }} />
                       <span>
                         <span className="block text-[10px] font-semibold uppercase text-[var(--app-subtle)]">{isDelivered(project) ? "Delivered" : "Expected"}</span>
                         <span className="mt-1 block text-xs font-medium">{formatDate(project.dueDate, { month: "short", day: "numeric" })}</span>
@@ -500,7 +485,7 @@ export function PrecisionTimeline({
                         <span className="block truncate text-[13px] font-semibold">{project.title}</span>
                         <span className="mt-1 block truncate text-[11px] text-[var(--app-muted)]">{project.client || project.workType} · {project.notes || "No note"}</span>
                       </span>
-                      <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
+                      <Badge variant="outline" className={cn("h-5 w-fit rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge>
                       <span className="flex items-center justify-end gap-1 text-[10px] text-[var(--app-muted)]">
                         {isDelivered(project) ? <CheckCircle2 className="size-3.5 text-[var(--app-success)]" /> : <Clock3 className="size-3.5" />}
                         {isDelivered(project) ? "Complete" : daysUntil(project.dueDate) < 0 ? "Overdue" : `${Math.max(0, daysUntil(project.dueDate))}d`}

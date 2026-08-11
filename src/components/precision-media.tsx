@@ -14,16 +14,17 @@ import { AnimatePresence, LayoutGroup, motion, MotionConfig } from "motion/react
 import { useEffect, useMemo, useState } from "react";
 import type { WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   FillViewport,
+  MasterDetail,
   PageContent,
   PageHeader,
   PageToolbar,
-  ThreePane,
   WorkspacePage,
 } from "@/components/workspace-page";
 
@@ -40,15 +41,14 @@ function progress(project: WorkItem) {
   return 16;
 }
 
-function statusTone(status: WorkItem["status"]) {
-  if (status === "Delivered") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
-  if (["Review", "Revision", "Client Review"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300";
-  if (status === "In Progress") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300";
-  return "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-}
-
 function packageColor(project: WorkItem) {
-  const palette = ["#dce8f7", "#e8e4dc", "#dce9df", "#dde3eb", "#e7e9ec"];
+  const palette = [
+    "var(--media-package-1)",
+    "var(--media-package-2)",
+    "var(--media-package-3)",
+    "var(--media-package-4)",
+    "var(--media-package-5)",
+  ];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
@@ -109,8 +109,7 @@ export function PrecisionMedia({
         <PageContent mode="fill">
         <LayoutGroup id="media-workspace">
           <FillViewport bodyLabel="Media workspace" bodyClassName="overflow-auto lg:overflow-hidden">
-          <ThreePane
-            density="compact"
+          <MasterDetail
             className="h-full min-h-0 overflow-hidden rounded-lg border border-[var(--app-border)] bg-[var(--app-panel)]"
             master={(
             <aside className="min-h-0 overflow-auto border-b border-[var(--app-border)] bg-[var(--app-soft-panel)] p-3 lg:border-b-0 lg:border-r">
@@ -285,7 +284,7 @@ export function PrecisionMedia({
                                       />
                                     </span>
                                   </span>
-                                  <Badge variant="outline" className={cn("relative z-10 h-5 w-fit rounded px-1.5 text-[10px]", statusTone(project.status))}>{project.status}</Badge>
+                                  <Badge variant="outline" className={cn("relative z-10 h-5 w-fit rounded px-1.5 text-[10px]", projectStatusTone(project.status))}>{project.status}</Badge>
                                 </motion.button>
                               );
                             })}
@@ -388,7 +387,7 @@ export function PrecisionMedia({
                     <span className="shrink-0 text-xs font-semibold tabular-nums text-[var(--app-muted)]">{progress(selected)}%</span>
                     </div>
                     <p className="mt-1 text-[11px] text-[var(--app-muted)]">{selected.client || selected.workType}</p>
-                    <Badge variant="outline" className={cn("mt-3 h-5 rounded px-1.5 text-[10px]", statusTone(selected.status))}>{selected.status}</Badge>
+                    <Badge variant="outline" className={cn("mt-3 h-5 rounded px-1.5 text-[10px]", projectStatusTone(selected.status))}>{selected.status}</Badge>
                     <div className="mt-4 space-y-3 border-t border-[var(--app-border)] pt-4">
                       <Detail label="Package type" value={selected.workType} />
                       <Detail label="Project note" value={selected.notes || "No media notes yet"} />

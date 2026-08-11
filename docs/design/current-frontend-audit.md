@@ -68,7 +68,7 @@ All of these routes except profile currently enter `TrackerApp`, which supplies 
 ### Shared application components
 
 - `WorkspaceShell`: desktop sidebar, mobile sheet navigation, top bar, command dialog, account menu, notifications and new-project action.
-- `workspace-page`: `WorkspacePage`, `PageHeader`, `PageContent`, `PageToolbar`, `MetricStrip`, `ContentSection`, `DataTableFrame`, `SplitPane`, `ThreePane`, `MasterDetail`, `FillViewport`, and empty-state primitives.
+- `workspace-page`: `WorkspacePage`, `PageHeader`, `PageContent`, `PageToolbar`, `MetricStrip`, `ContentSection`, `DataTableFrame`, `SplitPane`, `MasterDetail`, `FillViewport`, and empty-state primitives.
 - Precision screen modules: dashboard, projects, schedule/timeline/calendar, media, clients/feedback/reports and workspace administration.
 - `TrackerApp`: cross-screen state, data hooks, permissions, project dialogs, detail/delete dialogs, settings context and route dispatch.
 - Brand helpers: `CutLabMark`, `CutLabLockup`, brand assets and empty-state assets.

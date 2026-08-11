@@ -34,6 +34,7 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { SettingsState, WorkItem } from "@/lib/types";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,16 +110,14 @@ function money(value: number, currency: string) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
-function statusTone(status: WorkItem["status"]) {
-  if (status === "Delivered") return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300";
-  if (["Review", "Revision", "Client Review"].includes(status)) return "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-300";
-  if (status === "In Progress") return "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-300";
-  if (status === "Cancelled") return "border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300";
-  return "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-}
-
 function projectColor(project: WorkItem) {
-  const palette = ["#dce8f7", "#e9e2d6", "#dce9df", "#e5e1ef", "#e8e8e8"];
+  const palette = [
+    "var(--media-package-1)",
+    "var(--media-package-2)",
+    "var(--media-package-3)",
+    "var(--media-package-4)",
+    "var(--media-package-5)",
+  ];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
@@ -160,7 +159,7 @@ function ProjectVideoThumbnail({
       style={{ background: projectColor(project) }}
     >
       <span className="absolute -right-3 top-1/2 h-[130%] w-[52%] -translate-y-1/2 rotate-12 bg-[var(--app-accent)] opacity-45" />
-      <span className="absolute inset-x-2 top-2 flex items-center justify-between text-slate-900/60 dark:text-white/80">
+      <span className="absolute inset-x-2 top-2 flex items-center justify-between text-[var(--app-thumb-icon)]">
         <Film className="size-3.5" />
         <span className="size-1.5 rounded-full bg-current opacity-60" />
       </span>
@@ -242,7 +241,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
     }),
     columnHelper.accessor("status", {
       header: "Status",
-      cell: (info) => <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(info.getValue()))}>{info.getValue()}</Badge>,
+      cell: (info) => <Badge variant="outline" className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(info.getValue()))}>{info.getValue()}</Badge>,
     }),
     columnHelper.display({
       id: "progress",
@@ -468,7 +467,7 @@ export function PrecisionProjects(props: PrecisionProjectsProps) {
                   </span>
                   <Badge
                     variant="outline"
-                    className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(row.original.status))}
+                    className={cn("h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(row.original.status))}
                   >
                     {row.original.status}
                   </Badge>
@@ -728,7 +727,7 @@ function ProjectInspector({
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-sm font-semibold">{project.title}</h2>
             <p className="mt-0.5 truncate text-[11px] text-[var(--app-muted)]">{project.client || "No client"}</p>
-            <Badge variant="outline" className={cn("mt-2 h-5 rounded px-1.5 text-[10px] font-semibold", statusTone(project.status))}>{project.status}</Badge>
+            <Badge variant="outline" className={cn("mt-2 h-5 rounded px-1.5 text-[10px] font-semibold", projectStatusTone(project.status))}>{project.status}</Badge>
           </div>
         </div>
       </div>

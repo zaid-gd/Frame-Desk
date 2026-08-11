@@ -11,7 +11,7 @@ Apply one content rail, header, toolbar, section, pane, fill-height, and overflo
 
 - Use existing `workspace-page` compositions and semantic variants.
 - Define gutters, bounded panel scroll, sticky toolbar, split-pane separator, and mobile collapse.
-- Add fixtures for index, master-detail, split, three-pane, and fill viewport.
+- Add fixtures for index, master-detail (with optional inspector), split, and fill viewport.
 
 ## Acceptance
 

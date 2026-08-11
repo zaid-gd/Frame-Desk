@@ -38,6 +38,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { SalaryBatch, WorkItem, SettingsState } from "@/lib/types";
 import type { ProjectStatus } from "@/lib/domain-values";
 import { useHydratedReducedMotion } from "@/lib/motion";
+import { projectStatusTone } from "@/lib/project-status-style";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -260,7 +261,13 @@ function relativeActivityTime(value: string) {
 }
 
 function projectColor(project: WorkItem) {
-  const palette = ["#E1F3FE", "#EDF3EC", "#FBF3DB", "#FDEBEC", "#F0EEE9"];
+  const palette = [
+    "var(--media-package-1)",
+    "var(--media-package-2)",
+    "var(--media-package-3)",
+    "var(--media-package-4)",
+    "var(--media-package-5)",
+  ];
   let hash = 0;
   for (const char of project.id || project.title) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return palette[hash % palette.length];
@@ -268,22 +275,12 @@ function projectColor(project: WorkItem) {
 
 /** Muted pastel status chips — scarce color, uppercase meta. */
 function StatusBadge({ status }: { status: WorkItem["status"] }) {
-  const tone = status === "Delivered"
-    ? "border-transparent bg-[#EDF3EC] text-[#346538] dark:bg-[var(--app-success-bg)] dark:text-[var(--app-success)]"
-    : status === "Review" || status === "Revision" || status === "Client Review"
-      ? "border-transparent bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
-      : status === "Cancelled"
-        ? "border-transparent bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
-        : status === "In Progress"
-          ? "border-transparent bg-[var(--app-active)] text-[var(--app-highlight)]"
-          : "border-[var(--app-border)] bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
-
   return (
     <Badge
       variant="outline"
       className={cn(
         "h-5 rounded-full border px-2 text-[10px] font-medium uppercase tracking-[0.05em]",
-        tone,
+        projectStatusTone(status),
       )}
     >
       {status}
@@ -294,9 +291,9 @@ function StatusBadge({ status }: { status: WorkItem["status"] }) {
 function PriorityBadge({ project }: { project: WorkItem }) {
   const priority = priorityFor(project);
   const tone = priority === "Urgent" || priority === "High"
-    ? "bg-[#FDEBEC] text-[#9F2F2D] dark:bg-[var(--app-danger-bg)] dark:text-[var(--app-danger)]"
+    ? "bg-[var(--status-danger-bg)] text-[var(--status-danger)]"
     : priority === "Medium"
-      ? "bg-[#FBF3DB] text-[#956400] dark:bg-[var(--app-warning-bg)] dark:text-[var(--app-warning)]"
+      ? "bg-[var(--status-warning-bg)] text-[var(--status-warning)]"
       : "bg-[var(--app-soft-panel)] text-[var(--app-muted)]";
   return (
     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em]", tone)}>

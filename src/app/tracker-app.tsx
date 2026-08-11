@@ -80,6 +80,7 @@ import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { SampleModeBar } from "@/components/sample-mode-bar";
 import { resolveOnboardingVariant, trackOnboardingEvent, type OnboardingVariant } from "@/lib/onboarding";
 import { cn } from "@/lib/utils";
+import { projectStatusTone } from "@/lib/project-status-style";
 import {
   AlertDialog as OwnedAlertDialog,
   AlertDialogAction as OwnedAlertDialogAction,
@@ -182,8 +183,8 @@ const headingFont = cutlab.font.heading;
 const defaultAccent = cutlab.color.teal;
 const accent = `var(--app-accent, ${cutlab.color.teal})`;
 const ink = `var(--app-ink, ${cutlab.color.softWhite})`;
-const muted = "var(--app-muted, #A5ADB4)";
-const border = "var(--app-border, #2A3138)";
+const muted = "var(--app-muted)";
+const border = "var(--app-border)";
 const panel = `var(--app-panel, ${cutlab.color.graphite})`;
 const canvas = `var(--app-canvas, ${cutlab.color.charcoal})`;
 const activeBg = "var(--app-active, rgba(45,140,151,0.18))";
@@ -329,10 +330,10 @@ const integrationIcons: Record<string, string> = {
 };
 
 const integrationColors: Record<string, string> = {
-  "Google Drive": "#4285f4",
-  Dropbox: "#0061ff",
-  Slack: "#4a154b",
-  "Frame.io": "#8b5cf6"
+  "Google Drive": "var(--brand-google-drive)",
+  Dropbox: "var(--brand-dropbox)",
+  Slack: "var(--brand-slack)",
+  "Frame.io": "var(--brand-frame-io)"
 };
 
 const defaultSettings: SettingsState = {
@@ -2243,7 +2244,12 @@ function TeamDesignPage({ projects, settings }: { projects: WorkItem[]; settings
                         <OwnedBadge variant="outline" className="rounded-md text-[10px]">{member.role}</OwnedBadge>
                         <OwnedBadge
                           variant="secondary"
-                          className={member.status === "active" ? "rounded-md bg-primary/15 text-primary" : "rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300"}
+                          className={cn(
+                            "rounded-md",
+                            member.status === "active"
+                              ? "bg-[var(--status-success-bg)] text-[var(--status-success)]"
+                              : "bg-[var(--status-warning-bg)] text-[var(--status-warning)]",
+                          )}
                         >
                           {member.status}
                         </OwnedBadge>
@@ -3232,7 +3238,14 @@ function IntegrationLinkManager({
 
 function SettingsDesignPage({ settings, setSettings, notify }: { settings: SettingsState; setSettings: (settings: SettingsState) => void; notify: (message: string, tone?: ToastState["tone"]) => void }) {
   const [activeSection, setActiveSection] = useState<"workspace" | "workflow" | "notifications" | "permissions" | "integrations" | "appearance" | "regional">("workspace");
-  const stageColors = [cutlab.color.teal, cutlab.color.cyan, cutlab.color.warning, cutlab.color.success, cutlab.color.steel, cutlab.color.error];
+  const stageColors = [
+    "var(--workflow-stage-1)",
+    "var(--workflow-stage-2)",
+    "var(--workflow-stage-3)",
+    "var(--workflow-stage-4)",
+    "var(--workflow-stage-5)",
+    "var(--workflow-stage-6)",
+  ];
   const stageIssues = projectStageIssues(settings.projectStages);
   const tagIssues = projectTagIssues(settings.projectTags);
   const rolePolicy = [
@@ -4341,7 +4354,13 @@ function projectTimelineColor(status: string) {
 }
 
 function profileThumbColor(index: number) {
-  return ["#d9e3e8", "#dfd5c7", "#eee7da", "#dce4dc", "#d6e1ed"][index % 5];
+  return [
+    "var(--decorative-thumb-1)",
+    "var(--decorative-thumb-2)",
+    "var(--decorative-thumb-3)",
+    "var(--decorative-thumb-4)",
+    "var(--decorative-thumb-5)",
+  ][index % 5];
 }function EmptyPanel({
   title,
   body,
@@ -4587,9 +4606,9 @@ function weekdayIndex(day: string) {
 }
 
 function statusPalette(status: string) {
-  if (isDoneStatus(status)) return { fg: "var(--app-success, #23B58E)", bg: "var(--app-success-bg, rgba(35,181,142,0.14))" };
-  if (status === "In Progress") return { fg: "var(--app-warning, #F5A623)", bg: "var(--app-warning-bg, rgba(245,166,35,0.14))" };
-  if (status === "Cancelled") return { fg: "var(--app-danger, #FF5B5B)", bg: "var(--app-danger-bg, rgba(255,91,91,0.14))" };
+  if (isDoneStatus(status)) return { fg: "var(--app-success)", bg: "var(--app-success-bg)" };
+  if (status === "In Progress") return { fg: "var(--app-warning)", bg: "var(--app-warning-bg)" };
+  if (status === "Cancelled") return { fg: "var(--app-danger)", bg: "var(--app-danger-bg)" };
   return { fg: accent, bg: activeBg };
 }
 
@@ -4895,14 +4914,7 @@ function ActivityFeedItem({ actor, message, detail, createdAt, last }: { actor: 
 }
 
 function ProjectStatusBadge({ status }: { status: string }) {
-  const tone = isDoneStatus(status)
-    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-    : status === "Cancelled"
-      ? "border-destructive/30 bg-destructive/10 text-destructive"
-      : status === "In Progress"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-        : "border-primary/30 bg-primary/10 text-primary";
-  return <OwnedBadge variant="outline" className={tone}>{status}</OwnedBadge>;
+  return <OwnedBadge variant="outline" className={projectStatusTone(isDoneStatus(status) ? "Delivered" : status)}>{status}</OwnedBadge>;
 }
 
 function ProjectFileManager({ project, canEdit }: { project: WorkItem; canEdit: boolean }) {
@@ -6692,7 +6704,7 @@ function themeVariables(settings: SettingsState) {
 
   return {
     isDark,
-    vars: cutlabThemeVariables(isDark, settings.accentColor || defaultAccent)
+    vars: cutlabThemeVariables(settings.accentColor || defaultAccent)
   };
 }
 

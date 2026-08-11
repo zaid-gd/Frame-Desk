@@ -16,7 +16,6 @@ import {
   PageHeader,
   PageToolbar,
   SplitPane,
-  ThreePane,
   WorkspacePage,
 } from "./index";
 
@@ -65,7 +64,7 @@ function FixturePanel({ dark = false }: { dark?: boolean }) {
             master={<div className="rounded-md bg-muted p-3 text-sm">Master</div>}
             detail={<div className="rounded-md bg-muted p-3 text-sm">Detail</div>}
           />
-          <ThreePane
+          <MasterDetail
             master={<div className="rounded-md bg-muted p-3 text-sm">Collection</div>}
             detail={<div className="rounded-md bg-muted p-3 text-sm">Preview</div>}
             inspector={<div className="rounded-md bg-muted p-3 text-sm">Inspector</div>}
