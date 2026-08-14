@@ -1,35 +1,39 @@
-# Frame Desk glossary
+# Relay glossary
 
 ## Product
 
-**Frame Desk** — A work hub for freelance video editors and small editing teams. Use this name for the app and product.
+**Relay** — A video-workflow workspace for freelance editors and small post-production teams. Relay replaces the CutLab Studio and Frame Desk product names in the rebuild. The current deployed product keeps its existing name and copy until the full rebuild ships.
 
-**Workspace** — The signed-in work area that groups projects, clients, files, schedules, reports, people, and settings. Do not use workspace as a synonym for a single project.
+**Workspace** — The signed-in or local work area that groups clients, projects, files, schedules, reports, people, and settings. The first release has one Workspace per account. A Workspace starts as a solo space and becomes a Team workspace when its Owner invites people. Do not use Workspace as a synonym for one Project.
 
-**Project** — A tracked editing job with a client, owner, status, dates, money, progress, files, and review work.
+**Client** — A durable record for the person or company that commissions Projects. A Client can hold contact details, Project history, Project Groups, money totals, and Client Portal links. A Client is not a Team Member unless the same person also has an internal role.
 
-**Client** — The person or company that commissions projects and may receive review or delivery access.
+**Project Group** — An optional set of related Projects for one Client, such as a retainer, campaign, or production run. Its progress, Project count, and money totals come from its Projects. A Project can belong to no more than one Project Group.
 
-**Team member** — A person who works inside the workspace. A client is not a team member unless the same person also has an internal role.
+**Project** — One tracked video job and one possible Salary Plan count. It belongs to one Client and can belong to one Project Group. It holds workflow, dates, money, assignments, Project Outputs, files, review work, and activity.
 
-**Review** — A feedback cycle tied to a project or media version. Use review for the whole cycle and comment for one note inside it.
+**Project Output** — One promised result inside a Project, such as a main video, short cut, thumbnail, captions, or document. It can hold several Media Versions. Project Outputs do not count as Projects for Salary Plans. Use Project Output instead of the old deliverable target, task, subtask, or template-checklist terms.
 
-**Media version** — One uploaded or linked version of a project file that people can review or deliver.
+**Media Version** — One uploaded or linked version of a Project Output. A Project Output has one current Media Version and can retain older versions and their Comments.
 
-**Resource** — A saved link or reference item used by the team. A media version is not a resource.
+**Workflow Template** — A reusable starting set for a Project. It can define workflow stages, starter Project Outputs, relative deadlines, roles, and Client Portal defaults. Relay copies it into a new Project, so later edits do not change existing Projects. Do not shorten this term to Template where the kind could be unclear.
 
-**Template** — A reusable starting set of project details and work items.
+**Salary Plan** — A solo contract rule tied to one Client. It sets how many delivered Projects form a batch and the full amount earned for that batch. Project Outputs do not add to its count, and partial progress has no partial money value.
 
-**Work item** — One unit of tracked work inside a project. Use task only in general UI copy where the shorter term helps.
+**Salary Batch** — An unchanging record created when a Salary Plan reaches its required number of delivered Projects. It stores the copied plan terms and counted Project identifiers. Later Project or Salary Plan changes do not rewrite a completed Salary Batch.
 
-**Client portal** — The client-facing, token-based area for review and delivery. It stays separate from the internal workspace.
+**Team Member** — A person who works inside the Workspace as an Owner, Editor, or Viewer. Client access stays in the Client Portal.
 
-**Public profile** — The public page that presents an editor or studio. It does not expose workspace data.
+**Review** — A feedback cycle for a Project Output. Use Review for the whole cycle and Comment for one note tied to the Media Version that received it.
+
+**Client Portal** — The Client-facing, token-based area for one Project's approved details and current shared Media Versions. It stays separate from the internal Workspace.
+
+**Resource** — A saved link or reference item used by the Team. A Media Version is not a Resource.
 
 ## Interface
 
-**App shell** — The shared sidebar, top bar, mobile navigation, and content frame around internal routes.
+**App Shell** — The shared sidebar, top bar, mobile navigation, and content frame around internal routes.
 
-**Page system** — The shared page headers, toolbars, sections, metric strips, tables, empty states, and pane layouts used inside the app shell.
+**Page System** — The shared page headers, toolbars, sections, metric strips, tables, empty states, and pane layouts used inside the App Shell.
 
 **Density** — The spacing and control-size setting for repeated work. It must change space without hiding features.
