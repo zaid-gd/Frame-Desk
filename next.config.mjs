@@ -2,6 +2,7 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = dirname(fileURLToPath(import.meta.url));
+const developmentEvalSource = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
 
 const contentSecurityPolicy = [
   "default-src 'self'",
@@ -12,7 +13,7 @@ const contentSecurityPolicy = [
   "frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
   "img-src 'self' data: blob: https:",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com",
+  `script-src 'self' 'unsafe-inline'${developmentEvalSource} https://*.clerk.accounts.dev https://*.clerk.com`,
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com",
   "worker-src 'self' blob:",

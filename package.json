@@ -19,6 +19,7 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "test:workspace-page": "vitest run --config vitest.workspace-page.config.ts",
+    "test:relay": "vitest run --config vitest.relay.config.ts",
     "test:cloudflare-auth": "vitest run --config vitest.providers.config.ts",
     "check:workspace-layout": "node scripts/check-workspace-layout.mjs",
     "check:mui-allowlist": "node scripts/check-mui-allowlist.mjs",
