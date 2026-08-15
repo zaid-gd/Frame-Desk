@@ -1,13 +1,7 @@
 import type { WorkspacePort, WorkspaceProject } from "../ports/workspace-port";
+import { isWorkspaceProject, MAX_RELAY_PROJECTS } from "../domain/workspace-project";
 
 export const RELAY_LOCAL_PROJECTS_KEY = "relay:local-projects:v1";
-
-function isWorkspaceProject(value: unknown): value is WorkspaceProject {
-  if (!value || typeof value !== "object") return false;
-  const project = value as Record<string, unknown>;
-  return ["name", "client", "stage", "due", "progress"].every((key) => typeof project[key] === "string")
-    && ["review", "delivered", "overdue", "planned"].includes(String(project.tone));
-}
 
 export function createLocalWorkspacePort(storage?: Pick<Storage, "getItem" | "setItem">): WorkspacePort {
   const browserStorage = () => storage ?? (typeof window === "undefined" ? undefined : window.localStorage);
@@ -17,7 +11,7 @@ export function createLocalWorkspacePort(storage?: Pick<Storage, "getItem" | "se
       if (!stored) return [];
       try {
         const projects: unknown = JSON.parse(stored);
-        return Array.isArray(projects) && projects.every(isWorkspaceProject) ? projects : [];
+        return Array.isArray(projects) && projects.length <= MAX_RELAY_PROJECTS && projects.every(isWorkspaceProject) ? projects : [];
       } catch {
         return [];
       }
@@ -26,6 +20,9 @@ export function createLocalWorkspacePort(storage?: Pick<Storage, "getItem" | "se
       const target = browserStorage();
       if (!target) return { ok: false, error: { kind: "unavailable", message: "Browser storage is unavailable, so Relay could not save this local draft." } };
       const projects = this.loadProjects();
+      if (projects.length >= MAX_RELAY_PROJECTS) {
+        return { ok: false, error: { kind: "unavailable", message: "Local Mode supports up to 500 projects so every Workspace can be backed up safely." } };
+      }
       const suffix = projects.length ? ` ${projects.length + 1}` : "";
       const draft: WorkspaceProject = { name: `Untitled local project${suffix}`, client: "No client", stage: "Planned", tone: "planned", due: "Not set", progress: "0%" };
       try {

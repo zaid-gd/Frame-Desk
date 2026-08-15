@@ -17,12 +17,14 @@ import {
   Plus,
   Search,
   Settings,
+  ShieldCheck,
   Sun,
   Users,
 } from "lucide-react";
 import type { EntryController, WorkspaceMode } from "../application/entry-controller";
 import type { RelaySection } from "../application/routes";
 import type { WorkspaceModel } from "../application/workspace-controller";
+import type { PreparedBackupView, WorkspaceBackupController } from "../application/workspace-backup-controller";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +56,7 @@ export type RelayExperienceProps = {
     identity?: { displayName: string; email: string; initials: string };
     storageWarning?: string;
     workspace: WorkspaceModel;
+    backup: WorkspaceBackupController;
   };
   onChooseMode(mode: "local" | "sample"): void;
   onStartAccount(action: "sign-up" | "sign-in"): void;
@@ -116,7 +119,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, mode, identity, storageWarning, workspace, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }> }) {
+function RelayShell({ section, mode, identity, storageWarning, workspace, backup, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }> }) {
   const [message, setMessage] = useState("");
   const readOnly = mode === "sample";
   const person = identity ?? workspace.fallbackIdentity;
@@ -172,12 +175,72 @@ function RelayShell({ section, mode, identity, storageWarning, workspace, collap
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             <PageHeader model={workspace.page} onNewProject={requestNewProject} />
-            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
       </div>
     </div>
+  );
+}
+
+function BackupSettings({ controller }: { controller: WorkspaceBackupController }) {
+  const [preview, setPreview] = useState<PreparedBackupView | null>(null);
+  const [notice, setNotice] = useState<{ kind: "error" | "success"; message: string } | null>(null);
+  const [working, setWorking] = useState(false);
+
+  async function chooseFile(file: File | undefined) {
+    setPreview(null);
+    setNotice(null);
+    if (!file) return;
+    if (!controller.actions) return;
+    const result = await controller.actions.previewFile(file);
+    if (result.ok) setPreview(result.prepared);
+    else setNotice({ kind: "error", message: result.error });
+  }
+
+  async function apply() {
+    if (!preview) return;
+    setWorking(true);
+    if (!controller.actions) return;
+    const result = await controller.actions.applyBackup(preview.backup);
+    setWorking(false);
+    setNotice({ kind: result.ok ? "success" : "error", message: result.message });
+    if (result.ok) {
+      setPreview(null);
+    }
+  }
+
+  if (!controller.model.available) {
+    return <section className={`${styles.card} ${styles.backupCard}`}><h2>{controller.model.title}</h2><p>{controller.model.description}</p></section>;
+  }
+
+  const model = controller.model;
+  return (
+    <section className={`${styles.card} ${styles.backupCard}`} aria-labelledby="backup-heading">
+      <div className={styles.backupIntro}>
+        <span className={styles.backupIcon}><ShieldCheck size={20} aria-hidden="true" /></span>
+        <div>
+          <p className={styles.eyebrow}>{model.eyebrow}</p>
+          <h2 id="backup-heading">{model.title}</h2>
+          <p>{model.description}</p>
+        </div>
+      </div>
+      {model.showExport ? <div className={styles.backupAction}><div><strong>{model.exportTitle}</strong><span>{model.exportDescription}</span></div><button type="button" className={styles.secondaryButton} onClick={() => { const result = controller.actions?.exportBackup(); if (result && !result.ok) setNotice({ kind: "error", message: result.error }); }}>{model.exportLabel}</button></div> : null}
+      <div className={styles.backupAction}>
+        <div><label htmlFor="relay-backup-file"><strong>{model.fileTitle}</strong></label><span>{model.fileDescription}</span></div>
+        <input id="relay-backup-file" className={styles.fileInput} type="file" accept=".json,application/json" onChange={(event) => void chooseFile(event.currentTarget.files?.[0])} />
+      </div>
+      <div className={styles.backupStatus} aria-live="polite" aria-atomic="true">
+        {preview ? (
+          <div className={styles.preview}>
+            <div><strong>{model.applyLead}</strong><span>{preview.fileName} · {preview.recordSummary}</span></div>
+            <button type="button" className={styles.primaryButton} disabled={working} onClick={() => void apply()}>{working ? "Working…" : model.applyLabel}</button>
+          </div>
+        ) : null}
+        {notice ? <p className={notice.kind === "error" ? styles.errorNotice : styles.successNotice} role={notice.kind === "error" ? "alert" : "status"}>{notice.message}</p> : null}
+      </div>
+    </section>
   );
 }
 

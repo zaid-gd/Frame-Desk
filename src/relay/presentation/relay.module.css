@@ -37,6 +37,23 @@
   outline-offset: 3px;
 }
 
+.backupCard { display: grid; gap: 0; padding: 0; overflow: hidden; }
+.backupIntro { display: flex; gap: 14px; padding: 22px; border-bottom: 1px solid var(--relay-border); }
+.backupIntro h2 { margin: 2px 0 8px; font-size: 22px; letter-spacing: -0.025em; }
+.backupIntro p:last-child { max-width: 760px; margin: 0; color: var(--relay-muted); line-height: 1.55; }
+.backupIcon { display: grid; width: 40px; height: 40px; flex: 0 0 auto; place-items: center; border-radius: 7px; background: color-mix(in srgb, var(--relay-action) 10%, transparent); color: var(--relay-action); }
+.backupAction, .preview { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 20px 22px; border-bottom: 1px solid var(--relay-border); }
+.backupAction strong, .backupAction span, .preview strong, .preview span { display: block; }
+.backupAction span, .preview span { margin-top: 5px; color: var(--relay-muted); font-size: 13px; line-height: 1.45; }
+.secondaryButton, .fileInput { min-height: 40px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 9px 12px; font: inherit; font-weight: 650; cursor: pointer; }
+.fileInput { max-width: 320px; font-weight: 500; }
+.fileInput::file-selector-button { margin-right: 10px; border: 0; background: transparent; color: var(--relay-action); font: inherit; font-weight: 700; cursor: pointer; }
+.backupStatus:empty { display: none; }
+.preview { border-bottom: 0; background: color-mix(in srgb, var(--relay-action) 5%, var(--relay-card)); }
+.errorNotice, .successNotice { margin: 0; padding: 14px 22px; border-top: 1px solid var(--relay-border); font-weight: 650; }
+.errorNotice { color: var(--relay-error); }
+.successNotice { color: var(--relay-success); }
+
 .welcome {
   min-height: 100dvh;
   display: grid;
@@ -174,6 +191,11 @@
   .dashboardGrid { grid-template-columns: 1fr; }
   .table { min-width: 680px; }
   .tableWrap { overflow-x: auto; }
+}
+
+@media (max-width: 700px) {
+  .backupAction, .preview { align-items: stretch; flex-direction: column; gap: 14px; }
+  .fileInput { width: 100%; max-width: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

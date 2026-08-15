@@ -1,15 +1,10 @@
+import type { WorkspaceProject } from "../domain/workspace-project";
+
+export type { WorkspaceProject } from "../domain/workspace-project";
+
 export type ActionResult =
   | { ok: true }
   | { ok: false; error: { kind: "forbidden" | "unavailable"; message: string } };
-
-export type WorkspaceProject = {
-  name: string;
-  client: string;
-  stage: string;
-  tone: "review" | "delivered" | "overdue" | "planned";
-  due: string;
-  progress: string;
-};
 
 export type WorkspacePort = {
   loadProjects(): readonly WorkspaceProject[];

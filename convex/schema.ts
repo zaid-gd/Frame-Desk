@@ -17,8 +17,21 @@ import {
   storedTeamRoleValidator,
   teamActivityKindValidator,
 } from "./domainValidators";
+import { relayProjectValidator } from "./relayWorkspaceValidators";
 
 export default defineSchema({
+  relayProjects: defineTable({
+    ownerUserId: v.string(),
+    ...relayProjectValidator.fields,
+    importedAt: v.string(),
+  }).index("by_ownerUserId", ["ownerUserId"]),
+
+  relayWorkspaceImports: defineTable({
+    ownerUserId: v.string(),
+    importedAt: v.string(),
+    recordCount: v.number(),
+  }).index("by_ownerUserId", ["ownerUserId"]),
+
   workItems: defineTable({
     userId: v.string(),
     id: v.string(),

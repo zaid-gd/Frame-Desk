@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useOptionalAuth } from "@/lib/optional-auth";
 import { createEntryController, type RelaySession, type WorkspaceMode } from "../application/entry-controller";
+import { createWorkspaceBackupController } from "../application/workspace-backup-controller";
 import { createWorkspaceController } from "../application/workspace-controller";
 import type { RelaySection } from "../application/routes";
 import { createBrowserEntryPort, RELAY_ENTRY_MODE_KEY } from "../infrastructure/browser-entry-port";
-import { createCloudWorkspacePort } from "../infrastructure/cloud-workspace-port";
+import { useCloudWorkspaceBackupPort } from "../infrastructure/cloud-workspace-backup-port";
+import { useCloudWorkspacePort } from "../infrastructure/cloud-workspace-port";
 import { createLocalWorkspacePort } from "../infrastructure/local-workspace-port";
+import { createLocalWorkspaceBackupPort } from "../infrastructure/local-workspace-backup";
 import { createMemoryEntryPort } from "../infrastructure/memory-entry-port";
 import { createSampleWorkspacePort } from "../infrastructure/sample-workspace-port";
 import { RelayExperience } from "../presentation/relay-experience";
@@ -29,9 +32,9 @@ function sessionFromAuth(auth: ReturnType<typeof useOptionalAuth>): RelaySession
   return { status: "signed-in", identity: { displayName, email, initials } };
 }
 
-function workspacePort(mode: WorkspaceMode) {
+function workspacePort(mode: WorkspaceMode, cloudPort: ReturnType<typeof useCloudWorkspacePort>) {
   if (mode === "sample") return createSampleWorkspacePort();
-  if (mode === "cloud") return createCloudWorkspacePort();
+  if (mode === "cloud") return cloudPort;
   return createLocalWorkspacePort();
 }
 
@@ -62,8 +65,15 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
   );
   const entryController = createEntryController({ entryPort, session: sessionFromAuth(auth) });
   const mode = entryController.model.mode ?? "local";
-  const selectedWorkspacePort = useMemo(() => workspacePort(mode), [mode]);
+  const cloudPort = useCloudWorkspacePort(mode === "cloud" && Boolean(auth.isSignedIn));
+  const cloudBackupPort = useCloudWorkspaceBackupPort();
+  const selectedWorkspacePort = useMemo(() => workspacePort(mode, cloudPort), [cloudPort, mode]);
   const workspaceController = createWorkspaceController({ mode, workspacePort: selectedWorkspacePort, section });
+  const localBackupPort = useMemo(
+    () => hydrated ? createLocalWorkspaceBackupPort(window.localStorage, undefined, () => setWorkspaceVersion((version) => version + 1)) : null,
+    [hydrated],
+  );
+  const backupController = createWorkspaceBackupController({ mode, backupPort: mode === "cloud" ? cloudBackupPort : localBackupPort });
 
   useEffect(() => {
     if (hydrated && !section && entryController.model.state === "workspace") router.replace("/relay/dashboard");
@@ -127,6 +137,7 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
         identity: entryController.model.identity,
         storageWarning: entryController.model.storageWarning,
         workspace: workspaceController.model,
+        backup: backupController,
       }}
       onChooseMode={chooseMode}
       onStartAccount={startAccount}
