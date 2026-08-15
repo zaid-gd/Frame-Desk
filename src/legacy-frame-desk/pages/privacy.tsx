@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { LegalPage } from "../legal-page";
+import { LegalPage } from "@/app/legal-page";
 
 export const metadata: Metadata = {
   title: "Privacy Policy | Frame Desk",

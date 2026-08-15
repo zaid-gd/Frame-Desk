@@ -1,6 +1,6 @@
 # Relay rebuild boundary
 
-Status: accepted
+Status: accepted; release boundary amended by the 2026-08-16 owner-approved cutover below
 
 Date: 2026-08-14
 
@@ -34,6 +34,19 @@ Any future migration, merge, or cleanup needs its own approved work. Local Mode 
 
 For ticket 01, only records that set the product language and rebuild boundary may change. No runtime route, screen, schema, function, or deployment setting changes.
 
+## Owner-approved development cutover — 2026-08-16
+
+The product owner has now made Relay the active product during the rebuild. This decision supersedes only the route and product-name limits above:
+
+- `/` renders the Relay entry screen.
+- `/relay/**` remains the Relay workspace route family.
+- Former Frame Desk product routes redirect to `/` before their screens mount.
+- Former Frame Desk route entry files and UI-only browser verifiers are retired; their lower-level source may remain for reference.
+- Shared metadata, error states, account screens, browser checks, and install metadata name Relay.
+- Frame Desk source stays in the repository for reference, but Relay entry points and providers must not import or start it.
+
+The clean-start cloud-data boundary remains unchanged. Relay still cannot read, copy, migrate, update, or delete old cloud tables. This development cutover does not approve a deployment, pull request, old-data migration, or cleanup.
+
 ## Name-clearance risk
 
 The product owner accepted Relay as the rebuild name while another creative-workflow product uses the same name. This creates brand and search risk. The choice does not grant legal, trademark, domain, company-name, or app-store clearance. Complete those checks before a public launch; legal clearance is outside the rebuild scope.
@@ -44,4 +57,4 @@ The product owner accepted Relay as the rebuild name while another creative-work
 - Old and new cloud meanings cannot mix through shared tables or fallback reads.
 - Screens can run against fixed controller models without cloud or browser storage.
 - Controller and adapter tests can use the in-memory implementation of the same capability port.
-- The current deployed experience remains unchanged while Relay grows beside it.
+- Relay owns the active development runtime; the old product source stays dormant and its cloud data stays untouched.

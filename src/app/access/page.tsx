@@ -3,8 +3,8 @@ import { AccessForm } from "./access-form";
 import styles from "./access.module.css";
 
 export const metadata: Metadata = {
-  title: "Private access | Frame Desk",
-  description: "Enter the private access password to continue to Frame Desk.",
+  title: "Private access | Relay",
+  description: "Enter the private access password to continue to Relay.",
   robots: {
     index: false,
     follow: false,
@@ -21,16 +21,16 @@ export default async function AccessPage({
   return (
     <main id="main-content" className={styles.page}>
       <section className={styles.panel} aria-labelledby="access-heading">
-        <div className={styles.wordmark} aria-label="Frame Desk">
-          <span className={styles.mark} aria-hidden="true">F</span>
-          <span>FRAME DESK</span>
+        <div className={styles.wordmark} aria-label="Relay">
+          <span className={styles.mark} aria-hidden="true">R</span>
+          <span>RELAY</span>
         </div>
 
         <div className={styles.copy}>
           <p className={styles.eyebrow}>PRIVATE PREVIEW</p>
           <h1 id="access-heading">This workspace is not public yet.</h1>
           <p>
-            Frame Desk is in a limited preview while we finish the product and
+            Relay is in a limited preview while we finish the product and
             its legal review. Enter the shared access password to continue.
           </p>
         </div>
@@ -38,7 +38,7 @@ export default async function AccessPage({
         <AccessForm returnTo={returnTo} />
 
         <p className={styles.note}>
-          This access step is separate from your Frame Desk account sign-in.
+          This access step is separate from your Relay account sign-in.
         </p>
       </section>
     </main>

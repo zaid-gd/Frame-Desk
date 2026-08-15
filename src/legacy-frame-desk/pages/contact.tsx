@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ContactForm } from "@/components/contact-form";
 import { siteUrl } from "@/lib/site";
-import { LegalPage } from "../legal-page";
+import { LegalPage } from "@/app/legal-page";
 
 export const metadata: Metadata = {
   title: "Contact | Frame Desk",

@@ -5,6 +5,7 @@ loadE2EEnvironment();
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["cloud-workflow.spec.ts", "local-project.spec.ts"],
   fullyParallel: false,
   timeout: 90_000,
   expect: {

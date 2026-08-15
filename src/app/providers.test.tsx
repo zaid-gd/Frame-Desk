@@ -1,21 +1,29 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test, vi } from "vitest";
 import { Providers } from "./providers";
+import { metadata as signInMetadata } from "./sign-in/[[...sign-in]]/page";
+import { metadata as signUpMetadata } from "./sign-up/[[...sign-up]]/page";
 
 vi.mock("@clerk/nextjs", () => ({
   ClerkProvider: ({
     children,
     localization,
     publishableKey,
+    signInFallbackRedirectUrl,
+    signUpFallbackRedirectUrl,
   }: {
     children: React.ReactNode;
     localization: { signIn: { start: { title: string } } };
     publishableKey: string;
+    signInFallbackRedirectUrl: string;
+    signUpFallbackRedirectUrl: string;
   }) => (
     <div
       data-provider="clerk"
       data-publishable-key={publishableKey}
       data-sign-in-title={localization.signIn.start.title}
+      data-sign-in-fallback={signInFallbackRedirectUrl}
+      data-sign-up-fallback={signUpFallbackRedirectUrl}
     >
       {children}
     </div>
@@ -52,7 +60,7 @@ vi.mock("@/lib/data-context", () => ({
     children: React.ReactNode;
     mode: string;
   }) => (
-    <div data-auth-enabled={String(authEnabled)} data-data-mode={mode}>{children}</div>
+    <div data-provider="frame-desk-data" data-auth-enabled={String(authEnabled)} data-data-mode={mode}>{children}</div>
   ),
 }));
 
@@ -80,10 +88,11 @@ describe("Providers runtime configuration", () => {
     );
 
     expect(html).toContain('data-provider="clerk"');
-    expect(html).toContain('data-sign-in-title="Sign in to Frame Desk"');
+    expect(html).toContain('data-sign-in-title="Sign in to Relay"');
+    expect(html).toContain('data-sign-in-fallback="/relay/dashboard"');
+    expect(html).toContain('data-sign-up-fallback="/relay/dashboard"');
     expect(html).toContain('data-provider="convex-clerk"');
-    expect(html).toContain('data-auth-enabled="true"');
-    expect(html).toContain('data-data-mode="cloud"');
+    expect(html).not.toContain('data-provider="frame-desk-data"');
   });
 
   test("keeps account mode disabled when Convex runtime configuration is missing", () => {
@@ -95,7 +104,13 @@ describe("Providers runtime configuration", () => {
 
     expect(html).not.toContain('data-provider="clerk"');
     expect(html).toContain('data-provider="convex-local-auth"');
-    expect(html).toContain('data-auth-enabled="false"');
-    expect(html).toContain('data-data-mode="local"');
+    expect(html).not.toContain('data-provider="frame-desk-data"');
+  });
+});
+
+describe("Clerk route branding", () => {
+  test("labels the sign-in and sign-up browser tabs as Relay", () => {
+    expect(signInMetadata.title).toBe("Sign in | Relay");
+    expect(signUpMetadata.title).toBe("Create account | Relay");
   });
 });

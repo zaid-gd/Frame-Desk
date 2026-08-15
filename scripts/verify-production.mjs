@@ -31,7 +31,7 @@ try {
 
   await waitForServer(baseUrl, () => output);
 
-  const verifier = spawn(process.execPath, ["scripts/verify.mjs"], {
+  const verifier = spawn(process.execPath, ["scripts/verify-relay.mjs"], {
     env: {
       ...process.env,
       CUTLAB_VERIFY_ACCESS_PASSWORD: accessPassword,

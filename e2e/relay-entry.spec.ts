@@ -127,10 +127,16 @@ test("provides working account controls in Local Mode", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Use Local Mode" })).toBeVisible();
 });
 
-test("keeps the deployed product outside the Relay routes", async ({ page }) => {
+test("serves Relay as the root product", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle(/Frame Desk/);
-  await expect(page.locator("body")).not.toContainText("Run every edit from one clear workspace");
+  await expect(page).toHaveTitle(/Welcome to Relay/);
+  await expect(page.getByRole("heading", { name: "Run every edit from one clear workspace" })).toBeVisible();
+});
+
+test("retires old Frame Desk product routes before they mount", async ({ page }) => {
+  await page.goto("/projects");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { name: "Run every edit from one clear workspace" })).toBeVisible();
 });
 
 test("shows identity from a signed-in browser session", async ({ page }) => {
