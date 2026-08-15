@@ -164,11 +164,39 @@
 .emptyPage { min-height: 360px; padding: 30px; }
 .emptyPage h2 { margin: 0; font-size: 19px; }
 .emptyPage p { max-width: 620px; color: var(--relay-muted); line-height: 1.65; }
+.clientsGrid { display: grid; grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr); gap: 20px; align-items: start; }
+.clientPane { display: grid; gap: 20px; }
+.clientTools { display: grid; gap: 12px; padding: 18px; border-bottom: 1px solid var(--relay-border); }
+.clientTools label, .clientForm label { display: grid; gap: 6px; color: var(--relay-muted); font-size: 13px; font-weight: 650; }
+.clientTools input, .clientForm input, .clientForm textarea { min-height: 42px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 9px 11px; font: inherit; }
+.clientTools .check { display: flex; align-items: center; gap: 8px; }
+.clientTools .check input { min-height: auto; }
+.clientRows { margin: 0; padding: 0; list-style: none; }
+.clientRows li + li { border-top: 1px solid var(--relay-border); }
+.clientRows button { width: 100%; border: 0; background: transparent; color: var(--relay-ink); padding: 15px 18px; text-align: left; cursor: pointer; }
+.clientRows button[aria-pressed="true"] { background: color-mix(in srgb, var(--relay-action) 10%, var(--relay-card)); box-shadow: inset 3px 0 var(--relay-action); }
+.clientRows strong, .clientRows span, .clientRows small { display: block; }
+.clientRows span, .clientRows small { margin-top: 4px; color: var(--relay-muted); font-size: 12px; }
+.clientForm form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 20px; }
+.clientForm textarea { min-height: 90px; resize: vertical; }
+.clientForm .fullField, .clientForm .formActions { grid-column: 1 / -1; }
+.formActions { display: flex; justify-content: flex-end; gap: 9px; }
+.formActions > button:not(.primaryButton) { min-height: 38px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 0 12px; cursor: pointer; }
+.clientDetail { padding-bottom: 22px; }
+.clientDetail dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 0; padding: 20px; }
+.clientDetail dl div { border-bottom: 1px solid var(--relay-border); padding-bottom: 11px; }
+.clientDetail dt { color: var(--relay-muted); font-size: 12px; }
+.clientDetail dd { margin: 5px 0 0; }
+.clientDetail > p, .clientDetail > div:not(.cardTitle), .clientEmpty { padding: 0 20px; }
+.clientDetail h3 { margin: 20px 0 8px; font-size: 15px; }
+.clientDetail a { color: var(--relay-action); }
+.clientEmpty { color: var(--relay-muted); }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 50; max-width: 420px; border: 1px solid var(--relay-border); border-radius: 8px; background: var(--relay-card); color: var(--relay-ink); padding: 14px 16px; }
 
 @media (max-width: 1100px) and (min-width: 701px) {
   .content { padding: 26px; }
   .dashboardGrid { grid-template-columns: 1fr; }
+  .clientsGrid { grid-template-columns: 1fr; }
   .side { grid-template-columns: 1fr 1fr; }
 }
 

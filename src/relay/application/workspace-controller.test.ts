@@ -4,10 +4,11 @@ import { createMemoryWorkspacePort } from "../infrastructure/memory-workspace-po
 
 describe("Relay workspace controller", () => {
   test("refuses writes in the Sample Workspace", async () => {
-    const projects = [{ name: "Demo Project Alpha", client: "Demo Client", stage: "In review", tone: "review" as const, due: "Aug 15, 2026", progress: "60%" }];
+    const projects = [{ id: "demo_alpha", name: "Demo Project Alpha", clientId: "client_demo", stage: "In review", tone: "review" as const, due: "Aug 15, 2026", progress: "60%" }];
     const controller = createWorkspaceController({
       mode: "sample",
       workspacePort: createMemoryWorkspacePort({ readOnly: true, projects }),
+      clientNames: { client_demo: "Demo Client" },
     });
 
     await expect(controller.actions.requestNewProject()).resolves.toEqual({
@@ -24,7 +25,7 @@ describe("Relay workspace controller", () => {
       expect.objectContaining({ section: "projects", label: "Projects" }),
     ]));
     expect(controller.model.projects).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "Demo Project Alpha", client: "Demo Client", stage: "In review" }),
+      expect.objectContaining({ name: "Demo Project Alpha", clientId: "client_demo", clientName: "Demo Client", stage: "In review" }),
     ]));
   });
 });

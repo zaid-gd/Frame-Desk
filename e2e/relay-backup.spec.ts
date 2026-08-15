@@ -27,7 +27,7 @@ test("backs up and restores persisted Local Mode work", async ({ page }) => {
   const backupPath = await download.path();
   expect(backupPath).not.toBeNull();
 
-  await page.evaluate(() => localStorage.removeItem("relay:local-projects:v1"));
+  await page.evaluate(() => localStorage.removeItem("relay:local-workspace:v2"));
   await page.reload();
   await page.getByRole("link", { name: "Projects" }).click();
   await expect(page.getByText("Untitled local project", { exact: true })).toHaveCount(0);
@@ -39,12 +39,12 @@ test("backs up and restores persisted Local Mode work", async ({ page }) => {
   await expect(fileInput).toBeFocused();
   await fileInput.setInputFiles(backupPath!);
   const backupAnnouncements = page.locator('[aria-live="polite"][aria-atomic="true"]');
-  await expect(backupAnnouncements).toContainText("1 project · 1 total record");
+  await expect(backupAnnouncements).toContainText("1 Client · 1 project · 2 total records");
 
   const restoreButton = page.getByRole("button", { name: "Restore Local Mode backup" });
   await restoreButton.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("status").filter({ hasText: "Restored 1 project in Local Mode" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "Restored 2 records in Local Mode" })).toBeVisible();
 
   await page.getByRole("link", { name: "Projects" }).click();
   await expect(page.getByRole("cell", { name: /Untitled local project/ })).toBeVisible();

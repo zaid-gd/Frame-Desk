@@ -5,15 +5,15 @@ import type { WorkspaceBackupPort } from "../ports/workspace-backup-port";
 
 const backup: RelayWorkspaceBackup = {
   format: "relay-local-workspace",
-  version: 1,
+  version: 2,
   exportedAt: "2026-08-16T08:00:00.000Z",
-  workspace: { projects: [] },
+  workspace: { clients: [], projects: [] },
 };
 
 function port(overrides: Partial<WorkspaceBackupPort> = {}): WorkspaceBackupPort {
   return {
     exportBackup: () => ({ ok: true }),
-    previewFile: async (file) => ({ ok: true, prepared: { backup, fileName: file.name, counts: { projects: 0, total: 0 } } }),
+    previewFile: async (file) => ({ ok: true, prepared: { backup, fileName: file.name, counts: { clients: 0, projects: 0, total: 0 } } }),
     applyBackup: async () => ({ ok: true, imported: 0 }),
     ...overrides,
   };
@@ -32,8 +32,8 @@ describe("Relay workspace backup controller", () => {
     });
     if (!controller.actions) throw new Error("Local backup actions should be available");
     const preview = await controller.actions.previewFile(new File(["{}"], "relay.json"));
-    expect(preview).toEqual({ ok: true, prepared: { backup, fileName: "relay.json", recordSummary: "0 projects · 0 total records" } });
-    await expect(controller.actions.applyBackup(backup)).resolves.toEqual({ ok: true, message: "Restored 0 projects in Local Mode." });
+    expect(preview).toEqual({ ok: true, prepared: { backup, fileName: "relay.json", recordSummary: "0 Clients · 0 projects · 0 total records" } });
+    await expect(controller.actions.applyBackup(backup)).resolves.toEqual({ ok: true, message: "Restored 0 records in Local Mode." });
   });
 
   test("returns cloud move copy and keeps refusal errors", async () => {

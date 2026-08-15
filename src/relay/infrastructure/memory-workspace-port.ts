@@ -10,7 +10,7 @@ export function createMemoryWorkspacePort({ readOnly = false, projects = [] }: {
       if (readOnly) {
         return sampleWriteRefusal;
       }
-      records.push({ name: "Untitled local project", client: "No client", stage: "Planned", tone: "planned", due: "Not set", progress: "0%" });
+      records.push({ id: `project_${crypto.randomUUID()}`, name: "Untitled local project", clientId: "client_unassigned", stage: "Planned", tone: "planned", due: "Not set", progress: "0%" });
       return { ok: true };
     },
   };

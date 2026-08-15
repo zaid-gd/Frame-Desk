@@ -4,7 +4,7 @@ import { MAX_RELAY_PROJECTS } from "../domain/workspace-project";
 
 describe("Local workspace adapter", () => {
   test("loads solo project records from browser storage", () => {
-    const project = { name: "My Local Cut", client: "Solo Client", stage: "Planned", tone: "planned", due: "Sep 1, 2026", progress: "0%" };
+    const project = { id: "project_local", name: "My Local Cut", clientId: "client_solo", stage: "Planned", tone: "planned", due: "Sep 1, 2026", progress: "0%" };
     const storage = { getItem: (key: string) => key === RELAY_LOCAL_PROJECTS_KEY ? JSON.stringify([project]) : null, setItem: () => undefined };
 
     expect(createLocalWorkspacePort(storage).loadProjects()).toEqual([project]);
@@ -30,8 +30,9 @@ describe("Local workspace adapter", () => {
 
   test("keeps supported local state within the backup record limit", async () => {
     const projects = Array.from({ length: MAX_RELAY_PROJECTS }, (_, index) => ({
+      id: `project_${index}`,
       name: `Project ${index}`,
-      client: "No client",
+      clientId: "client_unassigned",
       stage: "Planned",
       tone: "planned" as const,
       due: "Not set",

@@ -25,6 +25,8 @@ import type { EntryController, WorkspaceMode } from "../application/entry-contro
 import type { RelaySection } from "../application/routes";
 import type { WorkspaceModel } from "../application/workspace-controller";
 import type { PreparedBackupView, WorkspaceBackupController } from "../application/workspace-backup-controller";
+import type { ClientController } from "../application/client-controller";
+import type { ClientInput } from "../domain/client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +59,7 @@ export type RelayExperienceProps = {
     storageWarning?: string;
     workspace: WorkspaceModel;
     backup: WorkspaceBackupController;
+    clients: ClientController;
   };
   onChooseMode(mode: "local" | "sample"): void;
   onStartAccount(action: "sign-up" | "sign-in"): void;
@@ -64,6 +67,7 @@ export type RelayExperienceProps = {
   onToggleTheme(): void;
   onLeaveWorkspace(): Promise<void>;
   onRequestNewProject(): Promise<{ ok: boolean; message: string }>;
+  onClientsChanged(): void;
 };
 
 export function RelayExperience(props: RelayExperienceProps) {
@@ -102,7 +106,7 @@ export function RelayExperience(props: RelayExperienceProps) {
     );
   }
 
-  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} />;
+  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onClientsChanged={props.onClientsChanged} />;
 }
 
 function EntryChoice({ icon: Icon, label, detail, onClick }: { icon: typeof Cloud; label: string; detail: string; onClick: () => void }) {
@@ -119,7 +123,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, mode, identity, storageWarning, workspace, backup, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }> }) {
+function RelayShell({ section, mode, identity, storageWarning, workspace, backup, clients, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject, onClientsChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onClientsChanged(): void }) {
   const [message, setMessage] = useState("");
   const readOnly = mode === "sample";
   const person = identity ?? workspace.fallbackIdentity;
@@ -175,7 +179,7 @@ function RelayShell({ section, mode, identity, storageWarning, workspace, backup
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             <PageHeader model={workspace.page} onNewProject={requestNewProject} />
-            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -265,7 +269,7 @@ function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; 
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead><tr><th>Project</th><th>Stage</th><th>Due</th><th>Progress</th></tr></thead>
-              <tbody>{workspace.projects.map((project) => <tr key={project.name}><td><span className={styles.projectTitle}>{project.name}</span><span className={styles.projectMeta}>{project.client}</span></td><td><span className={`${styles.status} ${styles[project.tone]}`}>{project.stage}</span></td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody>
+              <tbody>{workspace.projects.map((project) => <tr key={project.id}><td><span className={styles.projectTitle}>{project.name}</span><span className={styles.projectMeta}>{project.clientName}</span></td><td><span className={`${styles.status} ${styles[project.tone]}`}>{project.stage}</span></td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
@@ -276,6 +280,62 @@ function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; 
       </div>
     </>
   );
+}
+
+const blankClient: ClientInput = { name: "", company: "", contactName: "", email: "", phone: "", notes: "" };
+
+function ClientsPage({ controller, readOnly, onChanged }: { controller: ClientController; readOnly: boolean; onChanged(): void }) {
+  const [query, setQuery] = useState("");
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ClientInput>(blankClient);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+  const copy = controller.model.copy;
+  const clientRows = controller.actions.searchRows(query, { includeArchived });
+  const detail = selectedId ? controller.actions.inspect(selectedId) : null;
+
+  function update(field: keyof ClientInput, value: string) { setDraft((current) => ({ ...current, [field]: value })); }
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const result = editing ? await controller.actions.edit(editing, draft) : await controller.actions.create(draft);
+    setNotice(result.message);
+    if (result.ok) { setDraft(blankClient); setEditing(null); setSelectedId(result.client?.id ?? editing); onChanged(); }
+  }
+  function startEdit() {
+    if (!detail) return;
+    const { name, company, contactName, email, phone, notes } = detail.client;
+    setDraft({ name, company, contactName, email, phone, notes });
+    setEditing(detail.client.id);
+  }
+  async function setArchived(archived: boolean) {
+    if (!detail) return;
+    const result = archived ? await controller.actions.archive(detail.client.id) : await controller.actions.restore(detail.client.id);
+    setNotice(result.message);
+    if (result.ok) { if (archived && !includeArchived) setSelectedId(null); onChanged(); }
+  }
+
+  return (
+    <div className={styles.clientsGrid}>
+      <section className={`${styles.card} ${styles.clientList}`} aria-labelledby="client-list-title">
+        <div className={styles.cardTitle}><h2 id="client-list-title">{copy.listTitle}</h2><span>{clientRows.length}</span></div>
+        <div className={styles.clientTools}>
+          <label><span>{copy.searchLabel}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchPlaceholder} /></label>
+          <label className={styles.check}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />{copy.includeArchivedLabel}</label>
+        </div>
+        {clientRows.length ? <ul className={styles.clientRows}>{clientRows.map(({ client, secondary, archivedText }) => <li key={client.id}><button type="button" aria-pressed={selectedId === client.id} onClick={() => setSelectedId(client.id)}><strong>{client.name}</strong><span>{secondary}</span>{archivedText ? <small>{archivedText}</small> : null}</button></li>)}</ul> : <p className={styles.clientEmpty}>{copy.emptyList}</p>}
+      </section>
+      <div className={styles.clientPane}>
+        {!readOnly ? <section className={`${styles.card} ${styles.clientForm}`} aria-labelledby="client-form-title"><div className={styles.cardTitle}><h2 id="client-form-title">{editing ? copy.editTitle : copy.createTitle}</h2></div><form onSubmit={(event) => void save(event)}><label>{copy.fieldLabels.name}<input required value={draft.name} onChange={(event) => update("name", event.target.value)} /></label><label>{copy.fieldLabels.company}<input value={draft.company} onChange={(event) => update("company", event.target.value)} /></label><label>{copy.fieldLabels.contactName}<input value={draft.contactName} onChange={(event) => update("contactName", event.target.value)} /></label><label>{copy.fieldLabels.email}<input type="email" value={draft.email} onChange={(event) => update("email", event.target.value)} /></label><label>{copy.fieldLabels.phone}<input type="tel" value={draft.phone} onChange={(event) => update("phone", event.target.value)} /></label><label className={styles.fullField}>{copy.fieldLabels.notes}<textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} /></label><div className={styles.formActions}>{editing ? <button type="button" onClick={() => { setEditing(null); setDraft(blankClient); }}>{copy.cancelLabel}</button> : null}<button className={styles.primaryButton} type="submit">{editing ? copy.saveLabel : copy.createLabel}</button></div></form></section> : null}
+        {detail ? <section className={`${styles.card} ${styles.clientDetail}`} aria-labelledby="client-detail-title"><div className={styles.cardTitle}><h2 id="client-detail-title">{detail.client.name}</h2><div className={styles.formActions}>{!readOnly ? <><button type="button" onClick={startEdit}>{copy.editLabel}</button><button type="button" onClick={() => void setArchived(!detail.client.archived)}>{detail.client.archived ? copy.restoreLabel : copy.archiveLabel}</button></> : null}</div></div><dl>{detail.display.fields.map((field) => <div key={field.label}><dt>{field.label}</dt><dd>{field.kind === "email" && field.href ? <a href={field.href}>{field.value}</a> : field.value}</dd></div>)}</dl><p>{detail.display.notes}</p>{detail.display.relationships.map((relationship) => <Relationship key={relationship.title} title={relationship.title} rows={relationship.rows} empty={copy.none} />)}<div><h3>{detail.display.portalTitle}</h3>{detail.portalLinks.length ? <ul>{detail.portalLinks.map((link) => <li key={link.projectId}><Link href={link.url}>{link.projectName}</Link></li>)}</ul> : <p>{detail.display.portalsEmpty}</p>}</div></section> : <section className={`${styles.card} ${styles.clientEmpty}`}><h2>{copy.inspectTitle}</h2><p>{copy.inspectEmpty}</p></section>}
+      </div>
+      {notice ? <p className={styles.toast} role="status">{notice}</p> : null}
+    </div>
+  );
+}
+
+function Relationship({ title, rows, empty }: { title: string; rows: string[]; empty: string }) {
+  return <div><h3>{title}</h3>{rows.length ? <ul>{rows.map((row) => <li key={row}>{row}</li>)}</ul> : <p>{empty}</p>}</div>;
 }
 
 function SectionPlaceholder({ title }: { section: Exclude<RelaySection, "dashboard" | "projects">; title: string }) {

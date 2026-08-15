@@ -13,7 +13,7 @@ const navigation = [
   { section: "settings", label: "Settings" },
 ] as const;
 
-export function createWorkspaceController({ mode, workspacePort, section = "dashboard" }: { mode: WorkspaceMode; workspacePort: WorkspacePort; section?: RelaySection }) {
+export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard" }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection }) {
   const title = section[0].toUpperCase() + section.slice(1);
   return {
     model: {
@@ -37,7 +37,7 @@ export function createWorkspaceController({ mode, workspacePort, section = "dash
         { label: "Client reviews", value: "3" },
         { label: "Salary due", value: "₹84,000" },
       ],
-      projects: workspacePort.loadProjects(),
+      projects: workspacePort.loadProjects().map((project) => ({ ...project, clientName: clientNames[project.clientId] ?? "Unknown Client" })),
       activity: [
         { name: "Demo Project Beta", detail: "Marked delivered by Demo Editor", age: "2h" },
         { name: "Demo Project Alpha", detail: "Moved to In review", age: "5h" },

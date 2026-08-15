@@ -45,6 +45,47 @@ test("keeps Local Mode across reloads and warns about browser storage", async ({
   await expect(page.getByRole("button", { name: "Use light theme" })).toBeVisible();
 });
 
+test("manages a durable Client through create, edit, search, archive, restore, reload, and inspection", async ({ page }) => {
+  await page.getByRole("button", { name: "Use Local Mode" }).click();
+  await page.getByRole("link", { name: "Clients" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Acme");
+  await page.getByLabel("Company", { exact: true }).fill("Acme Films");
+  await page.getByLabel("Contact name").fill("Ava Reed");
+  await page.getByLabel("Email").fill("ava@acme.test");
+  await page.getByLabel("Phone").fill("555-0100");
+  await page.getByLabel("Notes").fill("Retainer");
+  await page.getByRole("button", { name: "Create Client" }).click();
+  await expect(page.getByText("Client created.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Acme\s+Acme Films/ }).click();
+  await expect(page.getByRole("heading", { name: "Active Projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Past Projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Project Groups" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Client Portal links" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit Client" }).click();
+  await page.getByLabel("Company", { exact: true }).fill("Acme Studio");
+  await page.getByRole("button", { name: "Save Client" }).click();
+  await page.getByLabel("Search Clients").fill("Studio");
+  await expect(page.getByRole("button", { name: /Acme\s+Acme Studio/ })).toBeVisible();
+  await page.getByRole("button", { name: "Archive Client" }).click();
+  await expect(page.getByText("No Clients match this view.")).toBeVisible();
+  await page.getByLabel("Include archived Clients").check();
+  await page.getByRole("button", { name: /Acme\s+Acme Studio\s+Archived/ }).click();
+  await page.getByRole("button", { name: "Restore Client" }).click();
+  await page.reload();
+  await page.getByLabel("Search Clients").fill("Acme Studio");
+  await expect(page.getByRole("button", { name: /Acme\s+Acme Studio/ })).toBeVisible();
+  await page.getByRole("button", { name: "Open account menu for Local editor" }).click();
+  await page.getByRole("menuitem", { name: "Leave workspace" }).click();
+  await page.getByRole("button", { name: "Open Sample Workspace" }).click();
+  await page.getByRole("link", { name: "Clients" }).click();
+  await page.getByRole("button", { name: /Demo Client\s+Demo Studio/ }).click();
+  await expect(page.getByText("Demo Project Alpha · In review")).toBeVisible();
+  await expect(page.getByText("Demo Project Beta · Delivered")).toBeVisible();
+  await expect(page.getByText("Launch campaign · 2 projects")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Demo Project Alpha" })).toHaveAttribute("href", "/portal/demo-alpha");
+  await expect(page.getByText("Not authorized")).toBeVisible();
+});
+
 test("explains unavailable account entry flows", async ({ page }) => {
   test.skip(cloudE2EAvailable(), "This check covers builds without cloud account configuration.");
   await page.getByRole("button", { name: "Create an account" }).click();

@@ -39,20 +39,21 @@ export function createWorkspaceBackupController({ mode, backupPort }: { mode: Wo
         const result = await backupPort.previewFile(file);
         if (!result.ok) return result;
         const projectNoun = result.prepared.counts.projects === 1 ? "project" : "projects";
+        const clientNoun = result.prepared.counts.clients === 1 ? "Client" : "Clients";
         const recordNoun = result.prepared.counts.total === 1 ? "record" : "records";
         return {
           ok: true,
           prepared: {
             backup: result.prepared.backup,
             fileName: result.prepared.fileName,
-            recordSummary: `${result.prepared.counts.projects} ${projectNoun} · ${result.prepared.counts.total} total ${recordNoun}`,
+            recordSummary: `${result.prepared.counts.clients} ${clientNoun} · ${result.prepared.counts.projects} ${projectNoun} · ${result.prepared.counts.total} total ${recordNoun}`,
           },
         };
       },
       async applyBackup(backup: RelayWorkspaceBackup) {
         const result = await backupPort.applyBackup(backup);
         if (!result.ok) return { ok: false as const, message: result.error };
-        const noun = result.imported === 1 ? "project" : "projects";
+        const noun = result.imported === 1 ? "record" : "records";
         return {
           ok: true as const,
           message: cloud ? `Imported ${result.imported} ${noun} into the cloud Workspace.` : `Restored ${result.imported} ${noun} in Local Mode.`,

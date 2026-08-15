@@ -1,16 +1,22 @@
 export const MAX_RELAY_PROJECTS = 500;
 
 export type WorkspaceProject = {
+  id: string;
   name: string;
-  client: string;
+  clientId: string;
   stage: string;
   tone: "review" | "delivered" | "overdue" | "planned";
   due: string;
   progress: string;
+  status?: "active" | "past";
+  outstandingAmount?: number;
+  projectGroupId?: string;
+  projectGroupName?: string;
+  portalUrl?: string;
 };
 
-const projectKeys = ["name", "client", "stage", "tone", "due", "progress"] as const;
-const textByteLimits = { name: 200, client: 200, stage: 80, due: 80, progress: 40 } as const;
+const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl"] as const;
+const textByteLimits = { id: 100, name: 200, clientId: 100, stage: 80, due: 80, progress: 40 } as const;
 
 function safeText(value: unknown, maxBytes: number): value is string {
   return typeof value === "string"
@@ -22,10 +28,16 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   if (Object.keys(record).some((key) => !projectKeys.includes(key as typeof projectKeys[number]))) return false;
-  return safeText(record.name, textByteLimits.name)
-    && safeText(record.client, textByteLimits.client)
+  return safeText(record.id, textByteLimits.id) && record.id !== ""
+    && safeText(record.name, textByteLimits.name)
+    && safeText(record.clientId, textByteLimits.clientId) && record.clientId !== ""
     && safeText(record.stage, textByteLimits.stage)
     && ["review", "delivered", "overdue", "planned"].includes(String(record.tone))
     && safeText(record.due, textByteLimits.due)
-    && safeText(record.progress, textByteLimits.progress);
+    && safeText(record.progress, textByteLimits.progress)
+    && (record.status === undefined || record.status === "active" || record.status === "past")
+    && (record.outstandingAmount === undefined || (typeof record.outstandingAmount === "number" && Number.isFinite(record.outstandingAmount)))
+    && (record.projectGroupId === undefined || safeText(record.projectGroupId, 100))
+    && (record.projectGroupName === undefined || safeText(record.projectGroupName, 200))
+    && (record.portalUrl === undefined || safeText(record.portalUrl, 1000));
 }
