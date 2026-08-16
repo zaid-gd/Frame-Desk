@@ -1,11 +1,13 @@
 import type { WorkspaceMode } from "./entry-controller";
 import type { RelaySection } from "./routes";
 import type { WorkspacePort } from "../ports/workspace-port";
+import type { ProjectSetup } from "../domain/workflow-template";
 
 const navigation = [
   { section: "dashboard", label: "Dashboard" },
   { section: "projects", label: "Projects" },
   { section: "clients", label: "Clients" },
+  { section: "templates", label: "Templates" },
   { section: "calendar", label: "Calendar" },
   { section: "files", label: "Files" },
   { section: "reports", label: "Reports" },
@@ -13,7 +15,7 @@ const navigation = [
   { section: "settings", label: "Settings" },
 ] as const;
 
-export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard" }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection }) {
+export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard", defaultProjectSetup }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection; defaultProjectSetup?: ProjectSetup }) {
   const title = section[0].toUpperCase() + section.slice(1);
   return {
     model: {
@@ -45,7 +47,7 @@ export function createWorkspaceController({ mode, workspacePort, clientNames = {
     },
     actions: {
       async requestNewProject() {
-        const result = await workspacePort.requestNewProject();
+        const result = await workspacePort.requestNewProject(defaultProjectSetup ? structuredClone(defaultProjectSetup) : undefined);
         return result.ok
           ? { ok: true as const, message: "Local draft saved in this browser." }
           : { ok: false as const, kind: result.error.kind, message: result.error.message };

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowRight,
+  ArrowDown,
+  ArrowUp,
   BarChart3,
   CalendarDays,
   ChevronLeft,
@@ -12,6 +14,7 @@ import {
   FileStack,
   FolderKanban,
   LayoutDashboard,
+  ListChecks,
   MonitorDown,
   Moon,
   Plus,
@@ -27,6 +30,8 @@ import type { WorkspaceModel } from "../application/workspace-controller";
 import type { PreparedBackupView, WorkspaceBackupController } from "../application/workspace-backup-controller";
 import type { ClientController } from "../application/client-controller";
 import type { ClientInput } from "../domain/client";
+import type { WorkflowTemplateInput } from "../domain/workflow-template";
+import type { WorkflowTemplateController } from "../application/workflow-template-controller";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +45,7 @@ const navigationIcons = {
   dashboard: LayoutDashboard,
   projects: FolderKanban,
   clients: Users,
+  templates: ListChecks,
   calendar: CalendarDays,
   files: FileStack,
   reports: BarChart3,
@@ -60,6 +66,7 @@ export type RelayExperienceProps = {
     workspace: WorkspaceModel;
     backup: WorkspaceBackupController;
     clients: ClientController;
+    templates: WorkflowTemplateController;
   };
   onChooseMode(mode: "local" | "sample"): void;
   onStartAccount(action: "sign-up" | "sign-in"): void;
@@ -68,6 +75,7 @@ export type RelayExperienceProps = {
   onLeaveWorkspace(): Promise<void>;
   onRequestNewProject(): Promise<{ ok: boolean; message: string }>;
   onClientsChanged(): void;
+  onTemplatesChanged(): void;
 };
 
 export function RelayExperience(props: RelayExperienceProps) {
@@ -106,7 +114,7 @@ export function RelayExperience(props: RelayExperienceProps) {
     );
   }
 
-  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onClientsChanged={props.onClientsChanged} />;
+  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} />;
 }
 
 function EntryChoice({ icon: Icon, label, detail, onClick }: { icon: typeof Cloud; label: string; detail: string; onClick: () => void }) {
@@ -123,7 +131,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, mode, identity, storageWarning, workspace, backup, clients, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject, onClientsChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onClientsChanged(): void }) {
+function RelayShell({ section, mode, identity, storageWarning, workspace, backup, clients, templates, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onClientsChanged(): void; onTemplatesChanged(): void }) {
   const [message, setMessage] = useState("");
   const readOnly = mode === "sample";
   const person = identity ?? workspace.fallbackIdentity;
@@ -179,7 +187,7 @@ function RelayShell({ section, mode, identity, storageWarning, workspace, backup
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             <PageHeader model={workspace.page} onNewProject={requestNewProject} />
-            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -336,6 +344,81 @@ function ClientsPage({ controller, readOnly, onChanged }: { controller: ClientCo
 
 function Relationship({ title, rows, empty }: { title: string; rows: string[]; empty: string }) {
   return <div><h3>{title}</h3>{rows.length ? <ul>{rows.map((row) => <li key={row}>{row}</li>)}</ul> : <p>{empty}</p>}</div>;
+}
+
+function TemplatesPage({ controller, onChanged }: { controller: WorkflowTemplateController; onChanged(): void }) {
+  const canManage = controller.model.canManage;
+  const copy = controller.model.copy;
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(controller.actions.list()[0]?.id ?? null);
+  const [draft, setDraft] = useState<WorkflowTemplateInput | null>(() => {
+    const first = controller.actions.list()[0];
+    return first ? controller.actions.inspectView(first.id)?.draft ?? null : null;
+  });
+  const [notice, setNotice] = useState("");
+  const rows = controller.actions.listRows(includeArchived);
+  const selected = selectedId ? controller.actions.inspectView(selectedId) : null;
+
+  function choose(id: string) {
+    const view = controller.actions.inspectView(id);
+    if (!view) return;
+    setSelectedId(view.id);
+    setDraft(view.draft);
+    setNotice("");
+  }
+  async function create() {
+    const result = await controller.actions.create();
+    setNotice(result.message);
+    if (result.ok && result.template) { choose(result.template.id); onChanged(); }
+  }
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selected || !draft) return;
+    const result = await controller.actions.edit(selected.id, draft);
+    setNotice(result.message);
+    if (result.ok) onChanged();
+  }
+  async function archive() {
+    if (!selected) return;
+    const result = await controller.actions.toggleArchived(selected.id);
+    setNotice(result.message);
+    if (result.ok) { setSelectedId(null); setDraft(null); onChanged(); }
+  }
+  async function moveTemplate(direction: -1 | 1) {
+    if (!selected) return;
+    const result = await controller.actions.moveTemplate(selected.id, direction);
+    setNotice(result.message);
+    if (result.ok) onChanged();
+  }
+  function moveStage(index: number, direction: -1 | 1) {
+    if (!draft) return;
+    setDraft(controller.actions.moveStage(draft, index, direction));
+  }
+
+  return (
+    <div className={styles.templatesGrid}>
+      <section className={`${styles.card} ${styles.templateList}`} aria-labelledby="template-list-title">
+        <div className={styles.cardTitle}><h2 id="template-list-title">{copy.listTitle}</h2>{canManage ? <button className={styles.primaryButton} type="button" onClick={() => void create()}><Plus size={16} />{copy.createLabel}</button> : null}</div>
+        <label className={styles.templateArchiveFilter}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />{copy.includeArchivedLabel}</label>
+        <ul className={styles.clientRows}>{rows.map((template) => <li key={template.id}><button type="button" aria-pressed={selectedId === template.id} onClick={() => choose(template.id)}><strong>{template.name}</strong><span>{template.summary}</span>{template.archivedText ? <small>{template.archivedText}</small> : null}</button></li>)}</ul>
+      </section>
+      {selected && draft ? (
+        <form className={`${styles.card} ${styles.templateEditor}`} onSubmit={(event) => void save(event)}>
+          <div className={styles.cardTitle}><div><h2>{selected.name}</h2><span>{copy.inspectLead}</span></div>{canManage ? <div className={styles.formActions}><button type="button" aria-label={copy.moveTemplateUp} onClick={() => void moveTemplate(-1)}><ArrowUp size={16} /></button><button type="button" aria-label={copy.moveTemplateDown} onClick={() => void moveTemplate(1)}><ArrowDown size={16} /></button><button type="button" onClick={() => void archive()}>{selected.archiveActionLabel}</button></div> : null}</div>
+          <div className={styles.templateFields}>
+            <label>{copy.fields.name}<input disabled={!canManage} value={draft.name} onChange={(event) => setDraft(controller.actions.setName(draft, event.target.value))} /></label>
+            <label>{copy.fields.cancelled}<input disabled={!canManage} value={draft.cancelledLabel} onChange={(event) => setDraft(controller.actions.setCancelledLabel(draft, event.target.value))} /><small>{copy.cancelledHelp}</small></label>
+            <fieldset><legend>{copy.sections.stages}</legend>{controller.actions.stageRows(draft).map(({ stage, purposeLabel, canRemove }, index) => <div className={styles.templateRow} key={stage.id}><span>{index + 1}</span><input aria-label={`${purposeLabel} stage label`} disabled={!canManage} value={stage.label} onChange={(event) => setDraft(controller.actions.setStageLabel(draft, stage.id, event.target.value))} /><code>{purposeLabel}</code>{canManage ? <><button type="button" aria-label={controller.actions.moveStageActionLabel(stage.label, -1)} onClick={() => moveStage(index, -1)}><ArrowUp size={15} /></button><button type="button" aria-label={controller.actions.moveStageActionLabel(stage.label, 1)} onClick={() => moveStage(index, 1)}><ArrowDown size={15} /></button>{canRemove ? <button type="button" onClick={() => setDraft(controller.actions.removeStage(draft, stage.id))}>{copy.actions.remove}</button> : null}</> : null}</div>)}{canManage ? <button type="button" onClick={() => setDraft(controller.actions.addStage(draft))}><Plus size={15} />{copy.actions.addStage}</button> : null}</fieldset>
+            <fieldset><legend>{copy.sections.roles}</legend>{draft.roles.map((role) => <div className={styles.templateRow} key={role.id}><input aria-label={copy.fields.roleLabel} disabled={!canManage} value={role.label} onChange={(event) => setDraft(controller.actions.setRoleLabel(draft, role.id, event.target.value))} />{canManage ? <button type="button" onClick={() => setDraft(controller.actions.removeRole(draft, role.id))}>{copy.actions.remove}</button> : null}</div>)}{canManage ? <button type="button" onClick={() => setDraft(controller.actions.addRole(draft))}><Plus size={15} />{copy.actions.addRole}</button> : null}</fieldset>
+            <fieldset><legend>{copy.sections.outputs}</legend>{draft.starterOutputs.map((output) => <div className={`${styles.templateRow} ${styles.outputRow}`} key={output.id}><input aria-label={copy.fields.outputName} disabled={!canManage} value={output.name} onChange={(event) => setDraft(controller.actions.setOutputName(draft, output.id, event.target.value))} /><label>{copy.fields.deadline}<input type="number" disabled={!canManage} value={output.relativeDeadlineDays} onChange={(event) => setDraft(controller.actions.setOutputDeadline(draft, output.id, Number(event.target.value)))} /></label><label>{copy.fields.role}<select disabled={!canManage} value={output.roleId ?? ""} onChange={(event) => setDraft(controller.actions.setOutputRole(draft, output.id, event.target.value || null))}><option value="">{copy.fields.unassigned}</option>{draft.roles.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}</select></label>{canManage ? <button type="button" onClick={() => setDraft(controller.actions.removeOutput(draft, output.id))}>{copy.actions.remove}</button> : null}</div>)}{canManage ? <button type="button" onClick={() => setDraft(controller.actions.addOutput(draft))}><Plus size={15} />{copy.actions.addOutput}</button> : null}</fieldset>
+            <fieldset><legend>{copy.sections.portal}</legend><div className={styles.portalDefaults}>{(["enabled", "showDates", "showNotes", "allowComments"] as const).map((key) => <label key={key}><input type="checkbox" disabled={!canManage} checked={draft.portalDefaults[key]} onChange={(event) => setDraft(controller.actions.setPortalDefault(draft, key, event.target.checked))} />{copy.portalLabels[key]}</label>)}</div></fieldset>
+          </div>
+          {canManage ? <div className={styles.templateSave}><button className={styles.primaryButton} type="submit">{copy.actions.save}</button></div> : null}
+        </form>
+      ) : <section className={`${styles.card} ${styles.clientEmpty}`}><h2>{copy.inspectLead}</h2><p>{copy.inspectEmpty}</p></section>}
+      {notice ? <p className={styles.toast} role="status">{notice}</p> : null}
+    </div>
+  );
 }
 
 function SectionPlaceholder({ title }: { section: Exclude<RelaySection, "dashboard" | "projects">; title: string }) {

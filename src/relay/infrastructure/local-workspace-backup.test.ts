@@ -8,6 +8,7 @@ import {
 import { RELAY_LOCAL_PROJECTS_KEY } from "./local-workspace-port";
 import { RELAY_LOCAL_CLIENTS_KEY } from "./local-client-port";
 import { RELAY_LOCAL_WORKSPACE_KEY } from "./local-workspace-state";
+import { createDefaultWorkflowTemplate } from "../domain/workflow-template";
 
 const project = {
   id: "project_launch",
@@ -33,6 +34,17 @@ function memoryStorage(initial: Record<string, string> = {}) {
 }
 
 describe("Local Mode workspace backups", () => {
+  test("round-trips saved Workflow Templates", () => {
+    const workflowTemplates = [createDefaultWorkflowTemplate("template_default", "Studio workflow")];
+    const storage = memoryStorage({ [RELAY_LOCAL_WORKSPACE_KEY]: JSON.stringify({ clients: [], projects: [], workflowTemplates }) });
+
+    const text = createLocalWorkspaceBackup(storage, "2026-08-16T08:00:00.000Z");
+    const target = memoryStorage();
+
+    expect(restoreLocalWorkspaceBackup(target, text)).toMatchObject({ ok: true, counts: { workflowTemplates: 1, total: 1 } });
+    expect(JSON.parse(target.getItem(RELAY_LOCAL_WORKSPACE_KEY)!).workflowTemplates).toEqual(workflowTemplates);
+  });
+
   test("includes durable Clients in export, preview, and restore", () => {
     const archivedClient = { ...client, name: "Acme", company: "Acme Films", contactName: "Ava", email: "ava@acme.test", phone: "555-0100", notes: "Retainer", archived: true };
     const storage = memoryStorage({ [RELAY_LOCAL_CLIENTS_KEY]: JSON.stringify([archivedClient]) });

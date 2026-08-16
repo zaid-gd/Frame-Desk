@@ -1,4 +1,5 @@
 import { sampleWriteRefusal, type WorkspacePort, type WorkspaceProject } from "../ports/workspace-port";
+import { createWorkspaceProjectDraft } from "../domain/workspace-project";
 
 export function createMemoryWorkspacePort({ readOnly = false, projects = [] }: { readOnly?: boolean; projects?: readonly WorkspaceProject[] } = {}): WorkspacePort {
   const records = [...projects];
@@ -6,11 +7,11 @@ export function createMemoryWorkspacePort({ readOnly = false, projects = [] }: {
     loadProjects() {
       return records;
     },
-    async requestNewProject() {
+    async requestNewProject(setup) {
       if (readOnly) {
         return sampleWriteRefusal;
       }
-      records.push({ id: `project_${crypto.randomUUID()}`, name: "Untitled local project", clientId: "client_unassigned", stage: "Planned", tone: "planned", due: "Not set", progress: "0%" });
+      records.push(createWorkspaceProjectDraft(`project_${crypto.randomUUID()}`, "Untitled local project", setup));
       return { ok: true };
     },
   };

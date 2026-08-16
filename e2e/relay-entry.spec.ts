@@ -15,6 +15,7 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => {
     window.localStorage.removeItem("relay:entry-mode:v1");
     window.localStorage.removeItem("relay:local-projects:v1");
+    window.localStorage.removeItem("relay:local-workspace:v2");
     window.localStorage.removeItem("relay:theme:v1");
     window.localStorage.removeItem("relay:sidebar-collapsed:v1");
   });
@@ -84,6 +85,33 @@ test("manages a durable Client through create, edit, search, archive, restore, r
   await expect(page.getByText("Launch campaign · 2 projects")).toBeVisible();
   await expect(page.getByRole("link", { name: "Demo Project Alpha" })).toHaveAttribute("href", "/portal/demo-alpha");
   await expect(page.getByText("Not authorized")).toBeVisible();
+});
+
+test("manages reusable Workflow Templates and keeps fixed reporting purposes", async ({ page }) => {
+  await page.getByRole("button", { name: "Use Local Mode" }).click();
+  await page.getByRole("link", { name: "Templates" }).click();
+  await expect(page.getByLabel("editing stage label")).toHaveValue("Editing");
+  await expect(page.getByText("Delivered", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: /New Workflow Template/ }).click();
+  await page.getByLabel("Template name").fill("Launch workflow");
+  await page.getByLabel("editing stage label").fill("Cutting");
+  await page.getByLabel("Enable portal").check();
+  await page.getByRole("button", { name: "Add starter output" }).click();
+  await page.getByLabel("Starter Project Output name").last().fill("Trailer");
+  await page.getByRole("button", { name: "Save Workflow Template" }).click();
+  await expect(page.getByText("Workflow Template saved.", { exact: true })).toBeVisible();
+
+  await page.reload();
+  await page.getByRole("button", { name: /Launch workflow/ }).click();
+  await expect(page.getByLabel("editing stage label")).toHaveValue("Cutting");
+  await expect(page.getByLabel("Starter Project Output name").last()).toHaveValue("Trailer");
+  await expect(page.getByLabel("Enable portal")).toBeChecked();
+  await page.getByRole("button", { name: "Archive" }).click();
+  await page.getByLabel("Include archived Templates").check();
+  await page.getByRole("button", { name: /Launch workflow.*Archived/ }).click();
+  await page.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByText("Workflow Template restored.", { exact: true })).toBeVisible();
 });
 
 test("explains unavailable account entry flows", async ({ page }) => {

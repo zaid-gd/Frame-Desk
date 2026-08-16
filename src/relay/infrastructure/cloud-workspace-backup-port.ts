@@ -7,10 +7,11 @@ import type { WorkspaceBackupPort } from "../ports/workspace-backup-port";
 import type { RelayWorkspaceBackup } from "../domain/workspace-backup";
 import type { WorkspaceProject } from "../domain/workspace-project";
 import type { RelayClient } from "../domain/client";
+import type { WorkflowTemplate } from "../domain/workflow-template";
 import { previewBrowserBackupFile } from "./browser-workspace-backup";
 
 type CloudImportResult = { ok: true; imported: number } | { ok: false; error: string };
-const importCloudWorkspace = makeFunctionReference<"mutation", { projects: WorkspaceProject[]; clients: RelayClient[] }, CloudImportResult>("relayWorkspaceImport:importLocalWorkspace");
+const importCloudWorkspace = makeFunctionReference<"mutation", { projects: WorkspaceProject[]; clients: RelayClient[]; workflowTemplates?: WorkflowTemplate[] }, CloudImportResult>("relayWorkspaceImport:importLocalWorkspace");
 
 export function useCloudWorkspaceBackupPort(): WorkspaceBackupPort {
   const runImport = useMutation(importCloudWorkspace);
@@ -19,7 +20,7 @@ export function useCloudWorkspaceBackupPort(): WorkspaceBackupPort {
     previewFile: previewBrowserBackupFile,
     async applyBackup(backup: RelayWorkspaceBackup) {
       try {
-        const result = await runImport({ projects: backup.workspace.projects, clients: backup.workspace.clients });
+        const result = await runImport({ projects: backup.workspace.projects, clients: backup.workspace.clients, workflowTemplates: backup.workspace.workflowTemplates });
         return result.ok ? result : { ok: false as const, error: result.error };
       } catch (error) {
         return { ok: false as const, error: error instanceof Error ? error.message : "Relay could not import this backup." };

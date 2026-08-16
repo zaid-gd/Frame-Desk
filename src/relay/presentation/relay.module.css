@@ -191,12 +191,35 @@
 .clientDetail h3 { margin: 20px 0 8px; font-size: 15px; }
 .clientDetail a { color: var(--relay-action); }
 .clientEmpty { color: var(--relay-muted); }
+.templatesGrid { display: grid; grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr); gap: 20px; align-items: start; }
+.templateList { overflow: hidden; }
+.templateList .primaryButton { min-height: 36px; padding: 0 12px; font-size: 13px; }
+.templateArchiveFilter { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--relay-border); padding: 14px 18px; color: var(--relay-muted); font-size: 13px; }
+.templateEditor { overflow: hidden; }
+.templateEditor .cardTitle > div:first-child span { display: block; margin-top: 4px; color: var(--relay-muted); font-size: 12px; }
+.templateFields { display: grid; gap: 20px; padding: 22px; }
+.templateFields > label { display: grid; gap: 7px; color: var(--relay-muted); font-size: 13px; font-weight: 650; }
+.templateFields input, .templateFields select { min-height: 40px; min-width: 0; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 8px 10px; font: inherit; }
+.templateFields small { font-weight: 450; }
+.templateFields fieldset { display: grid; gap: 10px; margin: 0; border: 1px solid var(--relay-border); border-radius: 7px; padding: 16px; }
+.templateFields legend { padding: 0 6px; font-weight: 700; }
+.templateFields fieldset > button, .templateRow button { display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--relay-border); border-radius: 6px; background: var(--relay-card); color: var(--relay-ink); padding: 0 10px; cursor: pointer; }
+.templateFields fieldset > button { justify-self: start; }
+.templateRow { display: grid; grid-template-columns: 24px minmax(140px, 1fr) auto auto auto auto; align-items: center; gap: 8px; }
+.templateRow > span, .templateRow code { color: var(--relay-muted); font-size: 12px; }
+.outputRow { grid-template-columns: minmax(150px, 1fr) minmax(130px, 0.6fr) minmax(120px, 0.6fr) auto; }
+.outputRow label { display: grid; gap: 5px; color: var(--relay-muted); font-size: 11px; }
+.portalDefaults { display: flex; flex-wrap: wrap; gap: 14px 24px; }
+.portalDefaults label { display: flex; align-items: center; gap: 7px; }
+.portalDefaults input { min-height: auto; }
+.templateSave { display: flex; justify-content: flex-end; border-top: 1px solid var(--relay-border); padding: 16px 22px; }
 .toast { position: fixed; right: 24px; bottom: 24px; z-index: 50; max-width: 420px; border: 1px solid var(--relay-border); border-radius: 8px; background: var(--relay-card); color: var(--relay-ink); padding: 14px 16px; }
 
 @media (max-width: 1100px) and (min-width: 701px) {
   .content { padding: 26px; }
   .dashboardGrid { grid-template-columns: 1fr; }
   .clientsGrid { grid-template-columns: 1fr; }
+  .templatesGrid { grid-template-columns: 1fr; }
   .side { grid-template-columns: 1fr 1fr; }
 }
 
@@ -217,6 +240,8 @@
   .metric:nth-child(3) { border-left: 0; border-top: 1px solid var(--relay-border); }
   .metric:nth-child(4) { border-top: 1px solid var(--relay-border); }
   .dashboardGrid { grid-template-columns: 1fr; }
+  .templatesGrid { grid-template-columns: 1fr; }
+  .templateRow, .outputRow { grid-template-columns: 1fr; }
   .table { min-width: 680px; }
   .tableWrap { overflow-x: auto; }
 }

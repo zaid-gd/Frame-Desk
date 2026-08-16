@@ -1,3 +1,5 @@
+import { validateWorkflowTemplate, type ProjectSetup } from "./workflow-template";
+
 export const MAX_RELAY_PROJECTS = 500;
 
 export type WorkspaceProject = {
@@ -13,9 +15,26 @@ export type WorkspaceProject = {
   projectGroupId?: string;
   projectGroupName?: string;
   portalUrl?: string;
+  workflowTemplateId?: string;
+  workflowStageId?: string;
+  workflowSetup?: ProjectSetup;
 };
 
-const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl"] as const;
+export function createWorkspaceProjectDraft(id: string, name: string, setup?: ProjectSetup): WorkspaceProject {
+  const firstStage = setup?.stages[0];
+  return {
+    id,
+    name,
+    clientId: "client_unassigned",
+    stage: firstStage?.label ?? "Planned",
+    tone: "planned",
+    due: "Not set",
+    progress: "0%",
+    ...(setup && firstStage ? { workflowTemplateId: setup.templateId, workflowStageId: firstStage.id, workflowSetup: structuredClone(setup) } : {}),
+  };
+}
+
+const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup"] as const;
 const textByteLimits = { id: 100, name: 200, clientId: 100, stage: 80, due: 80, progress: 40 } as const;
 
 function safeText(value: unknown, maxBytes: number): value is string {
@@ -39,5 +58,20 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
     && (record.outstandingAmount === undefined || (typeof record.outstandingAmount === "number" && Number.isFinite(record.outstandingAmount)))
     && (record.projectGroupId === undefined || safeText(record.projectGroupId, 100))
     && (record.projectGroupName === undefined || safeText(record.projectGroupName, 200))
-    && (record.portalUrl === undefined || safeText(record.portalUrl, 1000));
+    && (record.portalUrl === undefined || safeText(record.portalUrl, 1000))
+    && (record.workflowTemplateId === undefined || safeText(record.workflowTemplateId, 100))
+    && (record.workflowStageId === undefined || safeText(record.workflowStageId, 100))
+    && (record.workflowSetup === undefined || validProjectSetup(record.workflowSetup));
+}
+
+function validProjectSetup(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const setup = value as ProjectSetup;
+  return safeText(setup.templateId, 100) && safeText(setup.templateName, 200)
+    && validateProjectSetup(setup) === null;
+}
+
+function validateProjectSetup(setup: ProjectSetup) {
+  const { templateId: _templateId, templateName: name, ...input } = setup;
+  return validateWorkflowTemplate({ id: "project_setup", name, archived: false, ...input });
 }

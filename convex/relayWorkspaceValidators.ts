@@ -1,5 +1,23 @@
 import { v } from "convex/values";
 
+export const workflowStagePurposeValidator = v.union(
+  v.literal("planned"), v.literal("editing"), v.literal("clientReview"), v.literal("revisions"), v.literal("approved"), v.literal("delivered"),
+);
+export const workflowStageValidator = v.object({ id: v.string(), label: v.string(), purpose: workflowStagePurposeValidator });
+export const workflowTemplateRoleValidator = v.object({ id: v.string(), label: v.string() });
+export const starterProjectOutputValidator = v.object({ id: v.string(), name: v.string(), relativeDeadlineDays: v.number(), roleId: v.union(v.string(), v.null()) });
+export const clientPortalDefaultsValidator = v.object({ enabled: v.boolean(), showDates: v.boolean(), showNotes: v.boolean(), allowComments: v.boolean() });
+export const workflowTemplateInputValidator = v.object({
+  name: v.string(),
+  stages: v.array(workflowStageValidator),
+  cancelledLabel: v.string(),
+  starterOutputs: v.array(starterProjectOutputValidator),
+  roles: v.array(workflowTemplateRoleValidator),
+  portalDefaults: clientPortalDefaultsValidator,
+});
+export const workflowTemplateValidator = workflowTemplateInputValidator.extend({ id: v.string(), archived: v.boolean() });
+export const projectSetupValidator = workflowTemplateInputValidator.extend({ templateId: v.string(), templateName: v.string() }).omit("name");
+
 export const relayProjectValidator = v.object({
   id: v.string(),
   name: v.string(),
@@ -13,6 +31,9 @@ export const relayProjectValidator = v.object({
   projectGroupId: v.optional(v.string()),
   projectGroupName: v.optional(v.string()),
   portalUrl: v.optional(v.string()),
+  workflowTemplateId: v.optional(v.string()),
+  workflowStageId: v.optional(v.string()),
+  workflowSetup: v.optional(projectSetupValidator),
 });
 
 export const relayClientInputValidator = v.object({

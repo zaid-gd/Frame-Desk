@@ -24,7 +24,7 @@ export function createLocalClientPort(storage?: ClientStorage, createId = () => 
       const legacyProjects: unknown = JSON.parse(storageTarget.getItem(RELAY_LOCAL_PROJECTS_KEY) ?? "[]");
       const candidateProjects: unknown = state?.projects ?? legacyProjects;
       const projects = Array.isArray(candidateProjects) && candidateProjects.every(isWorkspaceProject) ? candidateProjects : [];
-      storageTarget.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients, projects }));
+      storageTarget.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ ...state, clients, projects }));
       return null;
     }
     catch { return "Browser storage refused the Client update."; }

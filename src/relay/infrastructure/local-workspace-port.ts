@@ -1,5 +1,5 @@
 import type { WorkspacePort, WorkspaceProject } from "../ports/workspace-port";
-import { isWorkspaceProject, MAX_RELAY_PROJECTS } from "../domain/workspace-project";
+import { createWorkspaceProjectDraft, isWorkspaceProject, MAX_RELAY_PROJECTS } from "../domain/workspace-project";
 import { readLocalWorkspaceState, RELAY_LOCAL_WORKSPACE_KEY } from "./local-workspace-state";
 import { isRelayClient } from "../domain/client";
 
@@ -20,7 +20,7 @@ export function createLocalWorkspacePort(storage?: Pick<Storage, "getItem" | "se
         return [];
       }
     },
-    async requestNewProject() {
+    async requestNewProject(setup) {
       const target = browserStorage();
       if (!target) return { ok: false, error: { kind: "unavailable", message: "Browser storage is unavailable, so Relay could not save this local draft." } };
       const projects = this.loadProjects();
@@ -29,12 +29,12 @@ export function createLocalWorkspacePort(storage?: Pick<Storage, "getItem" | "se
       }
       const suffix = projects.length ? ` ${projects.length + 1}` : "";
       const clientId = "client_unassigned";
-      const draft: WorkspaceProject = { id: `project_${crypto.randomUUID()}`, name: `Untitled local project${suffix}`, clientId, stage: "Planned", tone: "planned", due: "Not set", progress: "0%" };
+      const draft: WorkspaceProject = createWorkspaceProjectDraft(`project_${crypto.randomUUID()}`, `Untitled local project${suffix}`, setup);
       try {
         const state = readLocalWorkspaceState(target);
         const clients = state?.clients?.every(isRelayClient) ? state.clients : [];
         const nextClients = clients.some((client) => client.id === clientId) ? clients : [...clients, { id: clientId, name: "Unassigned Client", company: "", contactName: "", email: "", phone: "", notes: "Created for draft Projects that need a durable Client.", archived: false }];
-        target.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients: nextClients, projects: [...projects, draft] }));
+        target.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ ...state, clients: nextClients, projects: [...projects, draft] }));
         return { ok: true };
       } catch {
         return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the write, so Relay could not save this local draft." } };

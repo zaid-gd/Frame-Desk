@@ -1,4 +1,5 @@
 import type { WorkspaceProject } from "../domain/workspace-project";
+import type { ProjectSetup } from "../domain/workflow-template";
 
 export type { WorkspaceProject } from "../domain/workspace-project";
 
@@ -8,7 +9,7 @@ export type ActionResult =
 
 export type WorkspacePort = {
   loadProjects(): readonly WorkspaceProject[];
-  requestNewProject(): Promise<ActionResult>;
+  requestNewProject(setup?: ProjectSetup): Promise<ActionResult>;
 };
 
 export const sampleWriteRefusal: ActionResult = {

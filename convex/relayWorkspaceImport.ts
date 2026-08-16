@@ -2,7 +2,8 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { isWorkspaceProject, MAX_RELAY_PROJECTS } from "../src/relay/domain/workspace-project";
 import { isRelayClient, MAX_RELAY_CLIENTS } from "../src/relay/domain/client";
-import { relayClientValidator, relayProjectValidator } from "./relayWorkspaceValidators";
+import { isWorkflowTemplate } from "../src/relay/domain/workflow-template";
+import { relayClientValidator, relayProjectValidator, workflowTemplateValidator } from "./relayWorkspaceValidators";
 
 const importResultValidator = v.union(
   v.object({ ok: v.literal(true), imported: v.number() }),
@@ -26,7 +27,7 @@ export const listMine = query({
 });
 
 export const importLocalWorkspace = mutation({
-  args: { projects: v.array(relayProjectValidator), clients: v.array(relayClientValidator) },
+  args: { projects: v.array(relayProjectValidator), clients: v.array(relayClientValidator), workflowTemplates: v.optional(v.array(workflowTemplateValidator)) },
   returns: importResultValidator,
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -36,18 +37,20 @@ export const importLocalWorkspace = mutation({
     }
     if (!args.projects.every(isWorkspaceProject)) throw new Error("The backup contains an invalid project record.");
     if (args.clients.length > MAX_RELAY_CLIENTS || !args.clients.every(isRelayClient)) throw new Error("The backup contains an invalid Client record.");
+    if ((args.workflowTemplates?.length ?? 0) > 100 || (args.workflowTemplates !== undefined && !args.workflowTemplates.every(isWorkflowTemplate))) throw new Error("The backup contains an invalid Workflow Template record.");
     const clientIds = new Set(args.clients.map((client) => client.id));
     if (clientIds.size !== args.clients.length || args.projects.some((project) => !clientIds.has(project.clientId))) {
       throw new Error("Every imported Project must refer to one imported Client identifier.");
     }
 
     const ownerUserId = identity.tokenIdentifier;
-    const [priorImport, relayProject, relayClient] = await Promise.all([
+    const [priorImport, relayProject, relayClient, workflowTemplate] = await Promise.all([
       ctx.db.query("relayWorkspaceImports").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).unique(),
       ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).first(),
       ctx.db.query("relayClients").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).first(),
+      ctx.db.query("relayWorkflowTemplates").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).first(),
     ]);
-    if (priorImport || relayProject || relayClient) return { ok: false as const, error: WORKSPACE_NOT_EMPTY };
+    if (priorImport || relayProject || relayClient || workflowTemplate) return { ok: false as const, error: WORKSPACE_NOT_EMPTY };
 
     const importedAt = new Date().toISOString();
     for (const project of args.projects) {
@@ -56,7 +59,10 @@ export const importLocalWorkspace = mutation({
     for (const { id: durableId, ...client } of args.clients) {
       await ctx.db.insert("relayClients", { ownerUserId, durableId, ...client });
     }
-    const recordCount = args.projects.length + args.clients.length;
+    for (const [order, { id: durableId, ...template }] of (args.workflowTemplates ?? []).entries()) {
+      await ctx.db.insert("relayWorkflowTemplates", { ownerUserId, durableId, order, ...template });
+    }
+    const recordCount = args.projects.length + args.clients.length + (args.workflowTemplates?.length ?? 0);
     await ctx.db.insert("relayWorkspaceImports", { ownerUserId, importedAt, recordCount });
     return { ok: true as const, imported: recordCount };
   },

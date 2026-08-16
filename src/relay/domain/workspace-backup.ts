@@ -1,5 +1,6 @@
 import { isWorkspaceProject, MAX_RELAY_PROJECTS, type WorkspaceProject } from "./workspace-project";
 import { isRelayClient, MAX_RELAY_CLIENTS, type RelayClient } from "./client";
+import { isWorkflowTemplate, type WorkflowTemplate } from "./workflow-template";
 
 export const RELAY_BACKUP_FORMAT = "relay-local-workspace";
 export const RELAY_BACKUP_VERSION = 2;
@@ -11,10 +12,10 @@ export type RelayWorkspaceBackup = {
   format: typeof RELAY_BACKUP_FORMAT;
   version: typeof RELAY_BACKUP_VERSION;
   exportedAt: string;
-  workspace: { clients: RelayClient[]; projects: WorkspaceProject[] };
+  workspace: { clients: RelayClient[]; projects: WorkspaceProject[]; workflowTemplates?: WorkflowTemplate[] };
 };
 
-export type BackupCounts = { clients: number; projects: number; total: number };
+export type BackupCounts = { clients: number; projects: number; workflowTemplates?: number; total: number };
 export type BackupPreviewResult =
   | { ok: true; backup: RelayWorkspaceBackup; counts: BackupCounts }
   | { ok: false; error: string };
@@ -49,15 +50,15 @@ function validClientRelationships(projects: readonly WorkspaceProject[], clients
   return ids.size === clients.length && projects.every((project) => ids.has(project.clientId));
 }
 
-export function serializeWorkspaceBackup(projects: readonly WorkspaceProject[], clients: readonly RelayClient[] = [], exportedAt = new Date().toISOString()) {
+export function serializeWorkspaceBackup(projects: readonly WorkspaceProject[], clients: readonly RelayClient[] = [], exportedAt = new Date().toISOString(), workflowTemplates: readonly WorkflowTemplate[] = []) {
   const backup: RelayWorkspaceBackup = {
     format: RELAY_BACKUP_FORMAT,
     version: RELAY_BACKUP_VERSION,
     exportedAt,
-    workspace: { clients: [...clients], projects: [...projects] },
+    workspace: { clients: [...clients], projects: [...projects], ...(workflowTemplates.length ? { workflowTemplates: [...workflowTemplates] } : {}) },
   };
   const text = JSON.stringify(backup, null, 2);
-  if (projects.length > MAX_RELAY_PROJECTS || clients.length > MAX_RELAY_CLIENTS || !projects.every(isWorkspaceProject) || !clients.every(isRelayClient) || !validClientRelationships(projects, clients) || byteLength(text) > MAX_RELAY_BACKUP_BYTES) {
+  if (projects.length > MAX_RELAY_PROJECTS || clients.length > MAX_RELAY_CLIENTS || workflowTemplates.length > 100 || !projects.every(isWorkspaceProject) || !clients.every(isRelayClient) || !workflowTemplates.every(isWorkflowTemplate) || !validClientRelationships(projects, clients) || byteLength(text) > MAX_RELAY_BACKUP_BYTES) {
     throw new Error("Relay cannot export this Local Mode data because it exceeds the supported backup limits.");
   }
   return text;
@@ -87,13 +88,15 @@ export function previewWorkspaceBackup(text: string): BackupPreviewResult {
   }
   if (!record.workspace || typeof record.workspace !== "object" || Array.isArray(record.workspace)) return { ok: false, error: "This backup does not contain a valid Relay workspace." };
   const workspace = record.workspace as Record<string, unknown>;
-  const unsupportedWorkspaceField = unexpectedKey(workspace, ["clients", "projects"]);
+  const unsupportedWorkspaceField = unexpectedKey(workspace, ["clients", "projects", "workflowTemplates"]);
   if (unsupportedWorkspaceField) return { ok: false, error: `This backup contains an unsafe or unsupported field: ${unsupportedWorkspaceField}.` };
   if (!Array.isArray(workspace.projects) || workspace.projects.length > MAX_RELAY_PROJECTS) return { ok: false, error: `This backup must contain no more than ${MAX_RELAY_PROJECTS} projects.` };
   if (!workspace.projects.every(isWorkspaceProject)) return { ok: false, error: "This backup contains an invalid project record." };
   if (!Array.isArray(workspace.clients) || workspace.clients.length > MAX_RELAY_CLIENTS) return { ok: false, error: `This backup must contain no more than ${MAX_RELAY_CLIENTS} Clients.` };
   if (!workspace.clients.every(isRelayClient)) return { ok: false, error: "This backup contains an invalid Client record." };
+  if (workspace.workflowTemplates !== undefined && (!Array.isArray(workspace.workflowTemplates) || workspace.workflowTemplates.length > 100 || !workspace.workflowTemplates.every(isWorkflowTemplate))) return { ok: false, error: "This backup contains an invalid Workflow Template record." };
   if (!validClientRelationships(workspace.projects, workspace.clients)) return { ok: false, error: "Every Project in this backup must refer to one Client identifier." };
   const backup = value as RelayWorkspaceBackup;
-  return { ok: true, backup, counts: { clients: backup.workspace.clients.length, projects: backup.workspace.projects.length, total: backup.workspace.clients.length + backup.workspace.projects.length } };
+  const workflowTemplateCount = backup.workspace.workflowTemplates?.length ?? 0;
+  return { ok: true, backup, counts: { clients: backup.workspace.clients.length, projects: backup.workspace.projects.length, ...(workflowTemplateCount ? { workflowTemplates: workflowTemplateCount } : {}), total: backup.workspace.clients.length + backup.workspace.projects.length + workflowTemplateCount } };
 }

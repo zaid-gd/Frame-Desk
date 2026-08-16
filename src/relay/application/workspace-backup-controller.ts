@@ -41,12 +41,13 @@ export function createWorkspaceBackupController({ mode, backupPort }: { mode: Wo
         const projectNoun = result.prepared.counts.projects === 1 ? "project" : "projects";
         const clientNoun = result.prepared.counts.clients === 1 ? "Client" : "Clients";
         const recordNoun = result.prepared.counts.total === 1 ? "record" : "records";
+        const templateSummary = result.prepared.counts.workflowTemplates ? ` · ${result.prepared.counts.workflowTemplates} Workflow Templates` : "";
         return {
           ok: true,
           prepared: {
             backup: result.prepared.backup,
             fileName: result.prepared.fileName,
-            recordSummary: `${result.prepared.counts.clients} ${clientNoun} · ${result.prepared.counts.projects} ${projectNoun} · ${result.prepared.counts.total} total ${recordNoun}`,
+            recordSummary: `${result.prepared.counts.clients} ${clientNoun} · ${result.prepared.counts.projects} ${projectNoun}${templateSummary} · ${result.prepared.counts.total} total ${recordNoun}`,
           },
         };
       },

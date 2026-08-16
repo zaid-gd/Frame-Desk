@@ -7,6 +7,7 @@ import { createEntryController, type RelaySession, type WorkspaceMode } from "..
 import { createWorkspaceBackupController } from "../application/workspace-backup-controller";
 import { createWorkspaceController } from "../application/workspace-controller";
 import { createClientController } from "../application/client-controller";
+import { createWorkflowTemplateController } from "../application/workflow-template-controller";
 import type { RelaySection } from "../application/routes";
 import { createBrowserEntryPort, RELAY_ENTRY_MODE_KEY } from "../infrastructure/browser-entry-port";
 import { useCloudWorkspaceBackupPort } from "../infrastructure/cloud-workspace-backup-port";
@@ -19,6 +20,9 @@ import { createLocalClientPort } from "../infrastructure/local-client-port";
 import { createSampleClientPort } from "../infrastructure/sample-client-port";
 import { useCloudClientPort } from "../infrastructure/cloud-client-port";
 import { clientRelationships } from "../domain/client-relationships";
+import { createLocalWorkflowTemplatePort } from "../infrastructure/local-workflow-template-port";
+import { createSampleWorkflowTemplatePort } from "../infrastructure/sample-workflow-template-port";
+import { useCloudWorkflowTemplatePort } from "../infrastructure/cloud-workflow-template-port";
 import { RelayExperience } from "../presentation/relay-experience";
 
 const THEME_KEY = "relay:theme:v1";
@@ -81,8 +85,17 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
     return createLocalClientPort(undefined, undefined, () => relationships().projects, () => relationships().groups);
   }, [cloudClientPort, mode, selectedWorkspacePort]);
   const clientController = createClientController({ port: selectedClientPort });
+  const cloudTemplatePort = useCloudWorkflowTemplatePort(mode === "cloud" && Boolean(auth.isSignedIn), selectedWorkspacePort.loadProjects());
+  const selectedTemplatePort = useMemo(() => {
+    if (mode === "sample") return createSampleWorkflowTemplatePort();
+    if (mode === "cloud") return cloudTemplatePort;
+    return createLocalWorkflowTemplatePort();
+  }, [cloudTemplatePort, mode]);
+  const templateController = createWorkflowTemplateController({ port: selectedTemplatePort, canManage: mode !== "sample" });
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
-  const workspaceController = createWorkspaceController({ mode, workspacePort: selectedWorkspacePort, clientNames, section });
+  const firstTemplate = templateController.actions.list()[0];
+  const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
+  const workspaceController = createWorkspaceController({ mode, workspacePort: selectedWorkspacePort, clientNames, section, defaultProjectSetup });
   const localBackupPort = useMemo(
     () => hydrated ? createLocalWorkspaceBackupPort(window.localStorage, undefined, () => setWorkspaceVersion((version) => version + 1)) : null,
     [hydrated],
@@ -153,6 +166,7 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
         workspace: workspaceController.model,
         backup: backupController,
         clients: clientController,
+        templates: templateController,
       }}
       onChooseMode={chooseMode}
       onStartAccount={startAccount}
@@ -161,6 +175,7 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
       onLeaveWorkspace={leaveWorkspace}
       onRequestNewProject={requestNewProject}
       onClientsChanged={() => setWorkspaceVersion((version) => version + 1)}
+      onTemplatesChanged={() => setWorkspaceVersion((version) => version + 1)}
     />
   );
 }
