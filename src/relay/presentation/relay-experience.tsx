@@ -39,6 +39,7 @@ import type { WorkflowTemplateController } from "../application/workflow-templat
 import type { ProjectController } from "../application/project-controller";
 import type { ProjectOutputController } from "../application/project-output-controller";
 import type { ClientPortalController } from "../application/client-portal-controller";
+import type { ProjectFilePort } from "../ports/project-file-port";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import {
   DropdownMenu,
@@ -79,6 +80,7 @@ export type RelayExperienceProps = {
     templates: WorkflowTemplateController;
     projects: ProjectController;
     outputs: ProjectOutputController;
+    files: ProjectFilePort | null;
     portal?: ClientPortalController;
     projectId?: string;
   };
@@ -147,7 +149,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, files, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const readOnly = mode === "sample";
@@ -199,7 +201,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -488,7 +490,7 @@ function ProjectBoardCard({ project, readOnly, onMove }: { project: ProjectBoard
   return <li ref={setNodeRef} style={style} className={isDragging ? styles.projectDragging : undefined}><div className={styles.projectBoardCard}><div><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span>{project.clientName} · {project.dueDate}</span></div>{!readOnly ? <div className={styles.projectBoardActions}><button type="button" aria-label={`Drag ${project.name}`} {...listeners} {...attributes}>Drag</button><select aria-label={`Move ${project.name} to stage`} value={project.currentStageId} onChange={(event) => onMove(project.id, event.target.value)}>{project.stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></div> : null}</div></li>;
 }
 
-export function ProjectPage({ controller, outputController, portalController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; portalController?: ClientPortalController; projectId: string; readOnly: boolean; onChanged(): void }) {
+export function ProjectPage({ controller, outputController, filePort = null, portalController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; filePort?: ProjectFilePort | null; portalController?: ClientPortalController; projectId: string; readOnly: boolean; onChanged(): void }) {
   const [, setRevision] = useState(0);
   const [notice, setNotice] = useState("");
   const project = controller.actions.inspectProject(projectId);
@@ -517,8 +519,38 @@ export function ProjectPage({ controller, outputController, portalController, pr
       </div>
     </ContentSection>
     <ContentSection title="Client Review">{portalController ? <ClientPortalEditor controller={portalController} onChanged={changed} /> : <p>Client Portals are available for signed-in cloud Workspaces.</p>}</ContentSection>
-    {["Files and Links", "Activity"].map((title) => <ContentSection title={title} key={title}><p>{title} will stay attached to this Project as its work grows.</p></ContentSection>)}
+    <ContentSection title="Files and Links">{filePort ? <ProjectFiles port={filePort} onChanged={changed} /> : <p>Safe Project file uploads are available in signed-in cloud Workspaces.</p>}</ContentSection>
+    <ContentSection title="Activity"><p>Activity will stay attached to this Project as its work grows.</p></ContentSection>
   </PageContent></WorkspacePage>;
+}
+
+function ProjectFiles({ port, onChanged }: { port: ProjectFilePort; onChanged(message: string): void }) {
+  const [title, setTitle] = useState("");
+  const [selected, setSelected] = useState<File | null>(null);
+  const usage = port.usage();
+  async function upload() {
+    if (!selected) return onChanged("Choose a PDF, text, Markdown, JPEG, PNG, or WebP file.");
+    const result = await port.upload(selected, title);
+    if (result.ok) { setSelected(null); setTitle(""); }
+    onChanged(result.ok ? "Project file uploaded." : result.error.message);
+  }
+  async function archive(id: string, archived: boolean) {
+    const impact = await port.deletionImpact(id);
+    if (!impact.ok || (archived && !window.confirm(impact.value.archiveEffect))) return;
+    const result = await port.setArchived(id, archived);
+    onChanged(result.ok ? archived ? "Project file archived. Its retained size still counts." : "Project file restored." : result.error.message);
+  }
+  async function remove(id: string) {
+    const impact = await port.deletionImpact(id);
+    if (!impact.ok || !window.confirm(impact.value.deleteEffect)) return;
+    const result = await port.permanentlyDelete(id);
+    onChanged(result.ok ? "Project file permanently deleted and its stored bytes freed." : result.error.message);
+  }
+  return <div className={styles.projectOutputs}>
+    <p>{usage.retainedBytes.toLocaleString()} of {usage.limitBytes.toLocaleString()} bytes retained. Archived files and stored Media Versions count.</p>
+    <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void upload(); }}><label>File title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Safe Project file<input type="file" accept=".pdf,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,application/pdf,text/plain,text/markdown,image/jpeg,image/png,image/webp" onChange={(event) => setSelected(event.target.files?.[0] ?? null)} /></label><button type="submit" className={styles.primaryButton}>Upload Project file</button></form>
+    {port.state().kind === "loading" ? <p role="status">Loading Project files…</p> : port.files().length === 0 ? <p>No Project files yet.</p> : <ul>{port.files().map((file) => <li key={file.id}><strong>{file.title}</strong> · {file.fileName} · {file.size.toLocaleString()} bytes · {file.archived ? "Archived" : "Active"}<div>{file.accessUrl ? <a href={file.accessUrl} target="_blank" rel="noreferrer">Open private signed link</a> : null}<label><input type="checkbox" checked={file.portalVisible} disabled={file.archived} onChange={(event) => void port.setSharing(file.id, event.target.checked, event.target.checked && file.allowDownload).then((result) => onChanged(result.ok ? "Portal visibility saved." : result.error.message))} />Visible in Client Portal</label><label><input type="checkbox" checked={file.allowDownload} disabled={file.archived || !file.portalVisible} onChange={(event) => void port.setSharing(file.id, true, event.target.checked).then((result) => onChanged(result.ok ? "Download permission saved." : result.error.message))} />Allow Download</label><button type="button" onClick={() => void archive(file.id, !file.archived)}>{file.archived ? "Restore" : "Archive"}</button><button type="button" onClick={() => void remove(file.id)}>Permanently delete</button></div></li>)}</ul>}
+  </div>;
 }
 
 function ClientPortalEditor({ controller, onChanged }: { controller: ClientPortalController; onChanged(message: string): void }) {

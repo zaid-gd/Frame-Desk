@@ -127,7 +127,7 @@ export const addMediaVersion = mutation({
     const id = `version_${crypto.randomUUID()}`;
     await ctx.db.insert("relayMediaVersions", {
       ownerUserId, durableId: id, projectId: output.projectId, outputId: output.durableId, number: (latest?.number ?? 0) + 1,
-      provider: source.provider, ...(source.providerId ? { providerId: source.providerId } : {}), normalizedUrl: source.url, addedAt: new Date().toISOString(),
+      provider: source.provider, ...(source.providerId ? { providerId: source.providerId } : {}), normalizedUrl: source.url, addedAt: new Date().toISOString(), size: 0,
     });
     await ctx.db.patch("relayProjectOutputs", output._id, { currentVersionId: id, reviewState: "in_review" });
     return { id };

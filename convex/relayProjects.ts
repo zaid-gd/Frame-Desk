@@ -6,6 +6,7 @@ import { copyProjectSetup, createDefaultWorkflowTemplate, type WorkflowTemplate 
 import { isIsoCalendarDate } from "../src/relay/domain/calendar-date";
 import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
 import { projectStageTransition, type ProjectRecord } from "../src/relay/domain/project";
+import { relayStorageUsage } from "./relayStorageUsage";
 
 async function requireOwner(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -230,8 +231,27 @@ export const cleanupDeletedProjectRecords = internalMutation({
     const comments = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
     for (const comment of comments) await ctx.db.delete("relayMediaComments", comment._id);
     if (comments.length === batchSize) { await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args); return null; }
+    const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
+    for (const file of files) {
+      await ctx.storage.delete(file.storageId);
+      await ctx.db.delete("relayProjectFiles", file._id);
+      await relayStorageUsage.deleteIfExists(ctx, { namespace: args.ownerUserId, key: file.durableId, id: `file:${file.durableId}` });
+      const policy = await ctx.db.query("relayStoragePolicy").withIndex("by_key", (q) => q.eq("key", "service")).unique();
+      if (policy?.remainingBytes !== undefined) {
+        const remainingBytes = policy.remainingBytes + file.size;
+        await ctx.db.patch("relayStoragePolicy", policy._id, { remainingBytes, acceptsUploads: remainingBytes > (policy.reserveBytes ?? 0) });
+      }
+    }
+    if (files.length === batchSize) { await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args); return null; }
     const versions = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
-    for (const version of versions) await ctx.db.delete("relayMediaVersions", version._id);
+    for (const version of versions) {
+      await ctx.db.delete("relayMediaVersions", version._id);
+      await relayStorageUsage.deleteIfExists(ctx, {
+        namespace: args.ownerUserId,
+        key: version.durableId,
+        id: `version:${version.durableId}`,
+      });
+    }
     if (versions.length === batchSize) { await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args); return null; }
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
     for (const output of outputs) await ctx.db.delete("relayProjectOutputs", output._id);

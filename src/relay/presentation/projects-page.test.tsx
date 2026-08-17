@@ -8,6 +8,7 @@ import { createMemoryProjectPort } from "../infrastructure/memory-project-port";
 import { createMemoryWorkspacePort } from "../infrastructure/memory-workspace-port";
 import { copyProjectSetup, createDefaultWorkflowTemplate } from "../domain/workflow-template";
 import { ProjectPage, ProjectsPage } from "./relay-experience";
+import type { ProjectFilePort } from "../ports/project-file-port";
 import type { ProjectRecord } from "../domain/project";
 import type { ProjectOutput } from "../domain/project-output";
 import { createProjectOutputController } from "../application/project-output-controller";
@@ -121,5 +122,27 @@ describe("Project Outputs public interface", () => {
     expect(screen.getByRole("link", { name: "Open current Media Version" }).getAttribute("href")).toBe("https://vimeo.com/987654321");
     await userEvent.click(screen.getByRole("button", { name: "Resolve Comment from Client" }));
     expect(port.loadOutputs()[0].versions[0].comments[0].resolved).toBe(true);
+  });
+});
+
+describe("Project files public interface", () => {
+  test("shows retained storage and lets a cloud editor upload a safe file", async () => {
+    const setup = copyProjectSetup(createDefaultWorkflowTemplate("template_default", "Default workflow"));
+    const project: ProjectRecord = { id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Editing", dueDate: "2026-09-12", financialType: "nonBillable", paymentState: "not-applicable", archived: false, lead: "Owner", assignees: [], progress: 30, money: 0, workflowSetup: setup };
+    const projectPort = createMemoryProjectPort({ clients: [{ id: "client_acme", name: "Acme", archived: false }], projects: [project] });
+    const uploaded: File[] = [];
+    const filePort: ProjectFilePort = {
+      state: () => ({ kind: "ready" }), files: () => [], usage: () => ({ retainedBytes: 0, limitBytes: 200 * 1024 * 1024 }),
+      async upload(file) { uploaded.push(file); return { ok: true, value: { id: "file_one" } }; },
+      async setSharing() { return { ok: true, value: undefined }; }, async setArchived() { return { ok: true, value: undefined }; },
+      async deletionImpact() { return { ok: true, value: { archiveEffect: "Archive keeps the bytes.", deleteEffect: "Delete frees the bytes." } }; },
+      async permanentlyDelete() { return { ok: true, value: undefined }; },
+    };
+    render(<ProjectPage controller={createProjectController({ port: projectPort })} outputController={createProjectOutputController({ port: projectPort })} filePort={filePort} projectId={project.id} readOnly={false} onChanged={() => undefined} />);
+    expect(screen.getByText(/Archived files and stored Media Versions count/)).toBeTruthy();
+    const file = new File(["brief"], "brief.txt", { type: "text/plain" });
+    await userEvent.upload(screen.getByLabelText("Safe Project file"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Upload Project file" }));
+    expect(uploaded).toEqual([file]);
   });
 });

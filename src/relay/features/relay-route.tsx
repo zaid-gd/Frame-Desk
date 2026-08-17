@@ -30,6 +30,7 @@ import { createLocalProjectPort } from "../infrastructure/local-project-port";
 import { createMemoryProjectPort } from "../infrastructure/memory-project-port";
 import { createSampleProjectPort } from "../infrastructure/sample-project-port";
 import { useCloudProjectPort } from "../infrastructure/cloud-project-port";
+import { useCloudProjectFilePort } from "../infrastructure/cloud-project-file-port";
 import { useCloudClientPortalPort } from "../infrastructure/cloud-client-portal-port";
 import { RelayExperience } from "../presentation/relay-experience";
 
@@ -111,6 +112,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   }, [cloudProjectPort, hydrated, mode, projectClients, projectId, projectTemplates]);
   const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" });
   const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
+  const projectFiles = useCloudProjectFilePort(mode === "cloud" && Boolean(auth.isSignedIn), projectId);
   const selectedProject = selectedProjectPort.loadProjects().find(({ id }) => id === projectId) ?? null;
   const cloudClientPortalPort = useCloudClientPortalPort(
     mode === "cloud" && Boolean(auth.isSignedIn),
@@ -195,6 +197,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         templates: templateController,
         projects: projectController,
         outputs: projectOutputController,
+        files: projectFiles,
         portal: clientPortalController,
         projectId,
       }}

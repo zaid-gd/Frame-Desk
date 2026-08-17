@@ -82,9 +82,47 @@ export default defineSchema({
     providerId: v.optional(v.string()),
     normalizedUrl: v.string(),
     addedAt: v.string(),
+    size: v.optional(v.number()),
   })
     .index("by_ownerUserId_and_outputId_and_number", ["ownerUserId", "outputId", "number"])
     .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayProjectFiles: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    storageId: v.id("_storage"),
+    title: v.string(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    archived: v.boolean(),
+    portalVisible: v.boolean(),
+    allowDownload: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"])
+    .index("by_storageId", ["storageId"]),
+
+  relayStoragePolicy: defineTable({
+    key: v.literal("service"),
+    acceptsUploads: v.boolean(),
+    remainingBytes: v.optional(v.number()),
+    reserveBytes: v.optional(v.number()),
+    heldBytes: v.optional(v.number()),
+  }).index("by_key", ["key"]),
+
+  relayUploadReservations: defineTable({
+    ownerUserId: v.string(),
+    projectId: v.string(),
+    size: v.number(),
+    declaredSize: v.number(),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("pending"), v.literal("expired")),
+    createdAt: v.string(),
+    expiresAt: v.number(),
+  }).index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
 
   relayMediaComments: defineTable({
     ownerUserId: v.string(),

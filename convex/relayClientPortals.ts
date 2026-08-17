@@ -45,7 +45,7 @@ async function derivePinHash(pin: string, salt: Uint8Array) {
   return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: new Uint8Array(salt), iterations: PIN_ITERATIONS }, key, 256));
 }
 
-async function pinMatches(pin: string, hash: string, salt: string) {
+export async function pinMatches(pin: string, hash: string, salt: string) {
   const candidate = await derivePinHash(pin, hexToBytes(salt));
   const expected = hexToBytes(hash);
   if (candidate.length !== expected.length) return false;
