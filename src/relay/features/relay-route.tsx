@@ -9,6 +9,7 @@ import { createWorkspaceController } from "../application/workspace-controller";
 import { createClientController } from "../application/client-controller";
 import { createWorkflowTemplateController } from "../application/workflow-template-controller";
 import { createProjectController } from "../application/project-controller";
+import { createProjectOutputController } from "../application/project-output-controller";
 import type { RelaySection } from "../application/routes";
 import { createBrowserEntryPort, RELAY_ENTRY_MODE_KEY } from "../infrastructure/browser-entry-port";
 import { useCloudWorkspaceBackupPort } from "../infrastructure/cloud-workspace-backup-port";
@@ -99,14 +100,15 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   const templateController = createWorkflowTemplateController({ port: selectedTemplatePort, canManage: mode !== "sample" });
   const projectClients = selectedClientPort.loadClients().map(({ id, name, archived }) => ({ id, name, archived }));
   const projectTemplates = templateController.actions.list(true);
-  const cloudProjectPort = useCloudProjectPort(mode === "cloud" && Boolean(auth.isSignedIn), projectClients, projectTemplates);
+  const cloudProjectPort = useCloudProjectPort(mode === "cloud" && Boolean(auth.isSignedIn), projectClients, projectTemplates, projectId);
   const selectedProjectPort = useMemo(() => {
     if (mode === "sample") return createSampleProjectPort();
     if (mode === "cloud") return cloudProjectPort;
-    if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates });
-    return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates });
-  }, [cloudProjectPort, hydrated, mode, projectClients, projectTemplates]);
+    if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
+    return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
+  }, [cloudProjectPort, hydrated, mode, projectClients, projectId, projectTemplates]);
   const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" });
+  const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
   const firstTemplate = templateController.actions.list()[0];
   const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
@@ -183,6 +185,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         clients: clientController,
         templates: templateController,
         projects: projectController,
+        outputs: projectOutputController,
         projectId,
       }}
       onChooseMode={chooseMode}

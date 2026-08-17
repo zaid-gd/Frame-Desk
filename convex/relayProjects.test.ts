@@ -18,6 +18,13 @@ const inspectProject = makeFunctionReference<"query", { id: string }, Record<str
 const archiveProject = makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjects:setProjectArchived");
 const deleteProject = makeFunctionReference<"mutation", { id: string }, null>("relayProjects:deleteProject");
 const moveProjectStage = makeFunctionReference<"mutation", { id: string; targetStageId: string; confirmed: boolean }, { projectName: string; stage: string; effect: { kind: "projectValue"; amount: number } | { kind: "salaryPlan"; change: "added" | "removed" } | { kind: "none" } }>("relayProjects:moveProjectStage");
+const listProjects = makeFunctionReference<"query", Record<string, never>, Array<Record<string, unknown>>>("relayProjects:listProjects");
+const listOutputs = makeFunctionReference<"query", { projectId: string }, Array<Record<string, unknown>>>("relayProjectOutputs:listOutputs");
+const addOutput = makeFunctionReference<"mutation", { projectId: string; name: string }, { id: string }>("relayProjectOutputs:addOutput");
+const editOutput = makeFunctionReference<"mutation", { id: string; name: string }, null>("relayProjectOutputs:editOutput");
+const setOutputArchived = makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjectOutputs:setOutputArchived");
+const setOutputReviewState = makeFunctionReference<"mutation", { id: string; reviewState: "draft" | "in_review" | "changes_requested" | "approved" | "final_delivered" }, null>("relayProjectOutputs:setOutputReviewState");
+const addMediaVersion = makeFunctionReference<"mutation", { outputId: string; url: string }, { id: string }>("relayProjectOutputs:addMediaVersion");
 
 describe("Relay cloud Projects and Project Groups", () => {
   test("creates, edits, archives, and derives Project Group totals for its Client", async () => {
@@ -111,5 +118,48 @@ describe("Relay cloud Projects and Project Groups", () => {
     const reopened = await owner.query(inspectProject, { id });
     expect(reopened).toMatchObject({ stage: "Revisions", progress: "65%" });
     expect(reopened).not.toHaveProperty("completedAt");
+  });
+});
+
+describe("Relay cloud Project Outputs", () => {
+  test("materializes starter slots and retains normalized Media Version history without adding Projects", async () => {
+    const t = convexTest(schema, modules);
+    const ownerUserId = "owner|outputs";
+    const owner = t.withIdentity({ tokenIdentifier: ownerUserId });
+    const template = createDefaultWorkflowTemplate("template_outputs", "Output workflow");
+    template.starterOutputs.push({ id: "output_short", name: "Short cut", relativeDeadlineDays: -1, roleId: null });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("relayClients", { ownerUserId, durableId: "client_acme", archived: false, name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "" });
+      const { id: durableId, ...input } = template;
+      await ctx.db.insert("relayWorkflowTemplates", { ownerUserId, durableId, order: 0, ...input });
+    });
+    const { id: projectId } = await owner.mutation(createProject, { ...projectInput, templateId: template.id, financialType: "salaryPlan" });
+
+    expect(await owner.query(listOutputs, { projectId })).toMatchObject([
+      { name: "Main video", reviewState: "draft", versions: [] },
+      { name: "Short cut", reviewState: "draft", versions: [], relativeDeadlineDays: -1 },
+    ]);
+    const { id: addedId } = await owner.mutation(addOutput, { projectId, name: "Thumbnail" });
+    await owner.mutation(editOutput, { id: addedId, name: "Cover image" });
+    await owner.mutation(setOutputReviewState, { id: addedId, reviewState: "approved" });
+    await owner.mutation(setOutputArchived, { id: addedId, archived: true });
+
+    const outputId = String((await owner.query(listOutputs, { projectId }))[0].id);
+    const first = await owner.mutation(addMediaVersion, { outputId, url: "https://youtu.be/dQw4w9WgXcQ?t=12" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("relayMediaComments", { ownerUserId, durableId: "comment_1", projectId, versionId: first.id, body: "Tighten the opening.", resolved: false });
+    });
+    await owner.mutation(addMediaVersion, { outputId, url: "https://player.vimeo.com/video/987654321?autoplay=1" });
+
+    expect((await owner.query(listOutputs, { projectId }))[0]).toMatchObject({
+      currentVersionId: expect.stringMatching(/^version_/), reviewState: "in_review", unresolvedPreviousComments: 1,
+      versions: [
+        { number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, comments: [{ body: "Tighten the opening.", resolved: false }] },
+        { number: 2, source: { provider: "vimeo", providerId: "987654321", url: "https://vimeo.com/987654321" } },
+      ],
+    });
+    expect(await owner.query(listProjects, {})).toHaveLength(1);
+    await expect(owner.mutation(addMediaVersion, { outputId, url: "<iframe src=bad></iframe>" })).rejects.toThrow("valid HTTP");
+    await expect(t.withIdentity({ tokenIdentifier: "other|user" }).mutation(editOutput, { id: outputId, name: "Stolen" })).rejects.toThrow("not found");
   });
 });

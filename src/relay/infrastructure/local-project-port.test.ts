@@ -28,3 +28,27 @@ test("a local stage move persists delivery and reopening state", async () => {
   await expect(port.moveProjectStage(created.value.id, editing.id, false)).resolves.toMatchObject({ ok: true, value: { effect: { kind: "salaryPlan", change: "removed" } } });
   expect(port.loadProjects()[0]).toMatchObject({ stage: "Editing", progress: 25, completedAt: undefined });
 });
+
+test("local Project Outputs retain version history without adding salary-counted Projects", async () => {
+  const storage = memoryStorage();
+  const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
+  template.starterOutputs.push({ id: "output_short", name: "Short cut", relativeDeadlineDays: -1, roleId: null });
+  const port = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template] });
+  const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan" });
+  if (!created.ok) throw new Error(created.error.message);
+
+  const outputPort = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template], selectedProjectId: created.value.id });
+  const outputs = outputPort.loadOutputs();
+  expect(outputs).toMatchObject([{ name: "Main video", versions: [] }, { name: "Short cut", versions: [] }]);
+  await expect(outputPort.addOutput({ name: " " })).resolves.toMatchObject({ ok: false, error: { kind: "invalid" } });
+  await expect(outputPort.editOutput(outputs[0].id, { name: " ".repeat(201) })).resolves.toMatchObject({ ok: false, error: { kind: "invalid" } });
+  await expect(outputPort.addMediaVersion(outputs[0].id, { url: "https://youtu.be/dQw4w9WgXcQ" })).resolves.toMatchObject({ ok: true });
+  await expect(outputPort.addMediaVersion(outputs[0].id, { url: "https://vimeo.com/987654321" })).resolves.toMatchObject({ ok: true });
+
+  const reloaded = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template], selectedProjectId: created.value.id });
+  expect(reloaded.loadOutputs()[0]).toMatchObject({
+    reviewState: "in_review",
+    versions: [{ number: 1, source: { provider: "youtube" } }, { number: 2, source: { provider: "vimeo" } }],
+  });
+  expect(reloaded.loadProjects()).toHaveLength(1);
+});

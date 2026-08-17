@@ -3,6 +3,8 @@ import { projectStageTransition, type NewProjectInput, type ProjectChoice, type 
 import type { ProjectPort } from "../ports/project-port";
 import { deriveProjectGroupTotals } from "../domain/project-group";
 import { readLocalWorkspaceState, RELAY_LOCAL_WORKSPACE_KEY, type LocalWorkspaceState } from "./local-workspace-state";
+import { addMediaVersion, projectOutputNameError } from "../domain/project-output";
+import type { ProjectOutputPort } from "../ports/project-output-port";
 
 function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
   return (state?.projects ?? []).flatMap((project) => project.workflowSetup && project.financialType
@@ -10,7 +12,7 @@ function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
     : []);
 }
 
-export function createLocalProjectPort({ storage, clients, templates }: { storage: Pick<Storage, "getItem" | "setItem">; clients: readonly ProjectChoice[]; templates: readonly ProjectTemplate[] }): ProjectPort {
+export function createLocalProjectPort({ storage, clients, templates, selectedProjectId = "" }: { storage: Pick<Storage, "getItem" | "setItem">; clients: readonly ProjectChoice[]; templates: readonly ProjectTemplate[]; selectedProjectId?: string }): ProjectPort & ProjectOutputPort {
   const state = () => readLocalWorkspaceState(storage) ?? { clients: [], projects: [] };
   const save = (next: LocalWorkspaceState) => storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify(next));
   return {
@@ -24,6 +26,9 @@ export function createLocalProjectPort({ storage, clients, templates }: { storag
       });
     },
     loadProjects: () => projectRecords(state()),
+    projectId: selectedProjectId,
+    outputState: () => ({ kind: "ready" }),
+    loadOutputs: () => (state().projectOutputs ?? []).filter((output) => output.projectId === selectedProjectId),
     async createProject(input: NewProjectInput) {
       const current = state();
       const client = clients.find((row) => row.id === input.clientId && !row.archived);
@@ -33,7 +38,17 @@ export function createLocalProjectPort({ storage, clients, templates }: { storag
       const workflowSetup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
       const project = { id, name: input.name.trim(), clientId: input.clientId, stage: workflowSetup.stages[0].label, tone: "planned" as const, due: input.dueDate, progress: "0%", status: "active" as const, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId, projectGroupName: group!.name } : {}), workflowTemplateId: template.id, workflowStageId: workflowSetup.stages[0].id, workflowSetup, financialType: input.financialType, lead: "Unassigned", assignees: [] };
-      try { save({ ...current, projects: [...current.projects, project] }); return { ok: true, value: { id } }; }
+      const projectOutputs = workflowSetup.starterOutputs.map((starter) => ({
+        id: `output_${crypto.randomUUID()}`,
+        projectId: id,
+        name: starter.name,
+        reviewState: "draft" as const,
+        archived: false,
+        relativeDeadlineDays: starter.relativeDeadlineDays,
+        ...(starter.roleId ? { roleId: starter.roleId } : {}),
+        versions: [],
+      }));
+      try { save({ ...current, projects: [...current.projects, project], projectOutputs: [...(current.projectOutputs ?? []), ...projectOutputs] }); return { ok: true, value: { id } }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
     async createGroup(input) {
@@ -77,10 +92,51 @@ export function createLocalProjectPort({ storage, clients, templates }: { storag
         return { ok: true, value: { projectName: transition.project.name, stage: transition.project.stage, effect: transition.effect } };
       } catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
+    async addOutput(input) {
+      const nameError = projectOutputNameError(input.name);
+      if (nameError) return { ok: false, error: { kind: "invalid", message: nameError } };
+      const current = state();
+      if (!current.projects.some(({ id }) => id === selectedProjectId)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
+      const id = `output_${crypto.randomUUID()}`;
+      const output = { id, projectId: selectedProjectId, name: input.name.trim(), reviewState: "draft" as const, archived: false, versions: [] };
+      try { save({ ...current, projectOutputs: [...(current.projectOutputs ?? []), output] }); return { ok: true, value: { id } }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project Output write." } }; }
+    },
+    async editOutput(id, input) {
+      const nameError = projectOutputNameError(input.name);
+      if (nameError) return { ok: false, error: { kind: "invalid", message: nameError } };
+      const current = state();
+      if (!(current.projectOutputs ?? []).some((output) => output.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project Output not found." } };
+      try { save({ ...current, projectOutputs: (current.projectOutputs ?? []).map((output) => output.id === id ? { ...output, name: input.name.trim() } : output) }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project Output write." } }; }
+    },
+    async setOutputArchived(id, archived) {
+      const current = state();
+      if (!(current.projectOutputs ?? []).some((output) => output.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project Output not found." } };
+      try { save({ ...current, projectOutputs: (current.projectOutputs ?? []).map((output) => output.id === id ? { ...output, archived } : output) }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project Output write." } }; }
+    },
+    async setOutputReviewState(id, reviewState) {
+      const current = state();
+      if (!(current.projectOutputs ?? []).some((output) => output.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project Output not found." } };
+      try { save({ ...current, projectOutputs: (current.projectOutputs ?? []).map((output) => output.id === id ? { ...output, reviewState } : output) }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project Output write." } }; }
+    },
+    async addMediaVersion(outputId, input) {
+      const current = state();
+      const outputs = current.projectOutputs ?? [];
+      const output = outputs.find(({ id }) => id === outputId);
+      if (!output) return { ok: false, error: { kind: "unavailable", message: "Project Output not found." } };
+      const id = `version_${crypto.randomUUID()}`;
+      const next = addMediaVersion(output, { id, url: input.url, addedAt: new Date().toISOString() });
+      if (!next) return { ok: false, error: { kind: "invalid", message: "Enter a valid HTTP, HTTPS, YouTube, or Vimeo URL." } };
+      try { save({ ...current, projectOutputs: outputs.map((item) => item.id === outputId ? next : item) }); return { ok: true, value: { id } }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Media Version write." } }; }
+    },
     async deleteProject(id) {
       const current = state();
       if (!current.projects.some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
-      try { save({ ...current, projects: current.projects.filter((row) => row.id !== id) }); return { ok: true, value: undefined }; }
+      try { save({ ...current, projects: current.projects.filter((row) => row.id !== id), projectOutputs: (current.projectOutputs ?? []).filter((output) => output.projectId !== id) }); return { ok: true, value: undefined }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
   };

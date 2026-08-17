@@ -46,6 +46,19 @@ export const projectStageEffectValidator = v.union(
   v.object({ kind: v.literal("none") }),
 );
 
+export const outputReviewStateValidator = v.union(
+  v.literal("draft"), v.literal("in_review"), v.literal("changes_requested"), v.literal("approved"), v.literal("final_delivered"),
+);
+export const mediaProviderValidator = v.union(v.literal("youtube"), v.literal("vimeo"), v.literal("link"));
+export const relayMediaCommentValidator = v.object({ id: v.string(), body: v.string(), resolved: v.boolean() });
+export const relayMediaSourceValidator = v.object({ provider: mediaProviderValidator, providerId: v.union(v.string(), v.null()), url: v.string() });
+export const relayMediaVersionValidator = v.object({ id: v.string(), number: v.number(), source: relayMediaSourceValidator, addedAt: v.string(), comments: v.array(relayMediaCommentValidator) });
+export const relayProjectOutputValidator = v.object({
+  id: v.string(), projectId: v.string(), name: v.string(), reviewState: outputReviewStateValidator, archived: v.boolean(),
+  roleId: v.optional(v.string()), relativeDeadlineDays: v.optional(v.number()), versions: v.array(relayMediaVersionValidator),
+  currentVersionId: v.optional(v.string()), unresolvedPreviousComments: v.number(),
+});
+
 export const newProjectInputValidator = v.object({
   name: v.string(),
   clientId: v.string(),

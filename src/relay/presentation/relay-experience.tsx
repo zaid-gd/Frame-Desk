@@ -37,6 +37,7 @@ import type { ClientInput } from "../domain/client";
 import type { WorkflowTemplateInput } from "../domain/workflow-template";
 import type { WorkflowTemplateController } from "../application/workflow-template-controller";
 import type { ProjectController } from "../application/project-controller";
+import type { ProjectOutputController } from "../application/project-output-controller";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import {
   DropdownMenu,
@@ -76,6 +77,7 @@ export type RelayExperienceProps = {
     clients: ClientController;
     templates: WorkflowTemplateController;
     projects: ProjectController;
+    outputs: ProjectOutputController;
     projectId?: string;
   };
   onChooseMode(mode: "local" | "sample"): void;
@@ -143,7 +145,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const readOnly = mode === "sample";
@@ -195,7 +197,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} projectId={projectId} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -484,12 +486,59 @@ function ProjectBoardCard({ project, readOnly, onMove }: { project: ProjectBoard
   return <li ref={setNodeRef} style={style} className={isDragging ? styles.projectDragging : undefined}><div className={styles.projectBoardCard}><div><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span>{project.clientName} · {project.dueDate}</span></div>{!readOnly ? <div className={styles.projectBoardActions}><button type="button" aria-label={`Drag ${project.name}`} {...listeners} {...attributes}>Drag</button><select aria-label={`Move ${project.name} to stage`} value={project.currentStageId} onChange={(event) => onMove(project.id, event.target.value)}>{project.stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></div> : null}</div></li>;
 }
 
-function ProjectPage({ controller, projectId }: { controller: ProjectController; projectId: string }) {
+export function ProjectPage({ controller, outputController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; projectId: string; readOnly: boolean; onChanged(): void }) {
+  const [, setRevision] = useState(0);
+  const [notice, setNotice] = useState("");
   const project = controller.actions.inspectProject(projectId);
+  const outputView = outputController.actions.view();
+  const outputs = outputView.rows;
+  function changed(message: string) { setNotice(message); setRevision((value) => value + 1); onChanged(); }
+  const outputForm = useForm({
+    defaultValues: { name: "" },
+    onSubmit: async ({ value }) => {
+      const result = await outputController.actions.add(value);
+      if (result.ok) outputForm.reset();
+      changed(result.message);
+    },
+  });
   if (!project) return <WorkspacePage family="data-index"><SharedPageHeader title="Project not found" description="This Project is unavailable in the current Workspace." actions={<Link href="/relay/projects">Back to Projects</Link>} /></WorkspacePage>;
   const client = controller.model.clients.find(({ value }) => value === project.clientId)?.label ?? "Unknown Client";
   const headerFacts = <dl className={styles.projectFacts}><div><dt>Stage</dt><dd>{project.stage}</dd></div><div><dt>Client</dt><dd>{client}</dd></div><div><dt>Due date</dt><dd>{project.dueDate}</dd></div><div><dt>Lead</dt><dd>{project.lead}</dd></div><div><dt>Assignees</dt><dd>{project.assignees.length ? project.assignees.join(", ") : "Unassigned"}</dd></div></dl>;
-  return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>{["Overview", "Outputs and Versions", "Client Review", "Files and Links", "Activity"].map((title) => <ContentSection title={title} key={title}><p>{title === "Overview" ? `Financial type: ${project.financialType}. Workflow: ${project.workflowSetup.templateName}.` : `${title} will stay attached to this Project as its work grows.`}</p></ContentSection>)}</PageContent></WorkspacePage>;
+  return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>
+    <ContentSection title="Overview"><p>Financial type: {project.financialType}. Workflow: {project.workflowSetup.templateName}.</p></ContentSection>
+    <ContentSection title="Outputs and Versions">
+      <div className={styles.projectOutputs}>
+        {!readOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void outputForm.handleSubmit(); }}><outputForm.Field name="name">{(field) => <label>New Project Output name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</outputForm.Field><button type="submit" className={styles.primaryButton}>Add Project Output</button></form> : null}
+        {notice ? <p role="status">{notice}</p> : null}
+        {outputView.state.kind === "loading" ? <p role="status">Loading Project Outputs…</p> : outputView.state.kind === "error" ? <p role="alert">{outputView.state.message}</p> : null}
+        {outputView.state.kind === "ready" && outputs.length === 0 ? <p>No Project Outputs yet.</p> : outputs.map((output) => <ProjectOutputEditor key={output.id} output={output} controller={outputController} readOnly={readOnly} onChanged={changed} />)}
+      </div>
+    </ContentSection>
+    {[
+      "Client Review", "Files and Links", "Activity",
+    ].map((title) => <ContentSection title={title} key={title}><p>{title} will stay attached to this Project as its work grows.</p></ContentSection>)}
+  </PageContent></WorkspacePage>;
+}
+
+type ProjectOutputView = ReturnType<ProjectOutputController["actions"]["view"]>["rows"][number];
+
+function ProjectOutputEditor({ output, controller, readOnly, onChanged }: { output: ProjectOutputView; controller: ProjectOutputController; readOnly: boolean; onChanged(message: string): void }) {
+  const nameForm = useForm({ defaultValues: { name: output.name }, onSubmit: async ({ value }) => onChanged((await controller.actions.edit(output.id, value)).message) });
+  const versionForm = useForm({
+    defaultValues: { url: "" },
+    onSubmit: async ({ value }) => {
+      const result = await controller.actions.addVersion(output.id, value);
+      if (result.ok) versionForm.reset();
+      onChanged(result.message);
+    },
+  });
+  return <article className={styles.outputCard}>
+    <div className={styles.outputHeading}><div><h3>{output.name}</h3><span>{output.archived ? "Archived" : "Active"} · {output.versions.length} {output.versions.length === 1 ? "version" : "versions"}</span></div>{!readOnly ? <button type="button" onClick={async () => onChanged((await controller.actions.setArchived(output.id, !output.archived)).message)}>{output.archived ? "Restore" : "Archive"}</button> : null}</div>
+    {!readOnly ? <form className={styles.outputControls} onSubmit={(event) => { event.preventDefault(); void nameForm.handleSubmit(); }}><nameForm.Field name="name">{(field) => <label>{output.name} name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</nameForm.Field><button type="submit">Save name</button><label>{output.name} review state<select value={output.reviewState} onChange={async (event) => { const option = controller.model.reviewStateOptions.find(({ value }) => value === event.target.value); if (option) onChanged((await controller.actions.setReviewState(output.id, option.value)).message); }}>{controller.model.reviewStateOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label></form> : <p>Review state: {output.reviewStateLabel}</p>}
+    {output.unresolvedPreviousComments ? <p role="alert" className={styles.outputWarning}>{output.unresolvedPreviousComments} unresolved {output.unresolvedPreviousComments === 1 ? "Comment" : "Comments"} from an older version.</p> : null}
+    {!readOnly ? <form className={styles.versionCreate} onSubmit={(event) => { event.preventDefault(); void versionForm.handleSubmit(); }}><versionForm.Field name="url">{(field) => <label>New Media Version URL for {output.name}<input type="url" value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} placeholder="https://youtube.com/watch?v=…" /></label>}</versionForm.Field><button type="submit">Add Media Version for {output.name}</button></form> : null}
+    <ol className={styles.versionList}>{[...output.versions].reverse().map((version) => <li key={version.id}><div><strong>{version.current ? "Current" : "History"} · {version.providerLabel} · v{version.number}</strong><span>{version.addedLabel}</span></div><a href={version.source.url} target="_blank" rel="noreferrer" aria-label={version.current ? "Open current Media Version" : `Open Media Version ${version.number}`}>Open</a></li>)}</ol>
+  </article>;
 }
 
 const blankClient: ClientInput = { name: "", company: "", contactName: "", email: "", phone: "", notes: "" };

@@ -1,6 +1,6 @@
 import type { NewProjectInput, ProjectChoice, ProjectGroup, ProjectGroupInput, ProjectRecord, ProjectStageEffect, ProjectTemplate } from "../domain/project";
 
-export type ProjectWriteResult<T = undefined> = { ok: true; value: T } | { ok: false; error: { kind: "forbidden" | "invalid" | "unavailable"; message: string } };
+export type ProjectWriteResult<T = undefined> = { ok: true; value: T } | { ok: false; error: { kind: "unauthorized" | "forbidden" | "not-found" | "invalid" | "transport" | "unavailable"; message: string } };
 
 export type ProjectPort = {
   projectState?(): { kind: "ready" | "loading" | "error"; message?: string };

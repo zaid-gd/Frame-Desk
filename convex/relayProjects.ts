@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { internalMutation, mutation, query, type MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { newProjectInputValidator, projectDetailValidator, projectGroupInputValidator, projectGroupValidator, projectStageEffectValidator } from "./relayWorkspaceValidators";
 import { copyProjectSetup, createDefaultWorkflowTemplate, type WorkflowTemplate } from "../src/relay/domain/workflow-template";
 import { isIsoCalendarDate } from "../src/relay/domain/calendar-date";
@@ -126,6 +127,18 @@ export const createProject = mutation({
       lead: "Unassigned",
       assignees: [],
     });
+    for (const starter of setup.starterOutputs) {
+      await ctx.db.insert("relayProjectOutputs", {
+        ownerUserId,
+        durableId: `output_${crypto.randomUUID()}`,
+        projectId: id,
+        name: starter.name,
+        reviewState: "draft",
+        archived: false,
+        relativeDeadlineDays: starter.relativeDeadlineDays,
+        ...(starter.roleId ? { roleId: starter.roleId } : {}),
+      });
+    }
     return { id };
   },
 });
@@ -209,6 +222,24 @@ export const moveProjectStage = mutation({
   },
 });
 
+export const cleanupDeletedProjectRecords = internalMutation({
+  args: { ownerUserId: v.string(), projectId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const batchSize = 100;
+    const comments = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
+    for (const comment of comments) await ctx.db.delete("relayMediaComments", comment._id);
+    if (comments.length === batchSize) { await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args); return null; }
+    const versions = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
+    for (const version of versions) await ctx.db.delete("relayMediaVersions", version._id);
+    if (versions.length === batchSize) { await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args); return null; }
+    const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", args.ownerUserId).eq("projectId", args.projectId)).take(batchSize);
+    for (const output of outputs) await ctx.db.delete("relayProjectOutputs", output._id);
+    if (outputs.length === batchSize) await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, args);
+    return null;
+  },
+});
+
 export const deleteProject = mutation({
   args: { id: v.string() },
   returns: v.null(),
@@ -217,6 +248,7 @@ export const deleteProject = mutation({
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
     if (!project) throw new Error("Project not found.");
     await ctx.db.delete("relayProjects", project._id);
+    await ctx.scheduler.runAfter(0, internal.relayProjects.cleanupDeletedProjectRecords, { ownerUserId, projectId: args.id });
     return null;
   },
 });

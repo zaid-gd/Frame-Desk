@@ -18,6 +18,7 @@ import {
   teamActivityKindValidator,
 } from "./domainValidators";
 import { projectGroupInputValidator, relayClientInputValidator, relayProjectValidator, workflowTemplateInputValidator } from "./relayWorkspaceValidators";
+import { mediaProviderValidator, outputReviewStateValidator } from "./relayWorkspaceValidators";
 
 export default defineSchema({
   relayWorkflowTemplates: defineTable({
@@ -56,6 +57,45 @@ export default defineSchema({
     .index("by_ownerUserId", ["ownerUserId"])
     .index("by_ownerUserId_and_id", ["ownerUserId", "id"])
     .index("by_ownerUserId_and_workflowTemplateId_and_workflowStageId", ["ownerUserId", "workflowTemplateId", "workflowStageId"]),
+
+  relayProjectOutputs: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    name: v.string(),
+    reviewState: outputReviewStateValidator,
+    archived: v.boolean(),
+    roleId: v.optional(v.string()),
+    relativeDeadlineDays: v.optional(v.number()),
+    currentVersionId: v.optional(v.string()),
+  })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayMediaVersions: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    outputId: v.string(),
+    number: v.number(),
+    provider: mediaProviderValidator,
+    providerId: v.optional(v.string()),
+    normalizedUrl: v.string(),
+    addedAt: v.string(),
+  })
+    .index("by_ownerUserId_and_outputId_and_number", ["ownerUserId", "outputId", "number"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayMediaComments: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    versionId: v.string(),
+    body: v.string(),
+    resolved: v.boolean(),
+  })
+    .index("by_ownerUserId_and_versionId", ["ownerUserId", "versionId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
 
   relayWorkspaceImports: defineTable({
     ownerUserId: v.string(),

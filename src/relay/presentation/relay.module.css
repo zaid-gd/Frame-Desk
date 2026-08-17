@@ -240,6 +240,19 @@
 .projectSection { padding: 24px; }
 .projectSection h2 { margin: 0; font-size: 19px; }
 .projectSection p { margin-bottom: 0; color: var(--relay-muted); }
+.projectOutputs { display: grid; gap: 14px; }
+.outputCreate, .versionCreate, .outputControls { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.outputCreate label, .versionCreate label, .outputControls label { display: grid; flex: 1 1 220px; gap: 6px; color: var(--relay-muted); font-size: 12px; font-weight: 650; }
+.outputCreate input, .versionCreate input, .outputControls input, .outputControls select { min-height: 40px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 8px 10px; font: inherit; }
+.outputCreate button, .versionCreate button, .outputControls button, .outputHeading button { min-height: 40px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 0 12px; cursor: pointer; }
+.outputCard { display: grid; gap: 14px; border: 1px solid var(--relay-border); border-radius: 8px; padding: 16px; }
+.outputHeading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.outputHeading h3 { margin: 0; font-size: 16px; }
+.outputHeading span, .versionList span { display: block; margin-top: 4px; color: var(--relay-muted); font-size: 12px; }
+.outputWarning { margin: 0; border-left: 3px solid var(--relay-warning); background: color-mix(in srgb, var(--relay-warning) 10%, transparent); padding: 10px 12px; color: var(--relay-ink) !important; }
+.versionList { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.versionList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--relay-border); padding: 11px 0; }
+.versionList a { color: var(--relay-action); }
 .projectBoard { display: grid; grid-auto-columns: minmax(250px, 1fr); grid-auto-flow: column; gap: 12px; overflow-x: auto; padding: 16px; }
 .projectStage { min-height: 220px; padding: 14px; }
 .projectStage h3 { margin: 0 0 12px; font-size: 14px; }
