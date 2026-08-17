@@ -6,7 +6,7 @@ import { readLocalWorkspaceState, RELAY_LOCAL_WORKSPACE_KEY, type LocalWorkspace
 
 function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
   return (state?.projects ?? []).flatMap((project) => project.workflowSetup && project.financialType
-    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), stage: project.stage, dueDate: project.due, financialType: project.financialType, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup }]
+    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), stage: project.stage, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup }]
     : []);
 }
 
@@ -58,6 +58,18 @@ export function createLocalProjectPort({ storage, clients, templates }: { storag
       if (!(current.projectGroups ?? []).some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project Group not found." } };
       try { save({ ...current, projectGroups: (current.projectGroups ?? []).map((row) => row.id === id ? { ...row, archived } : row) }); return { ok: true, value: undefined }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project Group write." } }; }
+    },
+    async setProjectArchived(id, archived) {
+      const current = state();
+      if (!current.projects.some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
+      try { save({ ...current, projects: current.projects.map((row) => row.id === id ? { ...row, status: archived ? "past" : "active" } : row) }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
+    },
+    async deleteProject(id) {
+      const current = state();
+      if (!current.projects.some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
+      try { save({ ...current, projects: current.projects.filter((row) => row.id !== id) }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
   };
 }

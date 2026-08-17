@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import {
   ArrowRight,
   ArrowDown,
@@ -34,7 +36,7 @@ import type { ClientInput } from "../domain/client";
 import type { WorkflowTemplateInput } from "../domain/workflow-template";
 import type { WorkflowTemplateController } from "../application/workflow-template-controller";
 import type { ProjectController } from "../application/project-controller";
-import { newProjectSchema, type NewProjectInput, type ProjectGroupInput } from "../domain/project";
+import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import styles from "./relay.module.css";
-import { ContentSection, MetricItem, MetricStrip, PageContent, PageHeader as SharedPageHeader, WorkspacePage } from "@/components/workspace-page";
+import { ContentSection, MetricItem, MetricStrip, PageContent, PageHeader as SharedPageHeader, PageToolbar, WorkspacePage } from "@/components/workspace-page";
 
 const navigationIcons = {
   dashboard: LayoutDashboard,
@@ -326,11 +328,27 @@ function NewProjectForm({ controller, onCancel, onCreated }: { controller: Proje
   );
 }
 
-function ProjectsPage({ controller, workspace, readOnly, showNewProject, onNewProject, onCancelNewProject, onProjectCreated, onChanged }: { controller: ProjectController; workspace: WorkspaceModel; readOnly: boolean; showNewProject: boolean; onNewProject(): void; onCancelNewProject(): void; onProjectCreated(url: string): void; onChanged(): void }) {
+export function ProjectsPage({ controller, workspace, readOnly, showNewProject, onNewProject, onCancelNewProject, onProjectCreated, onChanged }: { controller: ProjectController; workspace: WorkspaceModel; readOnly: boolean; showNewProject: boolean; onNewProject(): void; onCancelNewProject(): void; onProjectCreated(url: string): void; onChanged(): void }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [draft, setDraft] = useState(blankGroup);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [notice, setNotice] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const state = {
+    query: searchParams.get("query") ?? undefined, client: searchParams.get("client") ?? undefined, stage: searchParams.get("stage") ?? undefined,
+    payment: (searchParams.get("payment") as "paid" | "unpaid" | "not-applicable" | null) ?? undefined,
+    salary: (searchParams.get("salary") as "salary" | "other" | null) ?? undefined,
+    sort: (searchParams.get("sort") as "name" | "client" | "stage" | "due" | "payment" | null) ?? undefined,
+    direction: (searchParams.get("direction") as "asc" | "desc" | null) ?? undefined,
+    view: (searchParams.get("view") as "table" | "board" | null) ?? undefined,
+    archived: (searchParams.get("archived") as "include" | null) ?? undefined,
+  };
+  const table = controller.actions.table(state);
+  useEffect(() => { if (!state.view) { const remembered = window.localStorage.getItem("relay:projects-view:v1"); if (remembered === "board") router.replace(`${pathname}?${controller.actions.viewQuery({ ...state, view: "board" })}`); } }, []);
+  function setViewState(next: typeof state) { if (next.view) window.localStorage.setItem("relay:projects-view:v1", next.view); const query = controller.actions.viewQuery(next); router.replace(query ? `${pathname}?${query}` : pathname); }
   const selected = controller.model.groups.find((group) => group.id === selectedId);
   function update(field: keyof ProjectGroupInput, value: string) { setDraft((current) => ({ ...current, [field]: value })); }
   async function saveGroup(event: React.FormEvent) {
@@ -342,7 +360,20 @@ function ProjectsPage({ controller, workspace, readOnly, showNewProject, onNewPr
   function inspect(group: typeof selected) { if (!group) return; setSelectedId(group.id); setDraft({ name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes }); }
   async function toggleGroup() { if (!selected) return; const result = await controller.actions.setGroupArchived(selected.id, !selected.archived); setNotice(result.message); if (result.ok) { setSelectedId(null); setDraft(blankGroup); onChanged(); } }
   const selectedClient = selected ? controller.model.clients.find(({ value }) => value === selected.clientId)?.label ?? "Unknown Client" : "";
-  const projectTable = <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Project</th><th>Stage</th><th>Due</th><th>Progress</th></tr></thead><tbody>{workspace.projects.map((project) => <tr key={project.id}><td><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span className={styles.projectMeta}>{project.clientName}</span></td><td>{project.stage}</td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody></table></div>;
+  async function archiveProject(id: string, archived: boolean) { const result = archived ? await controller.actions.restore(id) : await controller.actions.archive(id); setNotice(result.message); if (result.ok) onChanged(); }
+  async function deleteProject() { if (!deleteId) return; const result = await controller.actions.deletePermanently(deleteId); setNotice(result.message); if (result.ok) { setDeleteId(null); onChanged(); } }
+  type ProjectRow = ProjectRecord & { clientName: string };
+  const columns: ColumnDef<ProjectRow>[] = [
+    { accessorKey: "name", header: "Project", cell: ({ row }) => <Link className={styles.projectTitle} href={`/relay/projects/${row.original.id}`}>{row.original.name}</Link> },
+    { accessorKey: "clientName", header: "Client" }, { accessorKey: "stage", header: "Stage" }, { accessorKey: "dueDate", header: "Due" },
+    { accessorKey: "paymentState", header: "Payment", cell: ({ row }) => row.original.paymentState === "not-applicable" ? "—" : row.original.paymentState === "paid" ? "Paid" : "Unpaid" },
+    { accessorKey: "financialType", header: "Salary", cell: ({ row }) => row.original.financialType === "salaryPlan" ? "Salary Plan" : "—" },
+    ...(table.showAssignees ? [{ accessorKey: "assignees", header: "Assignees", cell: ({ row }: { row: { original: ProjectRow } }) => row.original.assignees.join(", ") || "Unassigned" } satisfies ColumnDef<ProjectRow>] : []),
+    { id: "actions", header: "Actions", cell: ({ row }) => readOnly ? <span>Read-only</span> : <><button type="button" onClick={() => void archiveProject(row.original.id, row.original.archived)}>{row.original.archived ? "Restore" : "Archive"}</button>{controller.model.canDeletePermanently ? <button type="button" onClick={() => setDeleteId(row.original.id)}>Delete permanently</button> : null}</> },
+  ];
+  const reactTable = useReactTable({ data: table.rows, columns, getCoreRowModel: getCoreRowModel() });
+  const projectTable = controller.model.projectState.kind === "loading" ? <div className={styles.emptyPage} role="status"><h3>Loading Projects…</h3><p>Your current view will appear when the Workspace responds.</p></div> : controller.model.projectState.kind === "error" ? <div className={styles.emptyPage} role="alert"><h3>Projects could not load</h3><p>{controller.model.projectState.message ?? "Refresh the page to try again."}</p></div> : table.rows.length ? <div className={styles.tableWrap}><table className={styles.table}>{reactTable.getHeaderGroups().map((group) => <thead key={group.id}><tr>{group.headers.map((header) => <th scope="col" key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr></thead>)}<tbody>{reactTable.getRowModel().rows.map((row) => <tr key={row.id}>{row.getVisibleCells().map((cell) => <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}</tbody></table></div> : <div className={styles.emptyPage} role="status"><h3>No Projects found</h3><p>Clear a filter or create a Project to start tracking work.</p></div>;
+  const board = <div className={styles.groupGrid}>{[...new Set(table.rows.map((project) => project.stage))].map((stage) => <section className={styles.card} key={stage}><h3>{stage}</h3><ul className={styles.clientRows}>{table.rows.filter((project) => project.stage === stage).map((project) => <li key={project.id}><Link href={`/relay/projects/${project.id}`}>{project.name}<span>{project.clientName} · {project.dueDate}</span></Link></li>)}</ul></section>)}</div>;
   const inspector = selected ? <div className={styles.groupInspector}><h3>{selected.name}</h3><dl><div><dt>Client</dt><dd>{selectedClient}</dd></div><div><dt>Status</dt><dd>{selected.archived ? "Archived" : "Active"}</dd></div><div><dt>Date range</dt><dd>{selected.startDate || "No start"} — {selected.endDate || "No end"}</dd></div><div><dt>Projects</dt><dd>{selected.projectCount}</dd></div><div><dt>Progress</dt><dd>{selected.progress}%</dd></div><div><dt>Money</dt><dd>{selected.money.toLocaleString()}</dd></div></dl><p>{selected.notes || "No notes."}</p></div> : <p className={styles.clientEmpty}>Choose a Project Group to inspect it.</p>;
   return (
     <WorkspacePage family="data-index">
@@ -350,7 +381,8 @@ function ProjectsPage({ controller, workspace, readOnly, showNewProject, onNewPr
       <PageContent>
       {showNewProject ? <NewProjectForm controller={controller} onCancel={onCancelNewProject} onCreated={onProjectCreated} /> : null}
       <MetricStrip aria-label="Workspace metrics">{workspace.metrics.map((metric) => <MetricItem key={metric.label} label={metric.label} value={metric.value} />)}</MetricStrip>
-      <ContentSection title="Projects" bodyMode="flush">{projectTable}</ContentSection>
+      <ContentSection title="Projects" bodyMode="flush"><PageToolbar className={styles.formActions}><input aria-label="Search Projects" placeholder="Search Projects" value={state.query ?? ""} onChange={(event) => setViewState({ ...state, query: event.target.value || undefined })} /><select aria-label="Filter by Client" value={state.client ?? ""} onChange={(event) => setViewState({ ...state, client: event.target.value || undefined })}><option value="">All Clients</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select><select aria-label="Filter by stage" value={state.stage ?? ""} onChange={(event) => setViewState({ ...state, stage: event.target.value || undefined })}><option value="">All stages</option>{[...new Set(controller.model.projects.map((project) => project.stage))].map((stage) => <option key={stage}>{stage}</option>)}</select><select aria-label="Filter by payment" value={state.payment ?? ""} onChange={(event) => setViewState({ ...state, payment: (event.target.value || undefined) as typeof state.payment })}><option value="">All payment states</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="not-applicable">Not applicable</option></select><select aria-label="Filter by salary" value={state.salary ?? ""} onChange={(event) => setViewState({ ...state, salary: (event.target.value || undefined) as typeof state.salary })}><option value="">All financial types</option><option value="salary">Salary Plan</option><option value="other">Other</option></select><select aria-label="Sort Projects" value={state.sort ?? "due"} onChange={(event) => setViewState({ ...state, sort: event.target.value as typeof state.sort })}><option value="due">Due date</option><option value="name">Name</option><option value="client">Client</option><option value="stage">Stage</option><option value="payment">Payment</option></select><button type="button" aria-label={`Sort ${state.direction === "desc" ? "ascending" : "descending"}`} onClick={() => setViewState({ ...state, direction: state.direction === "desc" ? "asc" : "desc" })}>{state.direction === "desc" ? "Descending" : "Ascending"}</button><label className={styles.check}><input type="checkbox" checked={state.archived === "include"} onChange={(event) => setViewState({ ...state, archived: event.target.checked ? "include" : undefined })} />Archived</label><button type="button" aria-pressed={table.view === "table"} onClick={() => setViewState({ ...state, view: "table" })}>Table</button><button type="button" aria-pressed={table.view === "board"} onClick={() => setViewState({ ...state, view: "board" })}>Board</button></PageToolbar>{table.view === "board" ? board : projectTable}</ContentSection>
+      {deleteId ? <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className={styles.card}><h3 id="delete-project-title">Permanently delete this Project?</h3><p>{controller.model.deletionEffects}</p><div className={styles.formActions}><button type="button" onClick={() => setDeleteId(null)}>Cancel</button><button type="button" onClick={() => void deleteProject()}>Delete permanently</button></div></div> : null}
       <ContentSection title="Project Groups" description="Campaigns, retainers, and production runs for one Client." actions={<label className={styles.check}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Include archived</label>} bodyMode="flush">
         <div className={styles.groupGrid}>
           <ul className={styles.clientRows}>{controller.model.groups.filter((group) => includeArchived || !group.archived).map((group) => <li key={group.id}><button type="button" aria-pressed={selectedId === group.id} onClick={() => inspect(group)}><strong>{group.name}</strong><span>{group.projectCount} Projects · {group.progress}% · {group.money.toLocaleString()}</span>{group.archived ? <small>Archived</small> : null}</button></li>)}</ul>

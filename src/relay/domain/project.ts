@@ -29,7 +29,21 @@ export type ProjectRecord = {
   assignees: string[];
   progress: number;
   money: number;
+  paymentState: "paid" | "unpaid" | "not-applicable";
+  archived: boolean;
   workflowSetup: ProjectSetup;
+};
+
+export type ProjectViewState = {
+  query?: string;
+  client?: string;
+  stage?: string;
+  payment?: ProjectRecord["paymentState"];
+  salary?: "salary" | "other";
+  sort?: "name" | "client" | "stage" | "due" | "payment";
+  direction?: "asc" | "desc";
+  view?: "table" | "board";
+  archived?: "include";
 };
 
 export type ProjectChoice = { id: string; name: string; archived: boolean };

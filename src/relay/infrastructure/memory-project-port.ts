@@ -20,11 +20,13 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
       if (!client || !template || template.archived || (input.projectGroupId && (!group || group.clientId !== input.clientId))) return { ok: false, error: { kind: "invalid", message: "Choose active Project setup options." } };
       const setup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
-      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), stage: setup.stages[0].label, dueDate: input.dueDate, financialType: input.financialType, lead: "Unassigned", assignees: [], progress: 0, money: 0, workflowSetup: setup });
+      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), stage: setup.stages[0].label, dueDate: input.dueDate, financialType: input.financialType, paymentState: input.financialType === "nonBillable" ? "not-applicable" : "unpaid", archived: false, lead: "Unassigned", assignees: [], progress: 0, money: 0, workflowSetup: setup });
       return { ok: true, value: { id } };
     },
     async createGroup(input) { const id = `group_${crypto.randomUUID()}`; savedGroups.push({ id, archived: false, projectCount: 0, progress: 0, money: 0, ...input }); return { ok: true, value: { id } }; },
     async editGroup(id, input) { const index = savedGroups.findIndex((group) => group.id === id); if (index < 0) return { ok: false, error: { kind: "unavailable", message: "Project Group not found." } }; savedGroups[index] = { ...savedGroups[index], ...input }; return { ok: true, value: undefined }; },
     async setGroupArchived(id, archived) { const group = savedGroups.find((row) => row.id === id); if (!group) return { ok: false, error: { kind: "unavailable", message: "Project Group not found." } }; group.archived = archived; return { ok: true, value: undefined }; },
+    async setProjectArchived(id, archived) { const project = savedProjects.find((row) => row.id === id); if (!project) return { ok: false, error: { kind: "unavailable", message: "Project not found." } }; project.archived = archived; return { ok: true, value: undefined }; },
+    async deleteProject(id) { const index = savedProjects.findIndex((row) => row.id === id); if (index < 0) return { ok: false, error: { kind: "unavailable", message: "Project not found." } }; savedProjects.splice(index, 1); return { ok: true, value: undefined }; },
   };
 }

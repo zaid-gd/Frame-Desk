@@ -156,3 +156,27 @@ export const listProjects = query({
     });
   },
 });
+
+export const setProjectArchived = mutation({
+  args: { id: v.string(), archived: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
+    if (!project) throw new Error("Project not found.");
+    await ctx.db.patch("relayProjects", project._id, { status: args.archived ? "past" : "active" });
+    return null;
+  },
+});
+
+export const deleteProject = mutation({
+  args: { id: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
+    if (!project) throw new Error("Project not found.");
+    await ctx.db.delete("relayProjects", project._id);
+    return null;
+  },
+});

@@ -1,11 +1,15 @@
-import { newProjectSchema, type NewProjectInput, type ProjectGroupInput } from "../domain/project";
+import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectViewState } from "../domain/project";
 import type { ProjectPort, ProjectWriteResult } from "../ports/project-port";
 
 function message<T>(result: ProjectWriteResult<T>, success: string) {
   return result.ok ? { ok: true as const, message: success } : { ok: false as const, kind: result.error.kind, message: result.error.message };
 }
 
-export function createProjectController({ port, canManage = true }: { port: ProjectPort; canManage?: boolean }) {
+type ProjectAccess = { role: "owner" | "editor" | "viewer"; memberId: string; editorsCanViewAll: boolean; team?: boolean };
+
+export function createProjectController({ port, canManage = true, access = { role: "owner", memberId: "owner", editorsCanViewAll: true, team: false } }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess }) {
+  const clientNames = new Map(port.loadClients().map((client) => [client.id, client.name]));
+  const canSee = (project: ReturnType<ProjectPort["loadProjects"]>[number]) => access.role !== "editor" || access.editorsCanViewAll || project.assignees.includes(access.memberId) || project.lead === access.memberId;
   return {
     model: {
       canManage,
@@ -13,10 +17,28 @@ export function createProjectController({ port, canManage = true }: { port: Proj
       templates: port.loadTemplates().filter(({ archived }) => !archived).map(({ id: value, name: label }) => ({ value, label })),
       groups: port.loadGroups(),
       projects: port.loadProjects(),
+      projectState: port.projectState?.() ?? { kind: "ready" as const },
+      canDeletePermanently: canManage && access.role === "owner",
+      deletionEffects: "Permanent deletion removes this Project. Its files, versions, Client Portal history, and Activity will no longer be available through the Project. This cannot be undone.",
     },
     actions: {
       groupOptions(clientId: string) { return port.loadGroups().filter((group) => !group.archived && group.clientId === clientId).map(({ id: value, name: label }) => ({ value, label })); },
       inspectProject(id: string) { return port.loadProjects().find((project) => project.id === id) ?? null; },
+      table(state: ProjectViewState) {
+        const needle = state.query?.trim().toLocaleLowerCase();
+        const rows = port.loadProjects().filter(canSee).filter((project) =>
+          (state.archived === "include" || !project.archived)
+          && (!needle || project.name.toLocaleLowerCase().includes(needle) || (clientNames.get(project.clientId) ?? "").toLocaleLowerCase().includes(needle))
+          && (!state.client || project.clientId === state.client)
+          && (!state.stage || project.stage === state.stage)
+          && (!state.payment || project.paymentState === state.payment)
+          && (!state.salary || (state.salary === "salary") === (project.financialType === "salaryPlan")));
+        const sort = state.sort ?? "due";
+        const value = (project: typeof rows[number]) => sort === "client" ? clientNames.get(project.clientId) ?? "" : sort === "payment" ? project.paymentState : sort === "due" ? project.dueDate : project[sort];
+        rows.sort((left, right) => String(value(left)).localeCompare(String(value(right))) * (state.direction === "desc" ? -1 : 1));
+        return { rows: rows.map((project) => ({ ...project, clientName: clientNames.get(project.clientId) ?? "Unknown Client" })), showAssignees: access.team !== false || access.role !== "owner", view: state.view ?? "table" };
+      },
+      viewQuery(state: ProjectViewState) { const query = new URLSearchParams(); for (const [key, value] of Object.entries(state)) if (value) query.set(key, value); return query.toString(); },
       async create(input: NewProjectInput) {
         const parsed = newProjectSchema.safeParse(input);
         if (!parsed.success) return { ok: false as const, kind: "invalid" as const, message: parsed.error.issues[0].message };
@@ -26,6 +48,12 @@ export function createProjectController({ port, canManage = true }: { port: Proj
       async createGroup(input: ProjectGroupInput) { return message(await port.createGroup(input), "Project Group created."); },
       async editGroup(id: string, input: ProjectGroupInput) { return message(await port.editGroup(id, input), "Project Group saved."); },
       async setGroupArchived(id: string, archived: boolean) { return message(await port.setGroupArchived(id, archived), archived ? "Project Group archived." : "Project Group restored."); },
+      async archive(id: string) { return message(await port.setProjectArchived(id, true), "Project archived. Its history remains available."); },
+      async restore(id: string) { return message(await port.setProjectArchived(id, false), "Project restored."); },
+      async deletePermanently(id: string) {
+        if (access.role !== "owner") return { ok: false as const, kind: "forbidden" as const, message: "Only the Workspace Owner can permanently delete Projects." };
+        return message(await port.deleteProject(id), "Project permanently deleted.");
+      },
     },
   };
 }

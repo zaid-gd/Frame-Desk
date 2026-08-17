@@ -14,6 +14,8 @@ const listGroups = makeFunctionReference<"query", { includeArchived?: boolean },
 const projectInput = { name: "Launch film 01", clientId: "client_acme", projectGroupId: "", templateId: "template_launch", dueDate: "2026-09-12", financialType: "projectValue" as const };
 const createProject = makeFunctionReference<"mutation", typeof projectInput, { id: string }>("relayProjects:createProject");
 const inspectProject = makeFunctionReference<"query", { id: string }, Record<string, unknown> | null>("relayProjects:inspectProject");
+const archiveProject = makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjects:setProjectArchived");
+const deleteProject = makeFunctionReference<"mutation", { id: string }, null>("relayProjects:deleteProject");
 
 describe("Relay cloud Projects and Project Groups", () => {
   test("creates, edits, archives, and derives Project Group totals for its Client", async () => {
@@ -72,5 +74,18 @@ describe("Relay cloud Projects and Project Groups", () => {
     });
     const { id } = await owner.mutation(createProject, { ...projectInput, templateId: "template_default" });
     await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ workflowSetup: { templateId: "template_default", templateName: "Default workflow" } });
+  });
+
+  test("archives a Project with its history intact, then permanently deletes it", async () => {
+    const t = convexTest(schema, modules);
+    const owner = t.withIdentity({ tokenIdentifier: "owner" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("relayClients", { ownerUserId: "owner", durableId: "client_acme", archived: false, name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "" });
+    });
+    const { id } = await owner.mutation(createProject, { ...projectInput, templateId: "template_default" });
+    await owner.mutation(archiveProject, { id, archived: true });
+    await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ id, status: "past" });
+    await owner.mutation(deleteProject, { id });
+    await expect(owner.query(inspectProject, { id })).resolves.toBeNull();
   });
 });
