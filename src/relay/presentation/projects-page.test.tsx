@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { createProjectController } from "../application/project-controller";
@@ -9,14 +9,14 @@ import { createMemoryWorkspacePort } from "../infrastructure/memory-workspace-po
 import { copyProjectSetup, createDefaultWorkflowTemplate } from "../domain/workflow-template";
 import { ProjectsPage } from "./relay-experience";
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
+const navigation = vi.hoisted(() => ({ replace: vi.fn(), search: "" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/relay/projects",
   useRouter: () => navigation,
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(navigation.search),
 }));
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); navigation.search = ""; navigation.replace.mockReset(); });
 
 describe("Projects page public interface", () => {
   function renderPage(controller = createProjectController({ port: createMemoryProjectPort() })) {
@@ -63,5 +63,36 @@ describe("Projects page public interface", () => {
     errorPort.projectState = () => ({ kind: "error", message: "Check your connection and refresh." });
     renderPage(createProjectController({ port: errorPort }));
     expect(screen.getByRole("alert").textContent).toContain("Check your connection and refresh.");
+  });
+
+  test("groups the board by copied stages and offers the same move through a stage menu", async () => {
+    navigation.search = "view=board";
+    const setup = copyProjectSetup(createDefaultWorkflowTemplate("template_default", "Default workflow"));
+    const port = createMemoryProjectPort({
+      now: () => "2026-08-17T10:00:00.000Z",
+      clients: [{ id: "client_acme", name: "Acme", archived: false }],
+      projects: [{ id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Approved", dueDate: "2026-09-12", financialType: "projectValue", paymentState: "unpaid", archived: false, lead: "Owner", assignees: [], progress: 90, money: 1200, workflowSetup: setup }],
+    });
+    renderPage(createProjectController({ port }));
+
+    for (const stage of setup.stages) expect(screen.getByRole("heading", { name: stage.label })).toBeTruthy();
+    const dragHandle = screen.getByRole("button", { name: "Drag Alpha" });
+    expect(dragHandle.getAttribute("aria-describedby")).toBeTruthy();
+    dragHandle.focus();
+    fireEvent.keyDown(dragHandle, { key: " ", code: "Space" });
+    expect(await screen.findByText("Picked up Alpha.")).toBeTruthy();
+    fireEvent.keyDown(dragHandle, { key: "Escape", code: "Escape" });
+    expect(await screen.findByText("Moving Alpha was cancelled.")).toBeTruthy();
+    fireEvent.pointerDown(dragHandle, { button: 0, buttons: 1, clientX: 10, clientY: 10, isPrimary: true, pointerId: 1, pointerType: "mouse" });
+    fireEvent.pointerMove(document, { buttons: 1, clientX: 20, clientY: 10, isPrimary: true, pointerId: 1, pointerType: "mouse" });
+    expect(await screen.findByText("Picked up Alpha.")).toBeTruthy();
+    fireEvent.pointerUp(document, { button: 0, clientX: 20, clientY: 10, isPrimary: true, pointerId: 1, pointerType: "mouse" });
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Move Alpha to stage" }), setup.stages.find(({ purpose }) => purpose === "delivered")!.id);
+    expect(screen.getByRole("alertdialog").textContent).toContain("records the actual delivery time and earns 1,200");
+    const confirmDelivery = screen.getByRole("button", { name: "Confirm delivery" });
+    expect(document.activeElement).toBe(confirmDelivery);
+    await userEvent.click(confirmDelivery);
+    expect(await screen.findByText("Alpha delivered. 1,200 earned.")).toBeTruthy();
+    expect(port.loadProjects()[0]).toMatchObject({ stage: "Delivered", completedAt: "2026-08-17T10:00:00.000Z" });
   });
 });

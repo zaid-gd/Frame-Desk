@@ -1,9 +1,10 @@
 import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
-import { newProjectInputValidator, projectDetailValidator, projectGroupInputValidator, projectGroupValidator } from "./relayWorkspaceValidators";
+import { newProjectInputValidator, projectDetailValidator, projectGroupInputValidator, projectGroupValidator, projectStageEffectValidator } from "./relayWorkspaceValidators";
 import { copyProjectSetup, createDefaultWorkflowTemplate, type WorkflowTemplate } from "../src/relay/domain/workflow-template";
 import { isIsoCalendarDate } from "../src/relay/domain/calendar-date";
 import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
+import { projectStageTransition, type ProjectRecord } from "../src/relay/domain/project";
 
 async function requireOwner(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -166,6 +167,45 @@ export const setProjectArchived = mutation({
     if (!project) throw new Error("Project not found.");
     await ctx.db.patch("relayProjects", project._id, { status: args.archived ? "past" : "active" });
     return null;
+  },
+});
+
+export const moveProjectStage = mutation({
+  args: { id: v.string(), targetStageId: v.string(), confirmed: v.boolean() },
+  returns: v.object({ projectName: v.string(), stage: v.string(), effect: projectStageEffectValidator }),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
+    if (!project || !project.workflowSetup || !project.financialType) throw new Error("Project not found.");
+    const record: ProjectRecord = {
+      id: project.id,
+      name: project.name,
+      clientId: project.clientId,
+      ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}),
+      stage: project.stage,
+      dueDate: project.due,
+      financialType: project.financialType,
+      paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid",
+      archived: project.status === "past",
+      lead: project.lead ?? "Unassigned",
+      assignees: project.assignees ?? [],
+      progress: Number.parseFloat(project.progress) || 0,
+      money: project.outstandingAmount ?? 0,
+      workflowSetup: project.workflowSetup,
+      workflowStageId: project.workflowStageId,
+      completedAt: project.completedAt,
+    };
+    const transition = projectStageTransition(record, args.targetStageId, new Date().toISOString(), args.confirmed);
+    if (!transition) throw new Error("Choose a stage from this Project's workflow.");
+    if (transition.kind === "confirmation-required") throw new Error("Confirm delivery before moving this Project to Delivered.");
+    await ctx.db.patch("relayProjects", project._id, {
+      stage: transition.project.stage,
+      workflowStageId: transition.project.workflowStageId,
+      progress: `${transition.project.progress}%`,
+      tone: transition.tone,
+      completedAt: transition.project.completedAt,
+    });
+    return { projectName: transition.project.name, stage: transition.project.stage, effect: transition.effect };
   },
 });
 

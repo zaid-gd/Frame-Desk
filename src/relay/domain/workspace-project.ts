@@ -22,6 +22,7 @@ export type WorkspaceProject = {
   financialType?: FinancialType;
   lead?: string;
   assignees?: string[];
+  completedAt?: string;
 };
 
 export function createWorkspaceProjectDraft(id: string, name: string, setup?: ProjectSetup): WorkspaceProject {
@@ -38,7 +39,7 @@ export function createWorkspaceProjectDraft(id: string, name: string, setup?: Pr
   };
 }
 
-const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup", "financialType", "lead", "assignees"] as const;
+const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup", "financialType", "lead", "assignees", "completedAt"] as const;
 const textByteLimits = { id: 100, name: 200, clientId: 100, stage: 80, due: 80, progress: 40 } as const;
 
 function safeText(value: unknown, maxBytes: number): value is string {
@@ -68,7 +69,8 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
     && (record.workflowSetup === undefined || validProjectSetup(record.workflowSetup))
     && (record.financialType === undefined || ["projectValue", "salaryPlan", "nonBillable"].includes(String(record.financialType)))
     && (record.lead === undefined || safeText(record.lead, 200))
-    && (record.assignees === undefined || (Array.isArray(record.assignees) && record.assignees.every((value) => safeText(value, 200))));
+    && (record.assignees === undefined || (Array.isArray(record.assignees) && record.assignees.every((value) => safeText(value, 200))))
+    && (record.completedAt === undefined || safeText(record.completedAt, 40));
 }
 
 function validProjectSetup(value: unknown) {

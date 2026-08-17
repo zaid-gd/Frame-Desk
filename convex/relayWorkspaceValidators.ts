@@ -37,7 +37,14 @@ export const relayProjectValidator = v.object({
   financialType: v.optional(v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable"))),
   lead: v.optional(v.string()),
   assignees: v.optional(v.array(v.string())),
+  completedAt: v.optional(v.string()),
 });
+
+export const projectStageEffectValidator = v.union(
+  v.object({ kind: v.literal("projectValue"), amount: v.number() }),
+  v.object({ kind: v.literal("salaryPlan"), change: v.union(v.literal("added"), v.literal("removed")) }),
+  v.object({ kind: v.literal("none") }),
+);
 
 export const newProjectInputValidator = v.object({
   name: v.string(),

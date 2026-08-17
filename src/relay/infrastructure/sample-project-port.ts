@@ -16,6 +16,7 @@ export function createSampleProjectPort(): ProjectPort {
     async editGroup() { return projectWriteRefusal; },
     async setGroupArchived() { return projectWriteRefusal; },
     async setProjectArchived() { return projectWriteRefusal; },
+    async moveProjectStage() { return projectWriteRefusal; },
     async deleteProject() { return projectWriteRefusal; },
   };
 }

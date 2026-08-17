@@ -1,12 +1,12 @@
 import { copyProjectSetup } from "../domain/workflow-template";
-import type { NewProjectInput, ProjectChoice, ProjectGroup, ProjectRecord, ProjectTemplate } from "../domain/project";
+import { projectStageTransition, type NewProjectInput, type ProjectChoice, type ProjectGroup, type ProjectRecord, type ProjectTemplate } from "../domain/project";
 import type { ProjectPort } from "../ports/project-port";
 import { deriveProjectGroupTotals } from "../domain/project-group";
 import { readLocalWorkspaceState, RELAY_LOCAL_WORKSPACE_KEY, type LocalWorkspaceState } from "./local-workspace-state";
 
 function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
   return (state?.projects ?? []).flatMap((project) => project.workflowSetup && project.financialType
-    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), stage: project.stage, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup }]
+    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), stage: project.stage, workflowStageId: project.workflowStageId, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup, completedAt: project.completedAt }]
     : []);
 }
 
@@ -64,6 +64,18 @@ export function createLocalProjectPort({ storage, clients, templates }: { storag
       if (!current.projects.some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
       try { save({ ...current, projects: current.projects.map((row) => row.id === id ? { ...row, status: archived ? "past" : "active" } : row) }); return { ok: true, value: undefined }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
+    },
+    async moveProjectStage(id, targetStageId, confirmed) {
+      const current = state();
+      const record = projectRecords(current).find((row) => row.id === id);
+      if (!record) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
+      const transition = projectStageTransition(record, targetStageId, new Date().toISOString(), confirmed);
+      if (!transition) return { ok: false, error: { kind: "invalid", message: "Choose a stage from this Project's workflow." } };
+      if (transition.kind === "confirmation-required") return { ok: false, error: { kind: "invalid", message: "Confirm delivery before moving this Project to Delivered." } };
+      try {
+        save({ ...current, projects: current.projects.map((project) => project.id === id ? { ...project, stage: transition.project.stage, workflowStageId: transition.project.workflowStageId, progress: `${transition.project.progress}%`, tone: transition.tone, completedAt: transition.project.completedAt } : project) });
+        return { ok: true, value: { projectName: transition.project.name, stage: transition.project.stage, effect: transition.effect } };
+      } catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
     async deleteProject(id) {
       const current = state();

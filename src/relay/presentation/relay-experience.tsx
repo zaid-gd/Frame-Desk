@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
+import { DndContext, KeyboardSensor, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type KeyboardCoordinateGetter } from "@dnd-kit/core";
 import {
   ArrowRight,
   ArrowDown,
@@ -44,6 +45,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import styles from "./relay.module.css";
 import { ContentSection, MetricItem, MetricStrip, PageContent, PageHeader as SharedPageHeader, PageToolbar, WorkspacePage } from "@/components/workspace-page";
 
@@ -337,6 +339,8 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
   const [includeArchived, setIncludeArchived] = useState(false);
   const [notice, setNotice] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{ projectId: string; targetStageId: string; message: string } | null>(null);
+  const confirmDeliveryRef = useRef<HTMLButtonElement>(null);
   const state = {
     query: searchParams.get("query") ?? undefined, client: searchParams.get("client") ?? undefined, stage: searchParams.get("stage") ?? undefined,
     payment: (searchParams.get("payment") as "paid" | "unpaid" | "not-applicable" | null) ?? undefined,
@@ -347,6 +351,7 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
     archived: (searchParams.get("archived") as "include" | null) ?? undefined,
   };
   const table = controller.actions.table(state);
+  const boardModel = controller.actions.board(state);
   useEffect(() => { if (!state.view) { const remembered = window.localStorage.getItem("relay:projects-view:v1"); if (remembered === "board") router.replace(`${pathname}?${controller.actions.viewQuery({ ...state, view: "board" })}`); } }, []);
   function setViewState(next: typeof state) { if (next.view) window.localStorage.setItem("relay:projects-view:v1", next.view); const query = controller.actions.viewQuery(next); router.replace(query ? `${pathname}?${query}` : pathname); }
   const selected = controller.model.groups.find((group) => group.id === selectedId);
@@ -362,6 +367,15 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
   const selectedClient = selected ? controller.model.clients.find(({ value }) => value === selected.clientId)?.label ?? "Unknown Client" : "";
   async function archiveProject(id: string, archived: boolean) { const result = archived ? await controller.actions.restore(id) : await controller.actions.archive(id); setNotice(result.message); if (result.ok) onChanged(); }
   async function deleteProject() { if (!deleteId) return; const result = await controller.actions.deletePermanently(deleteId); setNotice(result.message); if (result.ok) { setDeleteId(null); onChanged(); } }
+  async function moveProject(projectId: string, targetStageId: string, confirmed = false) {
+    const preview = controller.actions.previewStageMove(projectId, targetStageId);
+    if (!preview.ok) { setNotice(preview.message); return; }
+    if (preview.requiresConfirmation && !confirmed) { setPendingMove({ projectId, targetStageId, message: preview.message }); return; }
+    const result = await controller.actions.moveStage(projectId, targetStageId, confirmed);
+    setNotice(result.message);
+    setPendingMove(null);
+    if (result.ok) onChanged();
+  }
   type ProjectRow = ProjectRecord & { clientName: string };
   const columns: ColumnDef<ProjectRow>[] = [
     { accessorKey: "name", header: "Project", cell: ({ row }) => <Link className={styles.projectTitle} href={`/relay/projects/${row.original.id}`}>{row.original.name}</Link> },
@@ -373,7 +387,7 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
   ];
   const reactTable = useReactTable({ data: table.rows, columns, getCoreRowModel: getCoreRowModel() });
   const projectTable = controller.model.projectState.kind === "loading" ? <div className={styles.emptyPage} role="status"><h3>Loading Projects…</h3><p>Your current view will appear when the Workspace responds.</p></div> : controller.model.projectState.kind === "error" ? <div className={styles.emptyPage} role="alert"><h3>Projects could not load</h3><p>{controller.model.projectState.message ?? "Refresh the page to try again."}</p></div> : table.rows.length ? <div className={styles.tableWrap}><table className={styles.table}>{reactTable.getHeaderGroups().map((group) => <thead key={group.id}><tr>{group.headers.map((header) => <th scope="col" key={header.id}>{flexRender(header.column.columnDef.header, header.getContext())}</th>)}</tr></thead>)}<tbody>{reactTable.getRowModel().rows.map((row) => <tr key={row.id}>{row.getVisibleCells().map((cell) => <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>)}</tbody></table></div> : <div className={styles.emptyPage} role="status"><h3>No Projects found</h3><p>Clear a filter or create a Project to start tracking work.</p></div>;
-  const board = <div className={styles.groupGrid}>{[...new Set(table.rows.map((project) => project.stage))].map((stage) => <section className={styles.card} key={stage}><h3>{stage}</h3><ul className={styles.clientRows}>{table.rows.filter((project) => project.stage === stage).map((project) => <li key={project.id}><Link href={`/relay/projects/${project.id}`}>{project.name}<span>{project.clientName} · {project.dueDate}</span></Link></li>)}</ul></section>)}</div>;
+  const board = <ProjectBoard model={boardModel} readOnly={readOnly} onMove={(projectId, targetStageId) => void moveProject(projectId, targetStageId)} />;
   const inspector = selected ? <div className={styles.groupInspector}><h3>{selected.name}</h3><dl><div><dt>Client</dt><dd>{selectedClient}</dd></div><div><dt>Status</dt><dd>{selected.archived ? "Archived" : "Active"}</dd></div><div><dt>Date range</dt><dd>{selected.startDate || "No start"} — {selected.endDate || "No end"}</dd></div><div><dt>Projects</dt><dd>{selected.projectCount}</dd></div><div><dt>Progress</dt><dd>{selected.progress}%</dd></div><div><dt>Money</dt><dd>{selected.money.toLocaleString()}</dd></div></dl><p>{selected.notes || "No notes."}</p></div> : <p className={styles.clientEmpty}>Choose a Project Group to inspect it.</p>;
   return (
     <WorkspacePage family="data-index">
@@ -383,6 +397,12 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
       <MetricStrip aria-label="Workspace metrics">{workspace.metrics.map((metric) => <MetricItem key={metric.label} label={metric.label} value={metric.value} />)}</MetricStrip>
       <ContentSection title="Projects" bodyMode="flush"><PageToolbar className={styles.formActions}><input aria-label="Search Projects" placeholder="Search Projects" value={state.query ?? ""} onChange={(event) => setViewState({ ...state, query: event.target.value || undefined })} /><select aria-label="Filter by Client" value={state.client ?? ""} onChange={(event) => setViewState({ ...state, client: event.target.value || undefined })}><option value="">All Clients</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select><select aria-label="Filter by stage" value={state.stage ?? ""} onChange={(event) => setViewState({ ...state, stage: event.target.value || undefined })}><option value="">All stages</option>{[...new Set(controller.model.projects.map((project) => project.stage))].map((stage) => <option key={stage}>{stage}</option>)}</select><select aria-label="Filter by payment" value={state.payment ?? ""} onChange={(event) => setViewState({ ...state, payment: (event.target.value || undefined) as typeof state.payment })}><option value="">All payment states</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="not-applicable">Not applicable</option></select><select aria-label="Filter by salary" value={state.salary ?? ""} onChange={(event) => setViewState({ ...state, salary: (event.target.value || undefined) as typeof state.salary })}><option value="">All financial types</option><option value="salary">Salary Plan</option><option value="other">Other</option></select><select aria-label="Sort Projects" value={state.sort ?? "due"} onChange={(event) => setViewState({ ...state, sort: event.target.value as typeof state.sort })}><option value="due">Due date</option><option value="name">Name</option><option value="client">Client</option><option value="stage">Stage</option><option value="payment">Payment</option></select><button type="button" aria-label={`Sort ${state.direction === "desc" ? "ascending" : "descending"}`} onClick={() => setViewState({ ...state, direction: state.direction === "desc" ? "asc" : "desc" })}>{state.direction === "desc" ? "Descending" : "Ascending"}</button><label className={styles.check}><input type="checkbox" checked={state.archived === "include"} onChange={(event) => setViewState({ ...state, archived: event.target.checked ? "include" : undefined })} />Archived</label><button type="button" aria-pressed={table.view === "table"} onClick={() => setViewState({ ...state, view: "table" })}>Table</button><button type="button" aria-pressed={table.view === "board"} onClick={() => setViewState({ ...state, view: "board" })}>Board</button></PageToolbar>{table.view === "board" ? board : projectTable}</ContentSection>
       {deleteId ? <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className={styles.card}><h3 id="delete-project-title">Permanently delete this Project?</h3><p>{controller.model.deletionEffects}</p><div className={styles.formActions}><button type="button" onClick={() => setDeleteId(null)}>Cancel</button><button type="button" onClick={() => void deleteProject()}>Delete permanently</button></div></div> : null}
+      <AlertDialog open={pendingMove !== null} onOpenChange={(open) => { if (!open) setPendingMove(null); }}>
+        <AlertDialogContent onOpenAutoFocus={(event) => { event.preventDefault(); confirmDeliveryRef.current?.focus(); }}>
+          <AlertDialogHeader><AlertDialogTitle>Confirm delivery</AlertDialogTitle><AlertDialogDescription>{pendingMove?.message}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction ref={confirmDeliveryRef} onClick={() => { if (pendingMove) void moveProject(pendingMove.projectId, pendingMove.targetStageId, true); }}>Confirm delivery</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <ContentSection title="Project Groups" description="Campaigns, retainers, and production runs for one Client." actions={<label className={styles.check}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Include archived</label>} bodyMode="flush">
         <div className={styles.groupGrid}>
           <ul className={styles.clientRows}>{controller.model.groups.filter((group) => includeArchived || !group.archived).map((group) => <li key={group.id}><button type="button" aria-pressed={selectedId === group.id} onClick={() => inspect(group)}><strong>{group.name}</strong><span>{group.projectCount} Projects · {group.progress}% · {group.money.toLocaleString()}</span>{group.archived ? <small>Archived</small> : null}</button></li>)}</ul>
@@ -393,6 +413,75 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
       </PageContent>
     </WorkspacePage>
   );
+}
+
+type ProjectBoardModel = ReturnType<ProjectController["actions"]["board"]>;
+type ProjectBoardRow = ProjectBoardModel["columns"][number]["projects"][number];
+
+const workflowKeyboardCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates, context }) => {
+  const direction = event.code === "ArrowRight" || event.code === "ArrowDown" ? 1 : event.code === "ArrowLeft" || event.code === "ArrowUp" ? -1 : 0;
+  if (!direction) return undefined;
+
+  event.preventDefault();
+  const stages = context.droppableContainers
+    .getEnabled()
+    .map((container) => ({ container, rect: context.droppableRects.get(container.id) }))
+    .filter((stage): stage is typeof stage & { rect: NonNullable<typeof stage.rect> } => String(stage.container.id).startsWith("stage:") && stage.rect !== undefined)
+    .sort((left, right) => left.rect.left - right.rect.left || left.rect.top - right.rect.top);
+  const currentIndex = stages.findIndex(({ container }) => container.id === context.over?.id);
+  const next = stages[currentIndex + direction];
+  return next ? { x: next.rect.left, y: next.rect.top } : currentCoordinates;
+};
+
+function ProjectBoard({ model, readOnly, onMove }: { model: ProjectBoardModel; readOnly: boolean; onMove(projectId: string, targetStageId: string): void }) {
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: workflowKeyboardCoordinates }));
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const projects = model.columns.flatMap((column) => column.projects);
+  const projectName = (id: string | number) => projects.find((project) => project.id === id)?.name ?? "Project";
+  const stageName = (id: string | number) => model.columns.find((stage) => `stage:${stage.id}` === id)?.label ?? "a workflow stage";
+  function endDrag(event: DragEndEvent) {
+    const targetStageId = typeof event.over?.id === "string" ? event.over.id.replace(/^stage:/, "") : null;
+    const activeProject = projects.find(({ id }) => id === event.active.id);
+    setActiveProjectId(null);
+    if (activeProject && targetStageId && targetStageId !== activeProject.currentStageId) {
+      window.setTimeout(() => onMove(activeProject.id, targetStageId), 0);
+    }
+  }
+  const validTargetIds = new Set(projects.find(({ id }) => id === activeProjectId)?.stageOptions.map(({ value }) => value) ?? []);
+  return (
+    <DndContext
+      sensors={sensors}
+      onDragStart={({ active }) => setActiveProjectId(String(active.id))}
+      onDragCancel={() => setActiveProjectId(null)}
+      onDragEnd={endDrag}
+      accessibility={{
+        screenReaderInstructions: { draggable: "To move a Project, press Space, use the arrow keys to choose a workflow stage, then press Space again. Press Escape to cancel." },
+        announcements: {
+          onDragStart: ({ active }) => `Picked up ${projectName(active.id)}.`,
+          onDragOver: ({ active, over }) => over ? `${projectName(active.id)} is over ${stageName(over.id)}.` : undefined,
+          onDragEnd: ({ active, over }) => {
+            if (!over) return `${projectName(active.id)} was not moved.`;
+            const targetStageId = String(over.id).replace(/^stage:/, "");
+            return targetStageId === projects.find(({ id }) => id === active.id)?.currentStageId ? `${projectName(active.id)} stayed in ${stageName(over.id)}.` : `Requested moving ${projectName(active.id)} to ${stageName(over.id)}.`;
+          },
+          onDragCancel: ({ active }) => `Moving ${projectName(active.id)} was cancelled.`,
+        },
+      }}
+    >
+      <div className={styles.projectBoard}>{model.columns.map((stage) => <ProjectStageColumn key={stage.id} stageId={stage.id} label={stage.label} projects={stage.projects} readOnly={readOnly} disabled={activeProjectId !== null && !validTargetIds.has(stage.id)} onMove={onMove} />)}</div>
+    </DndContext>
+  );
+}
+
+function ProjectStageColumn({ stageId, label, projects, readOnly, disabled, onMove }: { stageId: string; label: string; projects: readonly ProjectBoardRow[]; readOnly: boolean; disabled: boolean; onMove(projectId: string, targetStageId: string): void }) {
+  const { isOver, setNodeRef } = useDroppable({ id: `stage:${stageId}`, disabled: readOnly || disabled });
+  return <section ref={setNodeRef} aria-disabled={disabled || undefined} className={`${styles.card} ${styles.projectStage} ${isOver ? styles.projectStageOver : ""}`}><h3>{label}</h3><ul>{projects.map((project) => <ProjectBoardCard key={project.id} project={project} readOnly={readOnly} onMove={onMove} />)}</ul></section>;
+}
+
+function ProjectBoardCard({ project, readOnly, onMove }: { project: ProjectBoardRow; readOnly: boolean; onMove(projectId: string, targetStageId: string): void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id, disabled: readOnly });
+  const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
+  return <li ref={setNodeRef} style={style} className={isDragging ? styles.projectDragging : undefined}><div className={styles.projectBoardCard}><div><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span>{project.clientName} · {project.dueDate}</span></div>{!readOnly ? <div className={styles.projectBoardActions}><button type="button" aria-label={`Drag ${project.name}`} {...listeners} {...attributes}>Drag</button><select aria-label={`Move ${project.name} to stage`} value={project.currentStageId} onChange={(event) => onMove(project.id, event.target.value)}>{project.stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></div> : null}</div></li>;
 }
 
 function ProjectPage({ controller, projectId }: { controller: ProjectController; projectId: string }) {

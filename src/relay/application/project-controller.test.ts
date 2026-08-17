@@ -49,6 +49,21 @@ describe("Projects table", () => {
     expect(controller.actions.viewQuery({ stage: "Editing", sort: "due", direction: "desc", view: "board" })).toBe("stage=Editing&sort=due&direction=desc&view=board");
   });
 
+  test("maps copied workflow stages and valid board targets", () => {
+    const baseSetup = project().workflowSetup;
+    const otherSetup = { ...baseSetup, templateId: "template_other", stages: baseSetup.stages.map((stage) => ({ ...stage, id: `other_${stage.id}` })) };
+    const controller = createProjectController({ port: createMemoryProjectPort({ projects: [project(), project({ id: "project_beta", name: "Beta", stage: "Editing", workflowSetup: otherSetup, workflowStageId: otherSetup.stages[1].id })] }) });
+
+    const board = controller.actions.board({ view: "board" });
+    expect(board.columns).toHaveLength(12);
+    const editingStageId = baseSetup.stages.find(({ purpose }) => purpose === "editing")!.id;
+    const alpha = board.columns.flatMap(({ projects }) => projects).find(({ id }) => id === "project_alpha")!;
+    const beta = board.columns.flatMap(({ projects }) => projects).find(({ id }) => id === "project_beta")!;
+    expect({ project_alpha: alpha.currentStageId, project_beta: beta.currentStageId }).toEqual({ project_alpha: editingStageId, project_beta: `other_${editingStageId}` });
+    expect(alpha.stageOptions.map(({ value }) => value)).toEqual(baseSetup.stages.map(({ id }) => id));
+    expect(alpha.stageOptions.map(({ value }) => value)).not.toContain(`other_${baseSetup.stages.find(({ purpose }) => purpose === "delivered")!.id}`);
+  });
+
   test("archives without losing history and limits permanent deletion to Owners", async () => {
     const port = createMemoryProjectPort({ projects: [project()] });
     const editor = createProjectController({ port, access: { role: "editor", memberId: "editor_1", editorsCanViewAll: true } });
@@ -60,5 +75,42 @@ describe("Projects table", () => {
     await expect(owner.actions.deletePermanently("project_alpha")).resolves.toMatchObject({ ok: true });
     expect(port.loadProjects()).toEqual([]);
     expect(owner.model.deletionEffects).toContain("files, versions, Client Portal history, and Activity");
+  });
+});
+
+describe("Project workflow", () => {
+  const setup = copyProjectSetup(createDefaultWorkflowTemplate("template_default", "Default workflow"));
+  const project = (overrides: Partial<ProjectRecord> = {}): ProjectRecord => ({
+    id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Approved", dueDate: "2026-09-12",
+    financialType: "projectValue", paymentState: "unpaid", lead: "owner", assignees: [], progress: 90,
+    money: 1200, archived: false, workflowSetup: setup, ...overrides,
+  });
+
+  test("requires delivery confirmation and reports the earned amount", async () => {
+    const port = createMemoryProjectPort({ now: () => "2026-08-17T10:00:00.000Z", projects: [project()] });
+    const controller = createProjectController({ port });
+    const delivered = setup.stages.find(({ purpose }) => purpose === "delivered")!;
+
+    expect(controller.actions.previewStageMove("project_alpha", delivered.id)).toEqual({
+      ok: true,
+      requiresConfirmation: true,
+      message: "Delivering Alpha records the actual delivery time and earns 1,200.",
+    });
+    await expect(controller.actions.moveStage("project_alpha", delivered.id, false)).resolves.toMatchObject({ ok: false, kind: "confirmation-required" });
+    await expect(controller.actions.moveStage("project_alpha", delivered.id, true)).resolves.toEqual({ ok: true, message: "Alpha delivered. 1,200 earned." });
+    expect(port.loadProjects()[0]).toMatchObject({ stage: delivered.label, progress: 100, completedAt: "2026-08-17T10:00:00.000Z" });
+  });
+
+  test("reopening removes current Salary Plan progress without rewriting settled history", async () => {
+    const port = createMemoryProjectPort({
+      now: () => "2026-08-17T10:00:00.000Z",
+      projects: [project({ stage: "Delivered", progress: 100, financialType: "salaryPlan", money: 0, completedAt: "2026-08-10T09:00:00.000Z" })],
+    });
+    const controller = createProjectController({ port });
+    const editing = setup.stages.find(({ purpose }) => purpose === "editing")!;
+
+    expect(controller.actions.previewStageMove("project_alpha", editing.id)).toEqual({ ok: true, requiresConfirmation: false, message: "Move Alpha to Editing." });
+    await expect(controller.actions.moveStage("project_alpha", editing.id, false)).resolves.toEqual({ ok: true, message: "Alpha moved to Editing. This Project no longer counts toward incomplete Salary Plan progress; completed batches stay unchanged." });
+    expect(port.loadProjects()[0]).toMatchObject({ stage: "Editing", progress: 25, completedAt: undefined });
   });
 });

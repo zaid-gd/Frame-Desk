@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ProjectSetup, WorkflowTemplate } from "./workflow-template";
+import type { ProjectSetup, WorkflowStage, WorkflowTemplate } from "./workflow-template";
 import { isIsoCalendarDate } from "./calendar-date";
 export type { ProjectGroup, ProjectGroupInput } from "./project-group";
 
@@ -32,7 +32,46 @@ export type ProjectRecord = {
   paymentState: "paid" | "unpaid" | "not-applicable";
   archived: boolean;
   workflowSetup: ProjectSetup;
+  workflowStageId?: string;
+  completedAt?: string;
 };
+
+export type ProjectStageEffect =
+  | { kind: "projectValue"; amount: number }
+  | { kind: "salaryPlan"; change: "added" | "removed" }
+  | { kind: "none" };
+
+export type ProjectTone = "review" | "delivered" | "planned";
+
+const progressByPurpose: Record<WorkflowStage["purpose"], number> = {
+  planned: 0,
+  editing: 25,
+  clientReview: 50,
+  revisions: 65,
+  approved: 90,
+  delivered: 100,
+};
+
+export function projectStageTransition(project: ProjectRecord, targetStageId: string, completedAt: string, confirmed: boolean) {
+  const target = project.workflowSetup.stages.find(({ id }) => id === targetStageId);
+  if (!target) return null;
+  const current = project.workflowSetup.stages.find(({ id }) => id === project.workflowStageId)
+    ?? project.workflowSetup.stages.find(({ label }) => label === project.stage);
+  const wasDelivered = current?.purpose === "delivered" || project.completedAt !== undefined;
+  const isDelivered = target.purpose === "delivered";
+  if (isDelivered && !wasDelivered && !confirmed) return { kind: "confirmation-required" as const };
+  const effect: ProjectStageEffect = isDelivered && !wasDelivered
+    ? project.financialType === "projectValue" ? { kind: "projectValue", amount: project.money } : project.financialType === "salaryPlan" ? { kind: "salaryPlan", change: "added" } : { kind: "none" }
+    : wasDelivered && !isDelivered && project.financialType === "salaryPlan" ? { kind: "salaryPlan", change: "removed" }
+    : { kind: "none" };
+  const tone: ProjectTone = isDelivered ? "delivered" : target.purpose === "clientReview" || target.purpose === "revisions" || target.purpose === "approved" ? "review" : "planned";
+  return {
+    kind: "ready" as const,
+    project: { ...project, stage: target.label, workflowStageId: target.id, progress: progressByPurpose[target.purpose], ...(isDelivered ? { completedAt: project.completedAt ?? completedAt } : { completedAt: undefined }) },
+    effect,
+    tone,
+  };
+}
 
 export type ProjectViewState = {
   query?: string;

@@ -1,4 +1,4 @@
-import type { NewProjectInput, ProjectChoice, ProjectGroup, ProjectGroupInput, ProjectRecord, ProjectTemplate } from "../domain/project";
+import type { NewProjectInput, ProjectChoice, ProjectGroup, ProjectGroupInput, ProjectRecord, ProjectStageEffect, ProjectTemplate } from "../domain/project";
 
 export type ProjectWriteResult<T = undefined> = { ok: true; value: T } | { ok: false; error: { kind: "forbidden" | "invalid" | "unavailable"; message: string } };
 
@@ -13,6 +13,7 @@ export type ProjectPort = {
   editGroup(id: string, input: ProjectGroupInput): Promise<ProjectWriteResult>;
   setGroupArchived(id: string, archived: boolean): Promise<ProjectWriteResult>;
   setProjectArchived(id: string, archived: boolean): Promise<ProjectWriteResult>;
+  moveProjectStage(id: string, targetStageId: string, confirmed: boolean): Promise<ProjectWriteResult<{ projectName: string; stage: string; effect: ProjectStageEffect }>>;
   deleteProject(id: string): Promise<ProjectWriteResult>;
 };
 

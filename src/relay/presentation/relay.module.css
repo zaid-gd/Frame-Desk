@@ -240,6 +240,17 @@
 .projectSection { padding: 24px; }
 .projectSection h2 { margin: 0; font-size: 19px; }
 .projectSection p { margin-bottom: 0; color: var(--relay-muted); }
+.projectBoard { display: grid; grid-auto-columns: minmax(250px, 1fr); grid-auto-flow: column; gap: 12px; overflow-x: auto; padding: 16px; }
+.projectStage { min-height: 220px; padding: 14px; }
+.projectStage h3 { margin: 0 0 12px; font-size: 14px; }
+.projectStage ul { display: grid; align-content: start; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.projectStageOver { outline: 2px solid var(--relay-action); outline-offset: -2px; }
+.projectBoardCard { display: grid; gap: 12px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); padding: 12px; }
+.projectBoardCard span { display: block; margin-top: 4px; color: var(--relay-muted); font-size: 12px; }
+.projectBoardActions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.projectBoardActions button, .projectBoardActions select { min-height: 34px; border: 1px solid var(--relay-border); border-radius: 6px; background: var(--relay-card); color: var(--relay-ink); padding: 0 9px; font: inherit; }
+.projectBoardActions button { cursor: grab; }
+.projectDragging { opacity: .55; }
 
 @media (max-width: 1100px) and (min-width: 701px) {
   .content { padding: 26px; }
