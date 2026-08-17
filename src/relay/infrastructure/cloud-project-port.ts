@@ -23,6 +23,7 @@ const refs = {
   setOutputArchived: makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjectOutputs:setOutputArchived"),
   setOutputReviewState: makeFunctionReference<"mutation", { id: string; reviewState: OutputReviewState }, null>("relayProjectOutputs:setOutputReviewState"),
   addMediaVersion: makeFunctionReference<"mutation", { outputId: string; url: string }, { id: string }>("relayProjectOutputs:addMediaVersion"),
+  resolveComment: makeFunctionReference<"mutation", { id: string }, null>("relayProjectOutputs:resolveComment"),
   deleteProject: makeFunctionReference<"mutation", { id: string }, null>("relayProjects:deleteProject"),
 };
 
@@ -50,6 +51,7 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
   const setOutputArchived = useMutation(refs.setOutputArchived);
   const setOutputReviewState = useMutation(refs.setOutputReviewState);
   const addMediaVersion = useMutation(refs.addMediaVersion);
+  const resolveComment = useMutation(refs.resolveComment);
   const deleteProject = useMutation(refs.deleteProject);
   return useMemo(() => ({
     projectId: selectedProjectId ?? "",
@@ -71,6 +73,7 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
     async setOutputArchived(id, archived) { try { await setOutputArchived({ id, archived }); return { ok: true as const, value: undefined }; } catch (error) { return cloudWriteError(error, "Project Output could not be archived."); } },
     async setOutputReviewState(id, reviewState) { try { await setOutputReviewState({ id, reviewState }); return { ok: true as const, value: undefined }; } catch (error) { return cloudWriteError(error, "Project Output review state could not be saved."); } },
     async addMediaVersion(outputId, input) { try { return { ok: true as const, value: await addMediaVersion({ outputId, ...input }) }; } catch (error) { return cloudWriteError(error, "Media Version could not be added."); } },
+    async resolveComment(id) { try { await resolveComment({ id }); return { ok: true as const, value: undefined }; } catch (error) { return cloudWriteError(error, "Comment could not be resolved."); } },
     async deleteProject(id) { try { await deleteProject({ id }); return { ok: true as const, value: undefined }; } catch (error) { return { ok: false as const, error: { kind: "invalid" as const, message: error instanceof Error ? error.message : "Project could not be deleted." } }; } },
-  }), [addMediaVersion, addOutput, archiveGroup, archiveProject, clients, createGroup, createProject, deleteProject, editGroup, editOutput, groups, moveProjectStage, projects, selectedOutputs, selectedProjectId, setOutputArchived, setOutputReviewState, templates]);
+  }), [addMediaVersion, addOutput, archiveGroup, archiveProject, clients, createGroup, createProject, deleteProject, editGroup, editOutput, groups, moveProjectStage, projects, resolveComment, selectedOutputs, selectedProjectId, setOutputArchived, setOutputReviewState, templates]);
 }

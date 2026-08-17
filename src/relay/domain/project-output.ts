@@ -11,8 +11,10 @@ export type MediaSource = {
 
 export type MediaComment = {
   id: string;
+  authorName: string;
   body: string;
   resolved: boolean;
+  createdAt: string;
 };
 
 export type MediaVersion = {

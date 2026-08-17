@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { outputReviewStateValidator, relayMediaSourceValidator } from "./relayWorkspaceValidators";
+import { outputReviewStateValidator, relayMediaCommentValidator, relayMediaSourceValidator } from "./relayWorkspaceValidators";
 
 const MAX_SHARED_OUTPUTS = 100;
 const PIN_ITERATIONS = 210_000;
@@ -8,7 +8,7 @@ const accessValidator = v.union(v.literal("open"), v.literal("invalid"), v.liter
 const publicViewValidator = v.object({
   branding: v.literal("relay"),
   project: v.object({ name: v.string(), stage: v.string(), progress: v.number(), publicNotes: v.string(), dueDate: v.union(v.string(), v.null()), completedAt: v.union(v.string(), v.null()) }),
-  outputs: v.array(v.object({ id: v.string(), name: v.string(), reviewState: outputReviewStateValidator, currentVersion: v.object({ id: v.string(), source: relayMediaSourceValidator }) })),
+  outputs: v.array(v.object({ id: v.string(), name: v.string(), reviewState: outputReviewStateValidator, currentVersion: v.object({ id: v.string(), source: relayMediaSourceValidator, comments: v.array(relayMediaCommentValidator) }) })),
 });
 const publicResultValidator = v.union(
   v.object({ access: accessValidator }),
@@ -60,6 +60,19 @@ function newToken() {
 
 function progressNumber(progress: string) {
   return Number.parseFloat(progress) || 0;
+}
+
+function cleanReviewText(value: string, maxLength: number, message: string) {
+  const clean = value.trim();
+  if (!clean || clean.length > maxLength) portalError("invalid", message);
+  return clean;
+}
+
+async function accessiblePortal(ctx: MutationCtx, token: string, pin?: string) {
+  const portal = await ctx.db.query("relayClientPortals").withIndex("by_token", (q) => q.eq("token", token)).unique();
+  if (!portal || portal.status === "closed" || (portal.expiresAt && Date.parse(portal.expiresAt) <= Date.now())) portalError("unavailable", "Client Portal unavailable.");
+  if (portal.pinHash && portal.pinSalt && (!pin || !(await pinMatches(pin, portal.pinHash, portal.pinSalt)))) portalError("unavailable", "Client Portal unavailable.");
+  return portal;
 }
 
 export const getForProject = query({
@@ -142,6 +155,7 @@ export const publicView = query({
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("projectId", portal.projectId)).take(MAX_SHARED_OUTPUTS);
     const selected = outputs.filter((output) => portal.outputIds.includes(output.durableId) && !output.archived && output.currentVersionId);
     const versions = await Promise.all(selected.map((output) => ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_outputId_and_number", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("outputId", output.durableId)).order("desc").first()));
+    const comments = await Promise.all(versions.map((version) => version ? ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_versionId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("versionId", version.durableId)).take(500) : []));
     return {
       access: "open" as const,
       view: {
@@ -150,9 +164,40 @@ export const publicView = query({
         outputs: selected.flatMap((output, index) => {
           const version = versions[index];
           if (!version || version.durableId !== output.currentVersionId) return [];
-          return [{ id: output.durableId, name: output.name, reviewState: output.reviewState, currentVersion: { id: version.durableId, source: { provider: version.provider, providerId: version.providerId ?? null, url: version.normalizedUrl } } }];
+          return [{ id: output.durableId, name: output.name, reviewState: output.reviewState, currentVersion: { id: version.durableId, source: { provider: version.provider, providerId: version.providerId ?? null, url: version.normalizedUrl }, comments: comments[index].map((comment) => ({ id: comment.durableId, authorName: comment.authorName ?? "Client", body: comment.body, resolved: comment.resolved, createdAt: comment.createdAt ?? new Date(comment._creationTime).toISOString() })) } }];
         }),
       },
     };
+  },
+});
+
+export const addComment = mutation({
+  args: { token: v.string(), pin: v.optional(v.string()), versionId: v.string(), displayName: v.string(), body: v.string() },
+  returns: v.object({ id: v.string() }),
+  handler: async (ctx, args) => {
+    const portal = await accessiblePortal(ctx, args.token, args.pin);
+    const displayName = cleanReviewText(args.displayName, 100, "Enter a display name under 100 characters.");
+    const body = cleanReviewText(args.body, 2_000, "Enter a Comment under 2,000 characters.");
+    const version = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("projectId", portal.projectId)).take(500).then((items) => items.find(({ durableId }) => durableId === args.versionId));
+    const output = version ? await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("durableId", version.outputId)).unique() : null;
+    if (!version || !output || output.currentVersionId !== version.durableId || !portal.outputIds.includes(output.durableId)) portalError("invalid", "Comment on a shared current Media Version.");
+    const id = `comment_${crypto.randomUUID()}`;
+    await ctx.db.insert("relayMediaComments", { ownerUserId: portal.ownerUserId, durableId: id, projectId: portal.projectId, versionId: version.durableId, authorName: displayName, body, resolved: false, createdAt: new Date().toISOString() });
+    return { id };
+  },
+});
+
+export const reopenComment = mutation({
+  args: { token: v.string(), pin: v.optional(v.string()), id: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const portal = await accessiblePortal(ctx, args.token, args.pin);
+    const comment = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("durableId", args.id)).unique();
+    if (!comment || comment.projectId !== portal.projectId) portalError("not-found", "Comment not found.");
+    const version = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("projectId", portal.projectId)).take(500).then((items) => items.find(({ durableId }) => durableId === comment.versionId));
+    const output = version ? await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", portal.ownerUserId).eq("durableId", version.outputId)).unique() : null;
+    if (!version || !output || output.currentVersionId !== version.durableId || !portal.outputIds.includes(output.durableId)) portalError("invalid", "Reopen a Comment on a shared current Media Version.");
+    await ctx.db.patch("relayMediaComments", comment._id, { resolved: false });
+    return null;
   },
 });

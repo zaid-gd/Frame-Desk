@@ -48,6 +48,7 @@ export function createProjectOutputController({ port }: { port: ProjectOutputPor
       async setArchived(id: string, archived: boolean) { return message(await port.setOutputArchived(id, archived), archived ? "Project Output archived." : "Project Output restored."); },
       async setReviewState(id: string, reviewState: OutputReviewState) { return message(await port.setOutputReviewState(id, reviewState), "Project Output review state saved."); },
       async addVersion(outputId: string, input: { url: string }) { return message(await port.addMediaVersion(outputId, input), "Media Version added and set as current."); },
+      async resolveComment(id: string) { return message(await port.resolveComment(id), "Comment resolved."); },
     },
   };
 }

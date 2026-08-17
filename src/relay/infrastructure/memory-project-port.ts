@@ -72,6 +72,12 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
       savedOutputs[index] = next;
       return { ok: true, value: { id } };
     },
+    async resolveComment(id) {
+      const comment = savedOutputs.flatMap(({ versions }) => versions).flatMap(({ comments }) => comments).find((item) => item.id === id);
+      if (!comment) return { ok: false, error: { kind: "unavailable", message: "Comment not found." } };
+      comment.resolved = true;
+      return { ok: true, value: undefined };
+    },
     async deleteProject(id) { const index = savedProjects.findIndex((row) => row.id === id); if (index < 0) return { ok: false, error: { kind: "unavailable", message: "Project not found." } }; savedProjects.splice(index, 1); for (let outputIndex = savedOutputs.length - 1; outputIndex >= 0; outputIndex -= 1) if (savedOutputs[outputIndex].projectId === id) savedOutputs.splice(outputIndex, 1); return { ok: true, value: undefined }; },
   };
 }

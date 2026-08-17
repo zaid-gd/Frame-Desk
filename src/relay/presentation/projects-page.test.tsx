@@ -104,7 +104,7 @@ describe("Project Outputs public interface", () => {
   test("lets an editor manage Output slots and add a current Media Version", async () => {
     const setup = copyProjectSetup(createDefaultWorkflowTemplate("template_default", "Default workflow"));
     const project: ProjectRecord = { id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Editing", dueDate: "2026-09-12", financialType: "salaryPlan", paymentState: "unpaid", archived: false, lead: "Owner", assignees: [], progress: 30, money: 0, workflowSetup: setup };
-    const output: ProjectOutput = { id: "output_main", projectId: project.id, name: "Main video", reviewState: "approved", archived: false, currentVersionId: "version_1", versions: [{ id: "version_1", number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, addedAt: "2026-08-16T10:00:00.000Z", comments: [{ id: "comment_1", body: "Tighten the opening.", resolved: false }] }] };
+    const output: ProjectOutput = { id: "output_main", projectId: project.id, name: "Main video", reviewState: "approved", archived: false, currentVersionId: "version_1", versions: [{ id: "version_1", number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, addedAt: "2026-08-16T10:00:00.000Z", comments: [{ id: "comment_1", authorName: "Client", body: "Tighten the opening.", resolved: false, createdAt: "2026-08-16T11:00:00.000Z" }] }] };
     const port = createMemoryProjectPort({ clients: [{ id: "client_acme", name: "Acme", archived: false }], projects: [project], outputs: [output] });
     const controller = createProjectController({ port });
     render(<ProjectPage controller={controller} outputController={createProjectOutputController({ port })} projectId={project.id} readOnly={false} onChanged={() => undefined} />);
@@ -119,5 +119,7 @@ describe("Project Outputs public interface", () => {
     expect(await screen.findByText("Current · Vimeo · v2")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("1 unresolved Comment from an older version");
     expect(screen.getByRole("link", { name: "Open current Media Version" }).getAttribute("href")).toBe("https://vimeo.com/987654321");
+    await userEvent.click(screen.getByRole("button", { name: "Resolve Comment from Client" }));
+    expect(port.loadOutputs()[0].versions[0].comments[0].resolved).toBe(true);
   });
 });

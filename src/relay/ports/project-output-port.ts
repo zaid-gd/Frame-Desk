@@ -10,4 +10,5 @@ export type ProjectOutputPort = {
   setOutputArchived(id: string, archived: boolean): Promise<ProjectWriteResult>;
   setOutputReviewState(id: string, reviewState: OutputReviewState): Promise<ProjectWriteResult>;
   addMediaVersion(outputId: string, input: { url: string }): Promise<ProjectWriteResult<{ id: string }>>;
+  resolveComment(id: string): Promise<ProjectWriteResult>;
 };

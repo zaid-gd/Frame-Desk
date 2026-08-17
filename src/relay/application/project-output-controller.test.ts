@@ -14,7 +14,7 @@ describe("Project Outputs and Media Versions", () => {
   };
   const output: ProjectOutput = {
     id: "output_main", projectId: salaryProject.id, name: "Main video", reviewState: "approved", archived: false,
-    versions: [{ id: "version_1", number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, addedAt: "2026-08-16T10:00:00.000Z", comments: [{ id: "comment_1", body: "Tighten the opening.", resolved: false }] }],
+    versions: [{ id: "version_1", number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, addedAt: "2026-08-16T10:00:00.000Z", comments: [{ id: "comment_1", authorName: "Client", body: "Tighten the opening.", resolved: false, createdAt: "2026-08-16T11:00:00.000Z" }] }],
     currentVersionId: "version_1",
   };
 

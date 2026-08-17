@@ -63,7 +63,7 @@ describe("Client Portal controller", () => {
           id: "main",
           name: "Main film",
           reviewState: "in_review",
-          currentVersion: { id: "v2", source: { provider: "vimeo", providerId: "123", url: "https://vimeo.com/123" } },
+          currentVersion: { id: "v2", source: { provider: "vimeo", providerId: "123", url: "https://vimeo.com/123" }, comments: [] },
         }],
       },
     });

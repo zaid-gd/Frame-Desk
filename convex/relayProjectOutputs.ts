@@ -52,7 +52,7 @@ export const listOutputs = query({
           number: version.number,
           source: { provider: version.provider, providerId: version.providerId ?? null, url: version.normalizedUrl },
           addedAt: version.addedAt,
-          comments: comments.filter(({ versionId }) => versionId === version.durableId).map((comment) => ({ id: comment.durableId, body: comment.body, resolved: comment.resolved })),
+          comments: comments.filter(({ versionId }) => versionId === version.durableId).map((comment) => ({ id: comment.durableId, authorName: comment.authorName ?? "Client", body: comment.body, resolved: comment.resolved, createdAt: comment.createdAt ?? new Date(comment._creationTime).toISOString() })),
         })),
       };
     });
@@ -131,5 +131,17 @@ export const addMediaVersion = mutation({
     });
     await ctx.db.patch("relayProjectOutputs", output._id, { currentVersionId: id, reviewState: "in_review" });
     return { id };
+  },
+});
+
+export const resolveComment = mutation({
+  args: { id: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerUserId = await ownerId(ctx);
+    const comment = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
+    if (!comment) outputError("not-found", "Comment not found.");
+    await ctx.db.patch("relayMediaComments", comment._id, { resolved: true });
+    return null;
   },
 });

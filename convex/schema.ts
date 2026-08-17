@@ -93,7 +93,10 @@ export default defineSchema({
     versionId: v.string(),
     body: v.string(),
     resolved: v.boolean(),
+    authorName: v.optional(v.string()),
+    createdAt: v.optional(v.string()),
   })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
     .index("by_ownerUserId_and_versionId", ["ownerUserId", "versionId"])
     .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
 

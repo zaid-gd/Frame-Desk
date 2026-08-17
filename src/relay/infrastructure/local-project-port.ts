@@ -133,6 +133,16 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
       try { save({ ...current, projectOutputs: outputs.map((item) => item.id === outputId ? next : item) }); return { ok: true, value: { id } }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Media Version write." } }; }
     },
+    async resolveComment(id) {
+      const current = state();
+      const outputs = current.projectOutputs ?? [];
+      const output = outputs.find(({ versions }) => versions.some(({ comments }) => comments.some((comment) => comment.id === id)));
+      const comment = output?.versions.flatMap(({ comments }) => comments).find((item) => item.id === id);
+      if (!comment) return { ok: false, error: { kind: "unavailable", message: "Comment not found." } };
+      comment.resolved = true;
+      try { save({ ...current, projectOutputs: outputs }); return { ok: true, value: undefined }; }
+      catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Comment write." } }; }
+    },
     async deleteProject(id) {
       const current = state();
       if (!current.projects.some((row) => row.id === id)) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };

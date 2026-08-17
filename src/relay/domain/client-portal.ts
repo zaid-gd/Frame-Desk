@@ -28,11 +28,13 @@ export type ClientPortalProject = {
   completedAt?: string;
 };
 
+export type ClientPortalComment = { id: string; authorName: string; body: string; resolved: boolean; createdAt: string };
+
 export type ClientPortalOutput = {
   id: string;
   name: string;
   reviewState: OutputReviewState;
-  currentVersion: { id: string; source: MediaSource };
+  currentVersion: { id: string; source: MediaSource; comments: ClientPortalComment[] };
 };
 
 export type ClientPortalPublicView = {
@@ -76,7 +78,7 @@ export function buildClientPortalPublicView(project: ClientPortalProject, output
     outputs: portal.outputIds.flatMap((outputId) => {
       const output = outputs.find(({ id, archived }) => id === outputId && !archived);
       const currentVersion = output?.versions.find(({ id }) => id === output.currentVersionId);
-      return output && currentVersion ? [{ id: output.id, name: output.name, reviewState: output.reviewState, currentVersion: { id: currentVersion.id, source: currentVersion.source } }] : [];
+      return output && currentVersion ? [{ id: output.id, name: output.name, reviewState: output.reviewState, currentVersion: { id: currentVersion.id, source: currentVersion.source, comments: currentVersion.comments.map((comment) => ({ ...comment, authorName: comment.authorName, createdAt: comment.createdAt })) } }] : [];
     }),
   };
 }

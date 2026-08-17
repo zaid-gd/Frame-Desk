@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import type { ClientPortalAccess, ClientPortalPublicView } from "@/relay/domain/client-portal";
 import styles from "./relay-client-portal.module.css";
@@ -17,7 +17,13 @@ const accessCopy: Record<Exclude<ClientPortalAccess, "open" | "pin-required" | "
 export function RelayClientPortal({ token }: { token: string }) {
   const [pin, setPin] = useState("");
   const [submittedPin, setSubmittedPin] = useState<string>();
+  const [displayName, setDisplayName] = useState("");
+  const [commentBody, setCommentBody] = useState("");
+  const [notice, setNotice] = useState("");
+  const addComment = useMutation(api.relayClientPortals.addComment);
+  const reopenComment = useMutation(api.relayClientPortals.reopenComment);
   const result: PublicResult | undefined = useQuery(api.relayClientPortals.publicView, submittedPin ? { token, pin: submittedPin } : { token });
+  useEffect(() => { setDisplayName(localStorage.getItem("relay:client-display-name") ?? ""); }, []);
   if (!result) return <PortalState title="Loading portal" body="Checking this private Relay link…" />;
   if (result.access === "pin-required" || result.access === "wrong-pin") return <main className={styles.state}><section><RelayBrand /><h1>{result.access === "wrong-pin" ? "That PIN did not match" : "Enter the portal PIN"}</h1><p>Your editor protected this project with a PIN.</p><form onSubmit={(event) => { event.preventDefault(); setSubmittedPin(pin); }}><label htmlFor="portal-pin">PIN</label><input id="portal-pin" type="password" inputMode="numeric" autoComplete="one-time-code" minLength={4} maxLength={12} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} aria-invalid={result.access === "wrong-pin"} /><button type="submit" disabled={pin.length < 4}>Open portal</button></form></section></main>;
   if (result.access !== "open") return <PortalState {...accessCopy[result.access]} />;
@@ -25,7 +31,7 @@ export function RelayClientPortal({ token }: { token: string }) {
   return <main className={styles.portal}>
     <header><RelayBrand /><span>Private Client Portal</span></header>
     <section className={styles.hero}><p className={styles.eyebrow}>Project</p><h1>{view.project.name}</h1><div className={styles.progress}><span>{view.project.stage}</span><span>{view.project.progress}%</span></div><div role="progressbar" aria-label="Project progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={view.project.progress}><i style={{ width: `${Math.max(0, Math.min(100, view.project.progress))}%` }} /></div>{view.project.publicNotes ? <p>{view.project.publicNotes}</p> : null}<dl>{view.project.dueDate ? <div><dt>Due date</dt><dd>{view.project.dueDate}</dd></div> : null}{view.project.completedAt ? <div><dt>Completed</dt><dd>{new Date(view.project.completedAt).toLocaleDateString()}</dd></div> : null}</dl></section>
-    <section className={styles.outputs}><div><p className={styles.eyebrow}>Shared work</p><h2>Current Project Outputs</h2></div>{view.outputs.length ? <ul>{view.outputs.map((output) => <li key={output.id}><div><h3>{output.name}</h3><span>{output.reviewState.replaceAll("_", " ")}</span></div><CurrentMedia output={output} /></li>)}</ul> : <p>No Project Outputs are shared yet.</p>}</section>
+    <section className={styles.outputs}><div><p className={styles.eyebrow}>Shared work</p><h2>Current Project Outputs</h2></div>{view.outputs.length ? <ul>{view.outputs.map((output) => <li key={output.id}><div><h3>{output.name}</h3><span>{output.reviewState.replaceAll("_", " ")}</span></div><CurrentMedia output={output} /><section aria-label={`Comments for ${output.name}`}><h4>Comments</h4>{output.currentVersion.comments.length ? <ul>{output.currentVersion.comments.map((comment) => <li key={comment.id}><p><strong>{comment.authorName}</strong> · {comment.resolved ? "Resolved" : "Open"}</p><p>{comment.body}</p>{comment.resolved ? <button type="button" onClick={async () => { await reopenComment({ token, ...(submittedPin ? { pin: submittedPin } : {}), id: comment.id }); setNotice("Comment reopened."); }}>Reopen Comment from {comment.authorName}</button> : null}</li>)}</ul> : <p>No comments yet.</p>}<form onSubmit={async (event) => { event.preventDefault(); const cleanName = displayName.trim(); if (!cleanName) { setNotice("Enter your display name before commenting."); return; } localStorage.setItem("relay:client-display-name", cleanName); await addComment({ token, ...(submittedPin ? { pin: submittedPin } : {}), versionId: output.currentVersion.id, displayName: cleanName, body: commentBody }); setCommentBody(""); setNotice("Comment added."); }}><label>Display name<input value={displayName} maxLength={100} onChange={(event) => setDisplayName(event.target.value)} /></label><label>Comment<textarea value={commentBody} maxLength={2000} required onChange={(event) => setCommentBody(event.target.value)} /></label><button type="submit">Add Comment</button></form></section></li>)}</ul> : <p>No Project Outputs are shared yet.</p>}{notice ? <p role="status">{notice}</p> : null}</section>
     <footer>Shared securely with Relay</footer>
   </main>;
 }

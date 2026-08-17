@@ -32,7 +32,7 @@ const output = (): ProjectOutput => ({
     number: 1,
     source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" },
     addedAt: "2026-08-16T10:00:00.000Z",
-    comments: [{ id: "comment_1", body: "Tighten the opening.", resolved: false }],
+    comments: [{ id: "comment_1", authorName: "Client", body: "Tighten the opening.", resolved: false, createdAt: "2026-08-16T11:00:00.000Z" }],
   }],
   currentVersionId: "version_1",
 });
@@ -70,7 +70,7 @@ describe("Project Output media", () => {
 
     expect(next).toMatchObject({ currentVersionId: "version_2", reviewState: "in_review" });
     expect(next.versions).toHaveLength(2);
-    expect(next.versions[0].comments).toEqual([{ id: "comment_1", body: "Tighten the opening.", resolved: false }]);
+    expect(next.versions[0].comments).toEqual([{ id: "comment_1", authorName: "Client", body: "Tighten the opening.", resolved: false, createdAt: "2026-08-16T11:00:00.000Z" }]);
     expect(next.unresolvedPreviousComments).toBe(1);
   });
 
