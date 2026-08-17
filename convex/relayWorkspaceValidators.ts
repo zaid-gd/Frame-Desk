@@ -34,6 +34,25 @@ export const relayProjectValidator = v.object({
   workflowTemplateId: v.optional(v.string()),
   workflowStageId: v.optional(v.string()),
   workflowSetup: v.optional(projectSetupValidator),
+  financialType: v.optional(v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable"))),
+  lead: v.optional(v.string()),
+  assignees: v.optional(v.array(v.string())),
+});
+
+export const newProjectInputValidator = v.object({
+  name: v.string(),
+  clientId: v.string(),
+  projectGroupId: v.string(),
+  templateId: v.string(),
+  dueDate: v.string(),
+  financialType: v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable")),
+});
+
+export const projectDetailValidator = relayProjectValidator.extend({
+  dueDate: v.string(),
+  lead: v.string(),
+  assignees: v.array(v.string()),
+  financialType: v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable")),
 });
 
 export const relayClientInputValidator = v.object({
@@ -48,4 +67,20 @@ export const relayClientInputValidator = v.object({
 export const relayClientValidator = relayClientInputValidator.extend({
   id: v.string(),
   archived: v.boolean(),
+});
+
+export const projectGroupInputValidator = v.object({
+  name: v.string(),
+  clientId: v.string(),
+  startDate: v.string(),
+  endDate: v.string(),
+  notes: v.string(),
+});
+
+export const projectGroupValidator = projectGroupInputValidator.extend({
+  id: v.string(),
+  archived: v.boolean(),
+  projectCount: v.number(),
+  progress: v.number(),
+  money: v.number(),
 });

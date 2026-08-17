@@ -36,14 +36,39 @@ test("keeps Local Mode across reloads and warns about browser storage", async ({
   await page.getByRole("button", { name: "Use Local Mode" }).click();
   await expect(page).toHaveURL(/\/relay\/dashboard$/);
   await expect(page.getByRole("status")).toContainText("Local Mode saves work only in this browser");
-  await page.getByRole("button", { name: "New project" }).click();
-  await expect(page.getByText("Untitled local project", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "Use dark theme" }).click();
   await page.reload();
   await expect(page).toHaveURL(/\/relay\/dashboard$/);
   await expect(page.getByRole("status")).toContainText("Clearing site data can remove it");
-  await expect(page.getByText("Untitled local project", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Use light theme" })).toBeVisible();
+});
+
+test("creates a Project Group and a Project, then opens its bookmarkable page", async ({ page }) => {
+  await page.getByRole("button", { name: "Use Local Mode" }).click();
+  await page.getByRole("link", { name: "Clients" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Acme");
+  await page.getByRole("button", { name: "Create Client" }).click();
+  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("heading", { name: "Create Project Group" }).locator("..").getByLabel("Name").fill("Launch campaign");
+  await page.getByRole("heading", { name: "Create Project Group" }).locator("..").getByLabel("Client").selectOption({ label: "Acme" });
+  await page.getByRole("button", { name: "Create Project Group" }).click();
+  await expect(page.getByText("Project Group created.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New project" }).click();
+  await page.getByLabel("Project name").fill("Launch film 01");
+  await page.getByRole("combobox", { name: "Client" }).first().selectOption({ label: "Acme" });
+  await page.getByRole("combobox", { name: /Project Group/ }).selectOption({ label: "Launch campaign" });
+  await page.getByRole("combobox", { name: "Workflow Template" }).selectOption({ label: "Default workflow" });
+  await page.getByLabel("Due date").fill("2026-09-12");
+  await page.getByRole("combobox", { name: "Financial type" }).selectOption("projectValue");
+  await page.getByRole("button", { name: "Create Project", exact: true }).click();
+  await expect(page).toHaveURL(/\/relay\/projects\/project_/);
+  await expect(page.getByRole("heading", { name: "Launch film 01" })).toBeVisible();
+  for (const section of ["Overview", "Outputs and Versions", "Client Review", "Files and Links", "Activity"]) await expect(page.getByRole("heading", { name: section })).toBeVisible();
+  await expect(page.getByText("Unassigned", { exact: true }).first()).toBeVisible();
+  const url = page.url();
+  await page.reload();
+  await expect(page).toHaveURL(url);
+  await expect(page.getByRole("heading", { name: "Launch film 01" })).toBeVisible();
 });
 
 test("manages a durable Client through create, edit, search, archive, restore, reload, and inspection", async ({ page }) => {
@@ -127,6 +152,10 @@ test("opens realistic Sample Workspace fixtures and refuses writes", async ({ pa
   await expect(page.getByText("Demo Project Alpha", { exact: true }).first()).toBeVisible();
   await page.getByRole("button", { name: "New project" }).click();
   await expect(page.getByRole("status")).toContainText("Sample Workspace is read-only");
+  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("button", { name: /Launch campaign/ }).click();
+  await expect(page.getByRole("definition").filter({ hasText: "Demo Client" })).toBeVisible();
+  await expect(page.getByRole("paragraph").filter({ hasText: "Read-only sample" })).toBeVisible();
 });
 
 test("supports keyboard entry and shell navigation", async ({ page }) => {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useForm } from "@tanstack/react-form";
 import {
   ArrowRight,
   ArrowDown,
@@ -32,6 +33,8 @@ import type { ClientController } from "../application/client-controller";
 import type { ClientInput } from "../domain/client";
 import type { WorkflowTemplateInput } from "../domain/workflow-template";
 import type { WorkflowTemplateController } from "../application/workflow-template-controller";
+import type { ProjectController } from "../application/project-controller";
+import { newProjectSchema, type NewProjectInput, type ProjectGroupInput } from "../domain/project";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +43,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import styles from "./relay.module.css";
+import { ContentSection, MetricItem, MetricStrip, PageContent, PageHeader as SharedPageHeader, WorkspacePage } from "@/components/workspace-page";
 
 const navigationIcons = {
   dashboard: LayoutDashboard,
@@ -67,6 +71,8 @@ export type RelayExperienceProps = {
     backup: WorkspaceBackupController;
     clients: ClientController;
     templates: WorkflowTemplateController;
+    projects: ProjectController;
+    projectId?: string;
   };
   onChooseMode(mode: "local" | "sample"): void;
   onStartAccount(action: "sign-up" | "sign-in"): void;
@@ -74,6 +80,8 @@ export type RelayExperienceProps = {
   onToggleTheme(): void;
   onLeaveWorkspace(): Promise<void>;
   onRequestNewProject(): Promise<{ ok: boolean; message: string }>;
+  onProjectCreated(url: string): void;
+  onProjectsChanged(): void;
   onClientsChanged(): void;
   onTemplatesChanged(): void;
 };
@@ -114,7 +122,7 @@ export function RelayExperience(props: RelayExperienceProps) {
     );
   }
 
-  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} />;
+  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onProjectCreated={props.onProjectCreated} onProjectsChanged={props.onProjectsChanged} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} />;
 }
 
 function EntryChoice({ icon: Icon, label, detail, onClick }: { icon: typeof Cloud; label: string; detail: string; onClick: () => void }) {
@@ -131,15 +139,11 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, mode, identity, storageWarning, workspace, backup, clients, templates, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onRequestNewProject, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onClientsChanged(): void; onTemplatesChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
   const [message, setMessage] = useState("");
+  const [showNewProject, setShowNewProject] = useState(false);
   const readOnly = mode === "sample";
   const person = identity ?? workspace.fallbackIdentity;
-
-  async function requestNewProject() {
-    const result = await onRequestNewProject();
-    setMessage(result.message);
-  }
 
   return (
     <div className={styles.relay} data-theme={theme}>
@@ -186,8 +190,8 @@ function RelayShell({ section, mode, identity, storageWarning, workspace, backup
           <div className={styles.content}>
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
-            <PageHeader model={workspace.page} onNewProject={requestNewProject} />
-            {section === "dashboard" || section === "projects" ? <Dashboard section={section} workspace={workspace} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
+            {projectId ? <ProjectPage controller={projects} projectId={projectId} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -256,7 +260,7 @@ function BackupSettings({ controller }: { controller: WorkspaceBackupController 
   );
 }
 
-function PageHeader({ model, onNewProject }: { model: WorkspaceModel["page"]; onNewProject: () => void }) {
+function RelayPageHeader({ model, onNewProject }: { model: WorkspaceModel["page"]; onNewProject: () => void }) {
   return (
     <section className={`${styles.card} ${styles.pageHeader}`}>
       <div><p className={styles.eyebrow}>Production Workspace</p><h1>{model.title}</h1><p>{model.description}</p></div>
@@ -277,7 +281,7 @@ function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; 
           <div className={styles.tableWrap}>
             <table className={styles.table}>
               <thead><tr><th>Project</th><th>Stage</th><th>Due</th><th>Progress</th></tr></thead>
-              <tbody>{workspace.projects.map((project) => <tr key={project.id}><td><span className={styles.projectTitle}>{project.name}</span><span className={styles.projectMeta}>{project.clientName}</span></td><td><span className={`${styles.status} ${styles[project.tone]}`}>{project.stage}</span></td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody>
+              <tbody>{workspace.projects.map((project) => <tr key={project.id}><td><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span className={styles.projectMeta}>{project.clientName}</span></td><td><span className={`${styles.status} ${styles[project.tone]}`}>{project.stage}</span></td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody>
             </table>
           </div>
         </section>
@@ -288,6 +292,83 @@ function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; 
       </div>
     </>
   );
+}
+
+const blankProject: NewProjectInput = { name: "", clientId: "", projectGroupId: "", templateId: "", dueDate: "", financialType: "projectValue" };
+const blankGroup: ProjectGroupInput = { name: "", clientId: "", startDate: "", endDate: "", notes: "" };
+
+function NewProjectForm({ controller, onCancel, onCreated }: { controller: ProjectController; onCancel(): void; onCreated(url: string): void }) {
+  const [notice, setNotice] = useState("");
+  const form = useForm({
+    defaultValues: blankProject,
+    validators: { onSubmit: newProjectSchema },
+    onSubmit: async ({ value }) => {
+      const result = await controller.actions.create(value);
+      setNotice(result.message);
+      if (result.ok) onCreated(result.url);
+    },
+  });
+  return (
+    <section className={`${styles.card} ${styles.projectCreate}`} aria-labelledby="new-project-title">
+      <div className={styles.cardTitle}><div><p className={styles.eyebrow}>Short setup</p><h2 id="new-project-title">Create Project</h2></div><button type="button" onClick={onCancel}>Close</button></div>
+      <form onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
+        <form.Field name="name">{(field) => <label>Project name<input autoFocus value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
+        <form.Field name="clientId">{(field) => <label>Client<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Client</option>{controller.model.clients.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
+        <form.Subscribe selector={(state) => state.values.clientId}>{(clientId) => <form.Field name="projectGroupId">{(field) => <label>Project Group <span>(optional)</span><select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">No Project Group</option>{controller.actions.groupOptions(clientId).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>}</form.Subscribe>
+        <form.Field name="templateId">{(field) => <label>Workflow Template<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Workflow Template</option>{controller.model.templates.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
+        <form.Field name="dueDate">{(field) => <label>Due date<input type="date" value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
+        <form.Field name="financialType">{(field) => <label>Financial type<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value as NewProjectInput["financialType"])}><option value="projectValue">Project value</option><option value="salaryPlan">Salary Plan</option><option value="nonBillable">Non-billable</option></select></label>}</form.Field>
+        <div className={styles.formActions}><button type="button" onClick={onCancel}>Cancel</button><form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>{([canSubmit, isSubmitting]) => <button className={styles.primaryButton} disabled={!canSubmit || isSubmitting} type="submit">{isSubmitting ? "Creating…" : "Create Project"}</button>}</form.Subscribe></div>
+      </form>
+      <form.Subscribe selector={(state) => state.errors}>{(errors) => errors.length ? <p className={styles.errorNotice} role="alert">{errors.map((error) => typeof error === "string" ? error : "Check the six Project fields and try again.").join(" ")}</p> : null}</form.Subscribe>
+      {notice ? <p role="status">{notice}</p> : null}
+    </section>
+  );
+}
+
+function ProjectsPage({ controller, workspace, readOnly, showNewProject, onNewProject, onCancelNewProject, onProjectCreated, onChanged }: { controller: ProjectController; workspace: WorkspaceModel; readOnly: boolean; showNewProject: boolean; onNewProject(): void; onCancelNewProject(): void; onProjectCreated(url: string): void; onChanged(): void }) {
+  const [draft, setDraft] = useState(blankGroup);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [notice, setNotice] = useState("");
+  const selected = controller.model.groups.find((group) => group.id === selectedId);
+  function update(field: keyof ProjectGroupInput, value: string) { setDraft((current) => ({ ...current, [field]: value })); }
+  async function saveGroup(event: React.FormEvent) {
+    event.preventDefault();
+    const result = selected ? await controller.actions.editGroup(selected.id, draft) : await controller.actions.createGroup(draft);
+    setNotice(result.message);
+    if (result.ok) { setDraft(blankGroup); setSelectedId(null); onChanged(); }
+  }
+  function inspect(group: typeof selected) { if (!group) return; setSelectedId(group.id); setDraft({ name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes }); }
+  async function toggleGroup() { if (!selected) return; const result = await controller.actions.setGroupArchived(selected.id, !selected.archived); setNotice(result.message); if (result.ok) { setSelectedId(null); setDraft(blankGroup); onChanged(); } }
+  const selectedClient = selected ? controller.model.clients.find(({ value }) => value === selected.clientId)?.label ?? "Unknown Client" : "";
+  const projectTable = <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Project</th><th>Stage</th><th>Due</th><th>Progress</th></tr></thead><tbody>{workspace.projects.map((project) => <tr key={project.id}><td><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span className={styles.projectMeta}>{project.clientName}</span></td><td>{project.stage}</td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody></table></div>;
+  const inspector = selected ? <div className={styles.groupInspector}><h3>{selected.name}</h3><dl><div><dt>Client</dt><dd>{selectedClient}</dd></div><div><dt>Status</dt><dd>{selected.archived ? "Archived" : "Active"}</dd></div><div><dt>Date range</dt><dd>{selected.startDate || "No start"} — {selected.endDate || "No end"}</dd></div><div><dt>Projects</dt><dd>{selected.projectCount}</dd></div><div><dt>Progress</dt><dd>{selected.progress}%</dd></div><div><dt>Money</dt><dd>{selected.money.toLocaleString()}</dd></div></dl><p>{selected.notes || "No notes."}</p></div> : <p className={styles.clientEmpty}>Choose a Project Group to inspect it.</p>;
+  return (
+    <WorkspacePage family="data-index">
+      <SharedPageHeader eyebrow="Production Workspace" title="Projects" description="Create tracked work and group related jobs for one Client." actions={<button className={styles.primaryButton} type="button" onClick={onNewProject}><Plus size={18} />New project</button>} />
+      <PageContent>
+      {showNewProject ? <NewProjectForm controller={controller} onCancel={onCancelNewProject} onCreated={onProjectCreated} /> : null}
+      <MetricStrip aria-label="Workspace metrics">{workspace.metrics.map((metric) => <MetricItem key={metric.label} label={metric.label} value={metric.value} />)}</MetricStrip>
+      <ContentSection title="Projects" bodyMode="flush">{projectTable}</ContentSection>
+      <ContentSection title="Project Groups" description="Campaigns, retainers, and production runs for one Client." actions={<label className={styles.check}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Include archived</label>} bodyMode="flush">
+        <div className={styles.groupGrid}>
+          <ul className={styles.clientRows}>{controller.model.groups.filter((group) => includeArchived || !group.archived).map((group) => <li key={group.id}><button type="button" aria-pressed={selectedId === group.id} onClick={() => inspect(group)}><strong>{group.name}</strong><span>{group.projectCount} Projects · {group.progress}% · {group.money.toLocaleString()}</span>{group.archived ? <small>Archived</small> : null}</button></li>)}</ul>
+          <div>{inspector}{!readOnly ? <form className={styles.groupForm} onSubmit={(event) => void saveGroup(event)}><h3>{selected ? "Edit Project Group" : "Create Project Group"}</h3><label>Name<input required value={draft.name} onChange={(event) => update("name", event.target.value)} /></label><label>Client<select required value={draft.clientId} onChange={(event) => update("clientId", event.target.value)}><option value="">Choose a Client</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select></label><label>Start date <span>(optional)</span><input type="date" value={draft.startDate} onChange={(event) => update("startDate", event.target.value)} /></label><label>End date <span>(optional)</span><input type="date" value={draft.endDate} onChange={(event) => update("endDate", event.target.value)} /></label><label className={styles.fullField}>Notes<textarea value={draft.notes} onChange={(event) => update("notes", event.target.value)} /></label><div className={styles.formActions}>{selected ? <><button type="button" onClick={() => { setSelectedId(null); setDraft(blankGroup); }}>Cancel</button><button type="button" onClick={() => void toggleGroup()}>{selected.archived ? "Restore" : "Archive"}</button></> : null}<button className={styles.primaryButton} type="submit">{selected ? "Save Project Group" : "Create Project Group"}</button></div></form> : null}</div>
+        </div>
+      </ContentSection>
+      {notice ? <p className={styles.toast} role="status">{notice}</p> : null}
+      </PageContent>
+    </WorkspacePage>
+  );
+}
+
+function ProjectPage({ controller, projectId }: { controller: ProjectController; projectId: string }) {
+  const project = controller.actions.inspectProject(projectId);
+  if (!project) return <WorkspacePage family="data-index"><SharedPageHeader title="Project not found" description="This Project is unavailable in the current Workspace." actions={<Link href="/relay/projects">Back to Projects</Link>} /></WorkspacePage>;
+  const client = controller.model.clients.find(({ value }) => value === project.clientId)?.label ?? "Unknown Client";
+  const headerFacts = <dl className={styles.projectFacts}><div><dt>Stage</dt><dd>{project.stage}</dd></div><div><dt>Client</dt><dd>{client}</dd></div><div><dt>Due date</dt><dd>{project.dueDate}</dd></div><div><dt>Lead</dt><dd>{project.lead}</dd></div><div><dt>Assignees</dt><dd>{project.assignees.length ? project.assignees.join(", ") : "Unassigned"}</dd></div></dl>;
+  return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>{["Overview", "Outputs and Versions", "Client Review", "Files and Links", "Activity"].map((title) => <ContentSection title={title} key={title}><p>{title === "Overview" ? `Financial type: ${project.financialType}. Workflow: ${project.workflowSetup.templateName}.` : `${title} will stay attached to this Project as its work grows.`}</p></ContentSection>)}</PageContent></WorkspacePage>;
 }
 
 const blankClient: ClientInput = { name: "", company: "", contactName: "", email: "", phone: "", notes: "" };

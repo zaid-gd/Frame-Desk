@@ -1,4 +1,5 @@
 import { validateWorkflowTemplate, type ProjectSetup } from "./workflow-template";
+import type { FinancialType } from "./project";
 
 export const MAX_RELAY_PROJECTS = 500;
 
@@ -18,6 +19,9 @@ export type WorkspaceProject = {
   workflowTemplateId?: string;
   workflowStageId?: string;
   workflowSetup?: ProjectSetup;
+  financialType?: FinancialType;
+  lead?: string;
+  assignees?: string[];
 };
 
 export function createWorkspaceProjectDraft(id: string, name: string, setup?: ProjectSetup): WorkspaceProject {
@@ -34,7 +38,7 @@ export function createWorkspaceProjectDraft(id: string, name: string, setup?: Pr
   };
 }
 
-const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup"] as const;
+const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup", "financialType", "lead", "assignees"] as const;
 const textByteLimits = { id: 100, name: 200, clientId: 100, stage: 80, due: 80, progress: 40 } as const;
 
 function safeText(value: unknown, maxBytes: number): value is string {
@@ -61,7 +65,10 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
     && (record.portalUrl === undefined || safeText(record.portalUrl, 1000))
     && (record.workflowTemplateId === undefined || safeText(record.workflowTemplateId, 100))
     && (record.workflowStageId === undefined || safeText(record.workflowStageId, 100))
-    && (record.workflowSetup === undefined || validProjectSetup(record.workflowSetup));
+    && (record.workflowSetup === undefined || validProjectSetup(record.workflowSetup))
+    && (record.financialType === undefined || ["projectValue", "salaryPlan", "nonBillable"].includes(String(record.financialType)))
+    && (record.lead === undefined || safeText(record.lead, 200))
+    && (record.assignees === undefined || (Array.isArray(record.assignees) && record.assignees.every((value) => safeText(value, 200))));
 }
 
 function validProjectSetup(value: unknown) {

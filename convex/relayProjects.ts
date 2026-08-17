@@ -1,0 +1,158 @@
+import { v } from "convex/values";
+import { mutation, query, type MutationCtx } from "./_generated/server";
+import { newProjectInputValidator, projectDetailValidator, projectGroupInputValidator, projectGroupValidator } from "./relayWorkspaceValidators";
+import { copyProjectSetup, createDefaultWorkflowTemplate, type WorkflowTemplate } from "../src/relay/domain/workflow-template";
+import { isIsoCalendarDate } from "../src/relay/domain/calendar-date";
+import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
+
+async function requireOwner(ctx: MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Sign in to manage Projects.");
+  return identity.tokenIdentifier;
+}
+
+function validGroup(input: { name: string; clientId: string; startDate: string; endDate: string; notes: string }) {
+  return input.name.trim().length > 0
+    && input.name.length <= 200
+    && input.clientId.length > 0
+    && (!input.startDate || isIsoCalendarDate(input.startDate))
+    && (!input.endDate || isIsoCalendarDate(input.endDate))
+    && (!input.startDate || !input.endDate || input.startDate <= input.endDate)
+    && input.notes.length <= 2_000;
+}
+
+async function clientExists(ctx: MutationCtx, ownerUserId: string, clientId: string) {
+  return ctx.db.query("relayClients").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", clientId)).unique();
+}
+
+export const listGroups = query({
+  args: { includeArchived: v.optional(v.boolean()) },
+  returns: v.array(projectGroupValidator),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    return groups.filter((group) => args.includeArchived || !group.archived).map((group) => {
+      const totals = deriveProjectGroupTotals(projects.map((project) => ({ projectGroupId: project.projectGroupId, progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0 })), group.durableId);
+      return { id: group.durableId, name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes, archived: group.archived, ...totals };
+    });
+  },
+});
+
+export const createGroup = mutation({
+  args: projectGroupInputValidator.fields,
+  returns: v.object({ id: v.string() }),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    if (!validGroup(args)) throw new Error("Enter valid Project Group details before saving.");
+    const client = await clientExists(ctx, ownerUserId, args.clientId);
+    if (!client || client.archived) throw new Error("Choose an active Client for this Project Group.");
+    const durableId = `group_${crypto.randomUUID()}`;
+    await ctx.db.insert("relayProjectGroups", { ownerUserId, durableId, archived: false, ...args, name: args.name.trim() });
+    return { id: durableId };
+  },
+});
+
+export const editGroup = mutation({
+  args: { id: v.string(), ...projectGroupInputValidator.fields },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
+    if (!group) throw new Error("Project Group not found.");
+    const { id: _id, ...input } = args;
+    if (!validGroup(input)) throw new Error("Enter valid Project Group details before saving.");
+    const client = await clientExists(ctx, ownerUserId, input.clientId);
+    if (!client || client.archived) throw new Error("Choose an active Client for this Project Group.");
+    const assignedProject = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).take(500);
+    if (assignedProject.some((project) => project.projectGroupId === args.id && project.clientId !== input.clientId)) throw new Error("Move this Project Group's Projects before changing its Client.");
+    await ctx.db.patch("relayProjectGroups", group._id, { ...input, name: input.name.trim() });
+    return null;
+  },
+});
+
+export const setGroupArchived = mutation({
+  args: { id: v.string(), archived: v.boolean() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
+    if (!group) throw new Error("Project Group not found.");
+    await ctx.db.patch("relayProjectGroups", group._id, { archived: args.archived });
+    return null;
+  },
+});
+
+function workflowTemplateFromRow(row: { durableId: string; archived: boolean; name: string; stages: WorkflowTemplate["stages"]; cancelledLabel: string; starterOutputs: WorkflowTemplate["starterOutputs"]; roles: WorkflowTemplate["roles"]; portalDefaults: WorkflowTemplate["portalDefaults"] }): WorkflowTemplate {
+  return { id: row.durableId, archived: row.archived, name: row.name, stages: row.stages, cancelledLabel: row.cancelledLabel, starterOutputs: row.starterOutputs, roles: row.roles, portalDefaults: row.portalDefaults };
+}
+
+export const createProject = mutation({
+  args: newProjectInputValidator.fields,
+  returns: v.object({ id: v.string() }),
+  handler: async (ctx, args) => {
+    const ownerUserId = await requireOwner(ctx);
+    if (!args.name.trim() || args.name.length > 200 || !isIsoCalendarDate(args.dueDate)) throw new Error("Enter valid Project details before saving.");
+    const client = await clientExists(ctx, ownerUserId, args.clientId);
+    if (!client || client.archived) throw new Error("Choose an active Client for this Project.");
+    if (args.projectGroupId) {
+      const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.projectGroupId)).unique();
+      if (!group || group.archived || group.clientId !== args.clientId) throw new Error("Choose an active Project Group for the same Client.");
+    }
+    const storedTemplate = await ctx.db.query("relayWorkflowTemplates").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.templateId)).unique();
+    const template = storedTemplate ? workflowTemplateFromRow(storedTemplate) : args.templateId === "template_default" ? createDefaultWorkflowTemplate("template_default", "Default workflow") : null;
+    if (!template || template.archived) throw new Error("Choose an active Workflow Template.");
+    const setup = copyProjectSetup(template);
+    const firstStage = setup.stages[0];
+    const id = `project_${crypto.randomUUID()}`;
+    await ctx.db.insert("relayProjects", {
+      ownerUserId,
+      importedAt: new Date().toISOString(),
+      id,
+      name: args.name.trim(),
+      clientId: args.clientId,
+      stage: firstStage.label,
+      tone: "planned",
+      due: args.dueDate,
+      progress: "0%",
+      status: "active",
+      ...(args.projectGroupId ? { projectGroupId: args.projectGroupId } : {}),
+      workflowTemplateId: template.id,
+      workflowStageId: firstStage.id,
+      workflowSetup: setup,
+      financialType: args.financialType,
+      lead: "Unassigned",
+      assignees: [],
+    });
+    return { id };
+  },
+});
+
+export const inspectProject = query({
+  args: { id: v.string() },
+  returns: v.union(projectDetailValidator, v.null()),
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", identity.tokenIdentifier).eq("id", args.id)).unique();
+    if (!project || !project.workflowSetup || !project.financialType) return null;
+    const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
+    return { ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] };
+  },
+});
+
+export const listProjects = query({
+  args: {},
+  returns: v.array(projectDetailValidator),
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    return projects.flatMap((project) => {
+      if (!project.workflowSetup || !project.financialType) return [];
+      const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
+      return [{ ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] }];
+    });
+  },
+});

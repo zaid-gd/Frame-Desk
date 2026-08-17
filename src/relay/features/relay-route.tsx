@@ -8,6 +8,7 @@ import { createWorkspaceBackupController } from "../application/workspace-backup
 import { createWorkspaceController } from "../application/workspace-controller";
 import { createClientController } from "../application/client-controller";
 import { createWorkflowTemplateController } from "../application/workflow-template-controller";
+import { createProjectController } from "../application/project-controller";
 import type { RelaySection } from "../application/routes";
 import { createBrowserEntryPort, RELAY_ENTRY_MODE_KEY } from "../infrastructure/browser-entry-port";
 import { useCloudWorkspaceBackupPort } from "../infrastructure/cloud-workspace-backup-port";
@@ -23,6 +24,10 @@ import { clientRelationships } from "../domain/client-relationships";
 import { createLocalWorkflowTemplatePort } from "../infrastructure/local-workflow-template-port";
 import { createSampleWorkflowTemplatePort } from "../infrastructure/sample-workflow-template-port";
 import { useCloudWorkflowTemplatePort } from "../infrastructure/cloud-workflow-template-port";
+import { createLocalProjectPort } from "../infrastructure/local-project-port";
+import { createMemoryProjectPort } from "../infrastructure/memory-project-port";
+import { createSampleProjectPort } from "../infrastructure/sample-project-port";
+import { useCloudProjectPort } from "../infrastructure/cloud-project-port";
 import { RelayExperience } from "../presentation/relay-experience";
 
 const THEME_KEY = "relay:theme:v1";
@@ -47,7 +52,7 @@ function workspacePort(mode: WorkspaceMode, cloudPort: ReturnType<typeof useClou
   return createLocalWorkspacePort();
 }
 
-export function RelayRoute({ section, cloudConfigured }: { section?: RelaySection; cloudConfigured: boolean }) {
+export function RelayRoute({ section, projectId, cloudConfigured }: { section?: RelaySection; projectId?: string; cloudConfigured: boolean }) {
   const router = useRouter();
   const auth = useOptionalAuth();
   const [hydrated, setHydrated] = useState(false);
@@ -92,6 +97,16 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
     return createLocalWorkflowTemplatePort();
   }, [cloudTemplatePort, mode]);
   const templateController = createWorkflowTemplateController({ port: selectedTemplatePort, canManage: mode !== "sample" });
+  const projectClients = selectedClientPort.loadClients().map(({ id, name, archived }) => ({ id, name, archived }));
+  const projectTemplates = templateController.actions.list(true);
+  const cloudProjectPort = useCloudProjectPort(mode === "cloud" && Boolean(auth.isSignedIn), projectClients, projectTemplates);
+  const selectedProjectPort = useMemo(() => {
+    if (mode === "sample") return createSampleProjectPort();
+    if (mode === "cloud") return cloudProjectPort;
+    if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates });
+    return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates });
+  }, [cloudProjectPort, hydrated, mode, projectClients, projectTemplates]);
+  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" });
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
   const firstTemplate = templateController.actions.list()[0];
   const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
@@ -167,6 +182,8 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
         backup: backupController,
         clients: clientController,
         templates: templateController,
+        projects: projectController,
+        projectId,
       }}
       onChooseMode={chooseMode}
       onStartAccount={startAccount}
@@ -174,6 +191,8 @@ export function RelayRoute({ section, cloudConfigured }: { section?: RelaySectio
       onToggleTheme={toggleTheme}
       onLeaveWorkspace={leaveWorkspace}
       onRequestNewProject={requestNewProject}
+      onProjectCreated={(url) => { setWorkspaceVersion((version) => version + 1); router.push(url); }}
+      onProjectsChanged={() => setWorkspaceVersion((version) => version + 1)}
       onClientsChanged={() => setWorkspaceVersion((version) => version + 1)}
       onTemplatesChanged={() => setWorkspaceVersion((version) => version + 1)}
     />
