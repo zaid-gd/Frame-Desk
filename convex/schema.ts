@@ -97,6 +97,24 @@ export default defineSchema({
     .index("by_ownerUserId_and_versionId", ["ownerUserId", "versionId"])
     .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
 
+  relayClientPortals: defineTable({
+    ownerUserId: v.string(),
+    projectId: v.string(),
+    token: v.string(),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    publicNotes: v.string(),
+    showDueDate: v.boolean(),
+    showCompletedDate: v.boolean(),
+    outputIds: v.array(v.string()),
+    expiresAt: v.union(v.string(), v.null()),
+    pinHash: v.optional(v.string()),
+    pinSalt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"])
+    .index("by_token", ["token"]),
+
   relayWorkspaceImports: defineTable({
     ownerUserId: v.string(),
     importedAt: v.string(),

@@ -310,3 +310,12 @@
 @media (prefers-reduced-motion: reduce) {
   .relay *, .relay *::before, .relay *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+.portalEditor { display: grid; gap: 16px; }
+.portalEditor textarea { min-height: 96px; resize: vertical; }
+.portalEditor textarea, .portalEditor input[type="datetime-local"], .portalEditor input[type="password"] { width: 100%; margin-top: 6px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-control); padding: 10px 12px; color: var(--app-ink); }
+.portalEditor fieldset { display: flex; flex-wrap: wrap; gap: 10px 18px; border: 1px solid var(--app-border); border-radius: 10px; padding: 12px; }
+.portalEditor fieldset label { display: flex; align-items: center; gap: 8px; }
+.portalStatus { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.portalFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.portalPreview { border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-soft-panel); padding: 16px; }
+@media (max-width: 700px) { .portalFields { grid-template-columns: 1fr; } }

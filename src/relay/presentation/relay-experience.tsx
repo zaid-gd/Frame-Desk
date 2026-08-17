@@ -38,6 +38,7 @@ import type { WorkflowTemplateInput } from "../domain/workflow-template";
 import type { WorkflowTemplateController } from "../application/workflow-template-controller";
 import type { ProjectController } from "../application/project-controller";
 import type { ProjectOutputController } from "../application/project-output-controller";
+import type { ClientPortalController } from "../application/client-portal-controller";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import {
   DropdownMenu,
@@ -78,6 +79,7 @@ export type RelayExperienceProps = {
     templates: WorkflowTemplateController;
     projects: ProjectController;
     outputs: ProjectOutputController;
+    portal?: ClientPortalController;
     projectId?: string;
   };
   onChooseMode(mode: "local" | "sample"): void;
@@ -145,7 +147,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const readOnly = mode === "sample";
@@ -197,7 +199,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -486,7 +488,7 @@ function ProjectBoardCard({ project, readOnly, onMove }: { project: ProjectBoard
   return <li ref={setNodeRef} style={style} className={isDragging ? styles.projectDragging : undefined}><div className={styles.projectBoardCard}><div><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span>{project.clientName} · {project.dueDate}</span></div>{!readOnly ? <div className={styles.projectBoardActions}><button type="button" aria-label={`Drag ${project.name}`} {...listeners} {...attributes}>Drag</button><select aria-label={`Move ${project.name} to stage`} value={project.currentStageId} onChange={(event) => onMove(project.id, event.target.value)}>{project.stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></div> : null}</div></li>;
 }
 
-export function ProjectPage({ controller, outputController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; projectId: string; readOnly: boolean; onChanged(): void }) {
+export function ProjectPage({ controller, outputController, portalController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; portalController?: ClientPortalController; projectId: string; readOnly: boolean; onChanged(): void }) {
   const [, setRevision] = useState(0);
   const [notice, setNotice] = useState("");
   const project = controller.actions.inspectProject(projectId);
@@ -514,10 +516,54 @@ export function ProjectPage({ controller, outputController, projectId, readOnly,
         {outputView.state.kind === "ready" && outputs.length === 0 ? <p>No Project Outputs yet.</p> : outputs.map((output) => <ProjectOutputEditor key={output.id} output={output} controller={outputController} readOnly={readOnly} onChanged={changed} />)}
       </div>
     </ContentSection>
-    {[
-      "Client Review", "Files and Links", "Activity",
-    ].map((title) => <ContentSection title={title} key={title}><p>{title} will stay attached to this Project as its work grows.</p></ContentSection>)}
+    <ContentSection title="Client Review">{portalController ? <ClientPortalEditor controller={portalController} onChanged={changed} /> : <p>Client Portals are available for signed-in cloud Workspaces.</p>}</ContentSection>
+    {["Files and Links", "Activity"].map((title) => <ContentSection title={title} key={title}><p>{title} will stay attached to this Project as its work grows.</p></ContentSection>)}
   </PageContent></WorkspacePage>;
+}
+
+function ClientPortalEditor({ controller, onChanged }: { controller: ClientPortalController; onChanged(message: string): void }) {
+  const model = controller.actions.view();
+  const [publicNotes, setPublicNotes] = useState(model.portal?.publicNotes ?? "");
+  const [showDueDate, setShowDueDate] = useState(model.portal?.showDueDate ?? false);
+  const [showCompletedDate, setShowCompletedDate] = useState(model.portal?.showCompletedDate ?? false);
+  const [outputIds, setOutputIds] = useState(model.portal?.outputIds ?? []);
+  const [expiresAt, setExpiresAt] = useState(model.portal?.expiresAt ?? "");
+  const [pin, setPin] = useState("");
+  const [removePin, setRemovePin] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const preview = controller.actions.preview({ publicNotes, showDueDate, showCompletedDate, outputIds, expiresAt: expiresAt || null, pin, removePin });
+
+  useEffect(() => {
+    if (!model.portal) return;
+    setPublicNotes(model.portal.publicNotes);
+    setShowDueDate(model.portal.showDueDate);
+    setShowCompletedDate(model.portal.showCompletedDate);
+    setOutputIds(model.portal.outputIds);
+    setExpiresAt(model.portal.expiresAt ?? "");
+  }, [model.portal?.token]);
+
+  async function publishPortal() {
+    const result = await controller.actions.publish({ publicNotes, showDueDate, showCompletedDate, outputIds, expiresAt: expiresAt || null, pin, removePin });
+    onChanged(result.message);
+  }
+
+  return <div className={styles.portalEditor}>
+    <div className={styles.portalStatus}>
+      <p><strong>Access:</strong> {model.access === "invalid" ? "Not published" : model.access}</p>
+      {model.portal ? <a href={`/client-portal/${model.portal.token}`} target="_blank" rel="noreferrer">Open public portal</a> : null}
+    </div>
+    <label>Public notes<textarea value={publicNotes} maxLength={2000} onChange={(event) => setPublicNotes(event.target.value)} /></label>
+    <fieldset><legend>Public dates</legend><label><input type="checkbox" checked={showDueDate} onChange={(event) => setShowDueDate(event.target.checked)} />Due date</label><label><input type="checkbox" checked={showCompletedDate} onChange={(event) => setShowCompletedDate(event.target.checked)} />Completed date</label></fieldset>
+    <fieldset><legend>Shared Project Outputs</legend>{model.outputs.length ? model.outputs.map((output) => <label key={output.id}><input type="checkbox" checked={outputIds.includes(output.id)} onChange={(event) => setOutputIds((current) => event.target.checked ? [...current, output.id] : current.filter((id) => id !== output.id))} />{output.name}</label>) : <p>Add a current Media Version before sharing an output.</p>}</fieldset>
+    <div className={styles.portalFields}><label>Expires at<input type="datetime-local" value={expiresAt ? expiresAt.slice(0, 16) : ""} onChange={(event) => setExpiresAt(event.target.value ? new Date(event.target.value).toISOString() : "")} /></label><label>Optional PIN<input type="password" inputMode="numeric" autoComplete="new-password" value={pin} minLength={4} maxLength={12} disabled={removePin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ""))} placeholder={model.portal?.pinProtected ? "Leave blank to keep current PIN" : "4–12 digits"} /></label></div>
+    {model.portal?.pinProtected ? <label><input type="checkbox" checked={removePin} onChange={(event) => setRemovePin(event.target.checked)} />Remove current PIN</label> : null}
+    <div className={styles.formActions}>
+      <button type="button" className={styles.primaryButton} onClick={() => void publishPortal()}>{model.portal ? "Save and open" : "Publish portal"}</button>
+      <button type="button" onClick={() => setPreviewOpen((value) => !value)}>Preview</button>
+      {model.portal ? <><button type="button" onClick={() => void (model.portal?.status === "open" ? controller.actions.close() : controller.actions.open()).then((result) => onChanged(result.message))}>{model.portal.status === "open" ? "Close portal" : "Open portal"}</button><button type="button" onClick={() => void controller.actions.regenerateToken().then((result) => onChanged(result.ok ? "Client Portal link regenerated." : result.error.message))}>Regenerate link</button></> : null}
+    </div>
+    {previewOpen ? <div className={styles.portalPreview} aria-label="Client Portal preview">{preview.view ? <><p className={styles.eyebrow}>Client preview</p><h3>{preview.view.project.name}</h3><p>{preview.view.project.stage} · {preview.view.project.progress}%</p>{preview.view.project.publicNotes ? <p>{preview.view.project.publicNotes}</p> : null}<ul>{preview.view.outputs.map((output) => <li key={output.id}>{output.name} · current version</li>)}</ul></> : <p>This Project is not available for preview.</p>}</div> : null}
+  </div>;
 }
 
 type ProjectOutputView = ReturnType<ProjectOutputController["actions"]["view"]>["rows"][number];
