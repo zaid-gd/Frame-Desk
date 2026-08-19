@@ -4,8 +4,9 @@ import type { ProjectPort } from "../ports/project-port";
 import { deriveProjectGroupTotals } from "../domain/project-group";
 import { addMediaVersion, projectOutputNameError, type ProjectOutput } from "../domain/project-output";
 import type { ProjectOutputPort } from "../ports/project-output-port";
+import type { SalaryPlan } from "../domain/salary-plan";
 
-export function createMemoryProjectPort({ clients = [], groups = [], templates = [], projects = [], outputs = [], selectedProjectId = projects[0]?.id ?? "", now = () => new Date().toISOString() }: { clients?: readonly ProjectChoice[]; groups?: readonly Omit<ProjectGroup, "projectCount" | "progress" | "money">[]; templates?: readonly ProjectTemplate[]; projects?: readonly ProjectRecord[]; outputs?: readonly ProjectOutput[]; selectedProjectId?: string; now?: () => string } = {}): ProjectPort & ProjectOutputPort {
+export function createMemoryProjectPort({ clients = [], groups = [], templates = [], projects = [], outputs = [], salaryPlans = [], selectedProjectId = projects[0]?.id ?? "", now = () => new Date().toISOString() }: { clients?: readonly ProjectChoice[]; groups?: readonly Omit<ProjectGroup, "projectCount" | "progress" | "money">[]; templates?: readonly ProjectTemplate[]; projects?: readonly ProjectRecord[]; outputs?: readonly ProjectOutput[]; salaryPlans?: readonly SalaryPlan[]; selectedProjectId?: string; now?: () => string } = {}): ProjectPort & ProjectOutputPort {
   const savedGroups: ProjectGroup[] = groups.map((group) => ({ ...group, projectCount: 0, progress: 0, money: 0 }));
   const savedProjects = [...projects];
   const savedOutputs = structuredClone([...outputs]);
@@ -23,10 +24,13 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
       const template = templates.find(({ id }) => id === input.templateId);
       const client = clients.find(({ id, archived }) => id === input.clientId && !archived);
       const group = input.projectGroupId ? savedGroups.find(({ id, archived }) => id === input.projectGroupId && !archived) : undefined;
+      const salaryPlan = input.salaryPlanId ? salaryPlans.find(({ id }) => id === input.salaryPlanId) : undefined;
+      if (input.financialType === "salaryPlan" && (!salaryPlan || salaryPlan.archived || salaryPlan.clientId !== input.clientId)) return { ok: false, error: { kind: "invalid", message: "Choose a Salary Plan for the same active Client." } };
+      if (input.financialType !== "salaryPlan" && input.salaryPlanId) return { ok: false, error: { kind: "invalid", message: "Salary Plans can only be selected for Salary Plan Projects." } };
       if (!client || !template || template.archived || (input.projectGroupId && (!group || group.clientId !== input.clientId))) return { ok: false, error: { kind: "invalid", message: "Choose active Project setup options." } };
       const setup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
-      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), stage: setup.stages[0].label, workflowStageId: setup.stages[0].id, dueDate: input.dueDate, financialType: input.financialType, paymentState: input.financialType === "nonBillable" ? "not-applicable" : "unpaid", archived: false, lead: "Unassigned", assignees: [], progress: 0, money: 0, workflowSetup: setup });
+      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), stage: setup.stages[0].label, workflowStageId: setup.stages[0].id, dueDate: input.dueDate, financialType: input.financialType, paymentState: input.financialType === "nonBillable" ? "not-applicable" : "unpaid", archived: false, lead: "Unassigned", assignees: [], progress: 0, money: 0, workflowSetup: setup });
       savedOutputs.push(...setup.starterOutputs.map((starter) => ({
         id: `output_${crypto.randomUUID()}`,
         projectId: id,

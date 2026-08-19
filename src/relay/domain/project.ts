@@ -13,6 +13,7 @@ export const newProjectSchema = z.object({
   templateId: z.string().min(1, "Choose a Workflow Template."),
   dueDate: z.string().refine(isIsoCalendarDate, "Enter a valid due date."),
   financialType: z.enum(financialTypes),
+  salaryPlanId: z.string().optional(),
 }).strict();
 
 export type NewProjectInput = z.infer<typeof newProjectSchema>;
@@ -25,6 +26,7 @@ export type ProjectRecord = {
   stage: string;
   dueDate: string;
   financialType: FinancialType;
+  salaryPlanId?: string;
   lead: string;
   assignees: string[];
   progress: number;
@@ -38,7 +40,7 @@ export type ProjectRecord = {
 
 export type ProjectStageEffect =
   | { kind: "projectValue"; amount: number }
-  | { kind: "salaryPlan"; change: "added" | "removed" }
+  | { kind: "salaryPlan"; change: "added" | "removed"; batchId?: string }
   | { kind: "none" };
 
 export type ProjectTone = "review" | "delivered" | "planned";

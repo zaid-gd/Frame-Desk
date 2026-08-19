@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
 import { createDefaultWorkflowTemplate } from "../domain/workflow-template";
 import { createLocalProjectPort } from "./local-project-port";
+import { createLocalSalaryPlanPort } from "./local-salary-plan-port";
+import { RELAY_LOCAL_WORKSPACE_KEY } from "./local-workspace-state";
 
 function memoryStorage(): Pick<Storage, "getItem" | "setItem"> {
   const values = new Map<string, string>();
@@ -16,8 +18,9 @@ test("a saved local Project Group is available to the next Project form", async 
 test("a local stage move persists delivery and reopening state", async () => {
   const storage = memoryStorage();
   const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
+  storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients: [], projects: [], salaryPlans: [{ id: "plan_acme", clientId: "client_acme", requiredProjectCount: 1, batchAmount: 3000, startDate: "2026-08-01", notes: "Local plan", archived: false }] }));
   const port = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template] });
-  const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan" });
+  const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan", salaryPlanId: "plan_acme" });
   if (!created.ok) throw new Error(created.error.message);
   const delivered = template.stages.find(({ purpose }) => purpose === "delivered")!;
   const editing = template.stages.find(({ purpose }) => purpose === "editing")!;
@@ -29,12 +32,28 @@ test("a local stage move persists delivery and reopening state", async () => {
   expect(port.loadProjects()[0]).toMatchObject({ stage: "Editing", progress: 25, completedAt: undefined });
 });
 
+test("a local delivery creates one snapshot Salary Batch", async () => {
+  const storage = memoryStorage();
+  const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
+  const clients = [{ id: "client_acme", name: "Acme", archived: false }];
+  storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients: [], projects: [], salaryPlans: [{ id: "plan_acme", clientId: "client_acme", requiredProjectCount: 2, batchAmount: 6000, startDate: "2026-08-01", notes: "Local plan", archived: false }] }));
+  const port = createLocalProjectPort({ storage, clients, templates: [template] });
+  const delivered = template.stages.find(({ purpose }) => purpose === "delivered")!;
+  for (const name of ["One", "Two"]) {
+    const created = await port.createProject({ name, clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan", salaryPlanId: "plan_acme" });
+    if (!created.ok) throw new Error(created.error.message);
+    await port.moveProjectStage(created.value.id, delivered.id, true);
+  }
+  expect(createLocalSalaryPlanPort(storage, clients).loadBatches()).toMatchObject([{ planId: "plan_acme", batchAmount: 6000, notes: "Local plan", projectIds: expect.any(Array) }]);
+});
+
 test("local Project Outputs retain version history without adding salary-counted Projects", async () => {
   const storage = memoryStorage();
   const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
+  storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients: [], projects: [], salaryPlans: [{ id: "plan_acme", clientId: "client_acme", requiredProjectCount: 3, batchAmount: 9000, startDate: "2026-08-01", notes: "Local plan", archived: false }] }));
   template.starterOutputs.push({ id: "output_short", name: "Short cut", relativeDeadlineDays: -1, roleId: null });
   const port = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template] });
-  const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan" });
+  const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan", salaryPlanId: "plan_acme" });
   if (!created.ok) throw new Error(created.error.message);
 
   const outputPort = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template], selectedProjectId: created.value.id });

@@ -5,10 +5,12 @@ import { deriveProjectGroupTotals } from "../domain/project-group";
 import { readLocalWorkspaceState, RELAY_LOCAL_WORKSPACE_KEY, type LocalWorkspaceState } from "./local-workspace-state";
 import { addMediaVersion, projectOutputNameError } from "../domain/project-output";
 import type { ProjectOutputPort } from "../ports/project-output-port";
+import type { SalaryPlan } from "../domain/salary-plan";
+import { deriveSalaryPlanProgress, type SalaryBatch } from "../domain/salary-plan";
 
 function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
   return (state?.projects ?? []).flatMap((project) => project.workflowSetup && project.financialType
-    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), stage: project.stage, workflowStageId: project.workflowStageId, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup, completedAt: project.completedAt }]
+    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), ...(project.salaryPlanId ? { salaryPlanId: project.salaryPlanId } : {}), stage: project.stage, workflowStageId: project.workflowStageId, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup, completedAt: project.completedAt }]
     : []);
 }
 
@@ -34,10 +36,14 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
       const client = clients.find((row) => row.id === input.clientId && !row.archived);
       const group = input.projectGroupId ? current.projectGroups?.find((row) => row.id === input.projectGroupId && !row.archived) : undefined;
       const template = templates.find((row) => row.id === input.templateId && !row.archived);
+      const salaryPlans = current.salaryPlans ?? [];
+      const salaryPlan = input.salaryPlanId ? salaryPlans.find((row) => row.id === input.salaryPlanId) : undefined;
+      if (input.financialType === "salaryPlan" && (!salaryPlan || salaryPlan.archived || salaryPlan.clientId !== input.clientId)) return { ok: false, error: { kind: "invalid", message: "Choose a Salary Plan for the same active Client." } };
+      if (input.financialType !== "salaryPlan" && input.salaryPlanId) return { ok: false, error: { kind: "invalid", message: "Salary Plans can only be selected for Salary Plan Projects." } };
       if (!client || !template || (input.projectGroupId && (!group || group.clientId !== input.clientId))) return { ok: false, error: { kind: "invalid", message: "Choose active Project setup options." } };
       const workflowSetup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
-      const project = { id, name: input.name.trim(), clientId: input.clientId, stage: workflowSetup.stages[0].label, tone: "planned" as const, due: input.dueDate, progress: "0%", status: "active" as const, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId, projectGroupName: group!.name } : {}), workflowTemplateId: template.id, workflowStageId: workflowSetup.stages[0].id, workflowSetup, financialType: input.financialType, lead: "Unassigned", assignees: [] };
+      const project = { id, name: input.name.trim(), clientId: input.clientId, stage: workflowSetup.stages[0].label, tone: "planned" as const, due: input.dueDate, progress: "0%", status: "active" as const, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId, projectGroupName: group!.name } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), workflowTemplateId: template.id, workflowStageId: workflowSetup.stages[0].id, workflowSetup, financialType: input.financialType, lead: "Unassigned", assignees: [] };
       const projectOutputs = workflowSetup.starterOutputs.map((starter) => ({
         id: `output_${crypto.randomUUID()}`,
         projectId: id,
@@ -88,8 +94,19 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
       if (!transition) return { ok: false, error: { kind: "invalid", message: "Choose a stage from this Project's workflow." } };
       if (transition.kind === "confirmation-required") return { ok: false, error: { kind: "invalid", message: "Confirm delivery before moving this Project to Delivered." } };
       try {
-        save({ ...current, projects: current.projects.map((project) => project.id === id ? { ...project, stage: transition.project.stage, workflowStageId: transition.project.workflowStageId, progress: `${transition.project.progress}%`, tone: transition.tone, completedAt: transition.project.completedAt } : project) });
-        return { ok: true, value: { projectName: transition.project.name, stage: transition.project.stage, effect: transition.effect } };
+        const nextProjects = current.projects.map((project) => project.id === id ? { ...project, stage: transition.project.stage, workflowStageId: transition.project.workflowStageId, progress: `${transition.project.progress}%`, tone: transition.tone, completedAt: transition.project.completedAt } : project);
+        const salaryPlan = transition.effect.kind === "salaryPlan" && transition.effect.change === "added" && transition.project.salaryPlanId ? (current.salaryPlans ?? []).find((plan) => plan.id === transition.project.salaryPlanId) : undefined;
+        const salaryBatches = current.salaryBatches ?? [];
+        const progress = salaryPlan ? deriveSalaryPlanProgress(salaryPlan, nextProjects, salaryBatches) : null;
+        let effect = transition.effect;
+        const nextBatches: SalaryBatch[] = [...salaryBatches];
+        if (salaryPlan && progress && progress.deliveredProjectCount >= salaryPlan.requiredProjectCount) {
+          const batch: SalaryBatch = { id: `batch_${crypto.randomUUID()}`, planId: salaryPlan.id, clientId: salaryPlan.clientId, requiredProjectCount: salaryPlan.requiredProjectCount, batchAmount: salaryPlan.batchAmount, startDate: salaryPlan.startDate, notes: salaryPlan.notes, projectIds: [...progress.deliveredProjectIds.slice(0, salaryPlan.requiredProjectCount)], completedAt: new Date().toISOString(), receivedAt: null };
+          nextBatches.push(batch);
+          effect = { kind: "salaryPlan", change: "added", batchId: batch.id };
+        }
+        save({ ...current, projects: nextProjects, salaryBatches: nextBatches });
+        return { ok: true, value: { projectName: transition.project.name, stage: transition.project.stage, effect } };
       } catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
     async addOutput(input) {

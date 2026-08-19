@@ -7,6 +7,7 @@ import { isIsoCalendarDate } from "../src/relay/domain/calendar-date";
 import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
 import { projectStageTransition, type ProjectRecord } from "../src/relay/domain/project";
 import { relayStorageUsage } from "./relayStorageUsage";
+import { maybeCreateSalaryBatch } from "./relaySalaryPlans";
 
 async function requireOwner(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -99,6 +100,15 @@ export const createProject = mutation({
     if (!args.name.trim() || args.name.length > 200 || !isIsoCalendarDate(args.dueDate)) throw new Error("Enter valid Project details before saving.");
     const client = await clientExists(ctx, ownerUserId, args.clientId);
     if (!client || client.archived) throw new Error("Choose an active Client for this Project.");
+    const salaryPlanId = args.salaryPlanId?.trim() || undefined;
+    if (args.financialType === "salaryPlan") {
+      if (!salaryPlanId) throw new Error("Choose a Salary Plan for this Project.");
+      const plan = await ctx.db.query("relaySalaryPlans").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", salaryPlanId)).unique();
+      if (!plan || plan.archived) throw new Error("Choose an active Salary Plan for this Project.");
+      if (plan.clientId !== args.clientId) throw new Error("Choose a Salary Plan for the same Client.");
+    } else if (salaryPlanId) {
+      throw new Error("Salary Plans can only be selected for Salary Plan Projects.");
+    }
     if (args.projectGroupId) {
       const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.projectGroupId)).unique();
       if (!group || group.archived || group.clientId !== args.clientId) throw new Error("Choose an active Project Group for the same Client.");
@@ -125,6 +135,7 @@ export const createProject = mutation({
       workflowStageId: firstStage.id,
       workflowSetup: setup,
       financialType: args.financialType,
+      ...(salaryPlanId ? { salaryPlanId } : {}),
       lead: "Unassigned",
       assignees: [],
     });
@@ -195,6 +206,7 @@ export const moveProjectStage = mutation({
       id: project.id,
       name: project.name,
       clientId: project.clientId,
+      ...(project.salaryPlanId ? { salaryPlanId: project.salaryPlanId } : {}),
       ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}),
       stage: project.stage,
       dueDate: project.due,
@@ -219,7 +231,11 @@ export const moveProjectStage = mutation({
       tone: transition.tone,
       completedAt: transition.project.completedAt,
     });
-    return { projectName: transition.project.name, stage: transition.project.stage, effect: transition.effect };
+    const batchId = transition.effect.kind === "salaryPlan" && transition.effect.change === "added" && transition.project.salaryPlanId
+      ? await maybeCreateSalaryBatch(ctx, ownerUserId, transition.project.salaryPlanId)
+      : null;
+    const effect = batchId && transition.effect.kind === "salaryPlan" ? { ...transition.effect, batchId } : transition.effect;
+    return { projectName: transition.project.name, stage: transition.project.stage, effect };
   },
 });
 

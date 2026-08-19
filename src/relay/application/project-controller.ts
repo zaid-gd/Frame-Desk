@@ -1,5 +1,6 @@
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectViewState } from "../domain/project";
 import type { ProjectPort, ProjectWriteResult } from "../ports/project-port";
+import type { SalaryPlan } from "../domain/salary-plan";
 
 function message<T>(result: ProjectWriteResult<T>, success: string) {
   return result.ok ? { ok: true as const, message: success } : { ok: false as const, kind: result.error.kind, message: result.error.message };
@@ -7,8 +8,9 @@ function message<T>(result: ProjectWriteResult<T>, success: string) {
 
 type ProjectAccess = { role: "owner" | "editor" | "viewer"; memberId: string; editorsCanViewAll: boolean; team?: boolean };
 
-export function createProjectController({ port, canManage = true, access = { role: "owner", memberId: "owner", editorsCanViewAll: true, team: false } }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess }) {
+export function createProjectController({ port, canManage = true, access = { role: "owner", memberId: "owner", editorsCanViewAll: true, team: false }, salaryPlans = [] }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess; salaryPlans?: readonly SalaryPlan[] }) {
   const clientNames = new Map(port.loadClients().map((client) => [client.id, client.name]));
+  const salaryPlanOptions = salaryPlans.filter(({ archived }) => !archived).map((plan) => ({ value: plan.id, label: `${clientNames.get(plan.clientId) ?? "Unknown Client"} · ${plan.requiredProjectCount} Projects · ${plan.batchAmount.toLocaleString("en-US")}`, clientId: plan.clientId }));
   const canSee = (project: ReturnType<ProjectPort["loadProjects"]>[number]) => access.role !== "editor" || access.editorsCanViewAll || project.assignees.includes(access.memberId) || project.lead === access.memberId;
   const previewStageMove = (id: string, targetStageId: string) => {
     const project = port.loadProjects().find((row) => row.id === id);
@@ -39,6 +41,7 @@ export function createProjectController({ port, canManage = true, access = { rol
       canManage,
       clients: port.loadClients().filter(({ archived }) => !archived).map(({ id: value, name: label }) => ({ value, label })),
       templates: port.loadTemplates().filter(({ archived }) => !archived).map(({ id: value, name: label }) => ({ value, label })),
+      salaryPlans: salaryPlanOptions,
       groups: port.loadGroups(),
       projects: port.loadProjects(),
       projectState: port.projectState?.() ?? { kind: "ready" as const },
@@ -47,6 +50,10 @@ export function createProjectController({ port, canManage = true, access = { rol
     },
     actions: {
       groupOptions(clientId: string) { return port.loadGroups().filter((group) => !group.archived && group.clientId === clientId).map(({ id: value, name: label }) => ({ value, label })); },
+      salaryPlanSelection(salaryPlanId: string) {
+        const plan = salaryPlanOptions.find(({ value }) => value === salaryPlanId);
+        return plan ? { salaryPlanId, clientId: plan.clientId, financialType: "salaryPlan" as const } : { salaryPlanId: "", financialType: "projectValue" as const };
+      },
       inspectProject(id: string) { return port.loadProjects().find((project) => project.id === id) ?? null; },
       table,
       board(state: ProjectViewState) {

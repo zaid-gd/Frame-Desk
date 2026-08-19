@@ -105,8 +105,9 @@ describe("Relay cloud Projects and Project Groups", () => {
     const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
     await t.run(async (ctx) => {
       await ctx.db.insert("relayClients", { ownerUserId: "owner", durableId: "client_acme", archived: false, name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "" });
+      await ctx.db.insert("relaySalaryPlans", { ownerUserId: "owner", durableId: "plan_salary", clientId: "client_acme", requiredProjectCount: 3, batchAmount: 9000, startDate: "2026-08-01", notes: "Salary plan", archived: false });
     });
-    const { id } = await owner.mutation(createProject, { ...projectInput, templateId: template.id, financialType: "salaryPlan" });
+    const { id } = await owner.mutation(createProject, { ...projectInput, templateId: template.id, financialType: "salaryPlan", salaryPlanId: "plan_salary" });
     const delivered = template.stages.find(({ purpose }) => purpose === "delivered")!;
     const revisions = template.stages.find(({ purpose }) => purpose === "revisions")!;
 
@@ -130,10 +131,11 @@ describe("Relay cloud Project Outputs", () => {
     template.starterOutputs.push({ id: "output_short", name: "Short cut", relativeDeadlineDays: -1, roleId: null });
     await t.run(async (ctx) => {
       await ctx.db.insert("relayClients", { ownerUserId, durableId: "client_acme", archived: false, name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "" });
+      await ctx.db.insert("relaySalaryPlans", { ownerUserId, durableId: "plan_salary", clientId: "client_acme", requiredProjectCount: 3, batchAmount: 9000, startDate: "2026-08-01", notes: "Salary plan", archived: false });
       const { id: durableId, ...input } = template;
       await ctx.db.insert("relayWorkflowTemplates", { ownerUserId, durableId, order: 0, ...input });
     });
-    const { id: projectId } = await owner.mutation(createProject, { ...projectInput, templateId: template.id, financialType: "salaryPlan" });
+    const { id: projectId } = await owner.mutation(createProject, { ...projectInput, templateId: template.id, financialType: "salaryPlan", salaryPlanId: "plan_salary" });
 
     expect(await owner.query(listOutputs, { projectId })).toMatchObject([
       { name: "Main video", reviewState: "draft", versions: [] },

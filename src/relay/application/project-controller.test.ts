@@ -27,6 +27,15 @@ describe("Project creation form", () => {
     expect(controller.actions.groupOptions("client_acme")).toEqual([{ value: "group_launch", label: "Launch" }]);
     expect(controller.actions.groupOptions("client_other")).toEqual([]);
   });
+
+  test("maps Salary Plan selection to its fixed Client and financial type", () => {
+    const controller = createProjectController({
+      port: createMemoryProjectPort({ clients: [{ id: "client_acme", name: "Acme", archived: false }] }),
+      salaryPlans: [{ id: "plan_acme", clientId: "client_acme", requiredProjectCount: 3, batchAmount: 9000, startDate: "2026-08-01", notes: "", archived: false }],
+    });
+    expect(controller.actions.salaryPlanSelection("plan_acme")).toEqual({ salaryPlanId: "plan_acme", clientId: "client_acme", financialType: "salaryPlan" });
+    expect(controller.actions.salaryPlanSelection("")).toEqual({ salaryPlanId: "", financialType: "projectValue" });
+  });
 });
 
 describe("Projects table", () => {

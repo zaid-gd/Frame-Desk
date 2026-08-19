@@ -21,6 +21,7 @@ import type * as relayProjectFileAccess from "../relayProjectFileAccess.js";
 import type * as relayProjectFiles from "../relayProjectFiles.js";
 import type * as relayProjectOutputs from "../relayProjectOutputs.js";
 import type * as relayProjects from "../relayProjects.js";
+import type * as relaySalaryPlans from "../relaySalaryPlans.js";
 import type * as relayStorageUsage from "../relayStorageUsage.js";
 import type * as relayWorkflowTemplates from "../relayWorkflowTemplates.js";
 import type * as relayWorkspaceImport from "../relayWorkspaceImport.js";
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   relayProjectFiles: typeof relayProjectFiles;
   relayProjectOutputs: typeof relayProjectOutputs;
   relayProjects: typeof relayProjects;
+  relaySalaryPlans: typeof relaySalaryPlans;
   relayStorageUsage: typeof relayStorageUsage;
   relayWorkflowTemplates: typeof relayWorkflowTemplates;
   relayWorkspaceImport: typeof relayWorkspaceImport;

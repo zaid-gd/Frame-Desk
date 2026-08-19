@@ -18,6 +18,35 @@ export const workflowTemplateInputValidator = v.object({
 export const workflowTemplateValidator = workflowTemplateInputValidator.extend({ id: v.string(), archived: v.boolean() });
 export const projectSetupValidator = workflowTemplateInputValidator.extend({ templateId: v.string(), templateName: v.string() }).omit("name");
 
+export const salaryPlanInputValidator = v.object({
+  clientId: v.string(),
+  requiredProjectCount: v.number(),
+  batchAmount: v.number(),
+  startDate: v.string(),
+  notes: v.string(),
+});
+export const salaryPlanValidator = salaryPlanInputValidator.extend({
+  id: v.string(),
+  archived: v.boolean(),
+  deliveredProjectIds: v.array(v.string()),
+  deliveredProjectCount: v.number(),
+  remainingProjectCount: v.number(),
+  currentAmount: v.union(v.number(), v.null()),
+});
+export const salaryBatchValidator = v.object({
+  id: v.string(),
+  planId: v.string(),
+  clientId: v.string(),
+  requiredProjectCount: v.number(),
+  batchAmount: v.number(),
+  startDate: v.string(),
+  notes: v.string(),
+  projectIds: v.array(v.string()),
+  completedAt: v.string(),
+  receivedAt: v.union(v.string(), v.null()),
+  correctionNote: v.optional(v.string()),
+});
+
 export const relayProjectValidator = v.object({
   id: v.string(),
   name: v.string(),
@@ -28,6 +57,7 @@ export const relayProjectValidator = v.object({
   progress: v.string(),
   status: v.optional(v.union(v.literal("active"), v.literal("past"))),
   outstandingAmount: v.optional(v.number()),
+  salaryPlanId: v.optional(v.string()),
   projectGroupId: v.optional(v.string()),
   projectGroupName: v.optional(v.string()),
   portalUrl: v.optional(v.string()),
@@ -42,7 +72,7 @@ export const relayProjectValidator = v.object({
 
 export const projectStageEffectValidator = v.union(
   v.object({ kind: v.literal("projectValue"), amount: v.number() }),
-  v.object({ kind: v.literal("salaryPlan"), change: v.union(v.literal("added"), v.literal("removed")) }),
+  v.object({ kind: v.literal("salaryPlan"), change: v.union(v.literal("added"), v.literal("removed")), batchId: v.optional(v.string()) }),
   v.object({ kind: v.literal("none") }),
 );
 
@@ -66,6 +96,7 @@ export const newProjectInputValidator = v.object({
   templateId: v.string(),
   dueDate: v.string(),
   financialType: v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable")),
+  salaryPlanId: v.optional(v.string()),
 });
 
 export const projectDetailValidator = relayProjectValidator.extend({

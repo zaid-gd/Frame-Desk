@@ -37,10 +37,12 @@ import type { ClientInput } from "../domain/client";
 import type { WorkflowTemplateInput } from "../domain/workflow-template";
 import type { WorkflowTemplateController } from "../application/workflow-template-controller";
 import type { ProjectController } from "../application/project-controller";
+import type { SalaryPlanController } from "../application/salary-plan-controller";
 import type { ProjectOutputController } from "../application/project-output-controller";
 import type { ClientPortalController } from "../application/client-portal-controller";
 import type { ProjectFilePort } from "../ports/project-file-port";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
+import type { SalaryPlanInput } from "../domain/salary-plan";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -79,6 +81,7 @@ export type RelayExperienceProps = {
     clients: ClientController;
     templates: WorkflowTemplateController;
     projects: ProjectController;
+    salaryPlans: SalaryPlanController;
     outputs: ProjectOutputController;
     files: ProjectFilePort | null;
     portal?: ClientPortalController;
@@ -94,6 +97,7 @@ export type RelayExperienceProps = {
   onProjectsChanged(): void;
   onClientsChanged(): void;
   onTemplatesChanged(): void;
+  onSalaryPlansChanged(): void;
 };
 
 export function RelayExperience(props: RelayExperienceProps) {
@@ -132,7 +136,7 @@ export function RelayExperience(props: RelayExperienceProps) {
     );
   }
 
-  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onProjectCreated={props.onProjectCreated} onProjectsChanged={props.onProjectsChanged} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} />;
+  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onProjectCreated={props.onProjectCreated} onProjectsChanged={props.onProjectsChanged} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} onSalaryPlansChanged={props.onSalaryPlansChanged} />;
 }
 
 function EntryChoice({ icon: Icon, label, detail, onClick }: { icon: typeof Cloud; label: string; detail: string; onClick: () => void }) {
@@ -149,7 +153,7 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, outputs, files, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, salaryPlans, outputs, files, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const readOnly = mode === "sample";
@@ -201,7 +205,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "reports" ? <SalaryPlansPage controller={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -304,7 +308,7 @@ function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; 
   );
 }
 
-const blankProject: NewProjectInput = { name: "", clientId: "", projectGroupId: "", templateId: "", dueDate: "", financialType: "projectValue" };
+const blankProject: NewProjectInput = { name: "", clientId: "", projectGroupId: "", templateId: "", dueDate: "", financialType: "projectValue", salaryPlanId: "" };
 const blankGroup: ProjectGroupInput = { name: "", clientId: "", startDate: "", endDate: "", notes: "" };
 
 function NewProjectForm({ controller, onCancel, onCreated }: { controller: ProjectController; onCancel(): void; onCreated(url: string): void }) {
@@ -323,7 +327,8 @@ function NewProjectForm({ controller, onCancel, onCreated }: { controller: Proje
       <div className={styles.cardTitle}><div><p className={styles.eyebrow}>Short setup</p><h2 id="new-project-title">Create Project</h2></div><button type="button" onClick={onCancel}>Close</button></div>
       <form onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="name">{(field) => <label>Project name<input autoFocus value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
-        <form.Field name="clientId">{(field) => <label>Client<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Client</option>{controller.model.clients.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
+        <form.Field name="salaryPlanId">{(field) => <label>Salary Plan <span>(optional)</span><select value={field.state.value ?? ""} onChange={(event) => { const selection = controller.actions.salaryPlanSelection(event.target.value); field.handleChange(selection.salaryPlanId); form.setFieldValue("financialType", selection.financialType); if (selection.clientId) form.setFieldValue("clientId", selection.clientId); }}><option value="">No Salary Plan</option>{controller.model.salaryPlans.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
+        <form.Subscribe selector={(state) => state.values.salaryPlanId}>{(salaryPlanId) => <form.Field name="clientId">{(field) => <label>Client<select disabled={Boolean(salaryPlanId)} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Client</option>{controller.model.clients.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{salaryPlanId ? <small>Salary Plan selection fixes this Client.</small> : null}</label>}</form.Field>}</form.Subscribe>
         <form.Subscribe selector={(state) => state.values.clientId}>{(clientId) => <form.Field name="projectGroupId">{(field) => <label>Project Group <span>(optional)</span><select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">No Project Group</option>{controller.actions.groupOptions(clientId).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>}</form.Subscribe>
         <form.Field name="templateId">{(field) => <label>Workflow Template<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Workflow Template</option>{controller.model.templates.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
         <form.Field name="dueDate">{(field) => <label>Due date<input type="date" value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
@@ -752,4 +757,67 @@ function TemplatesPage({ controller, onChanged }: { controller: WorkflowTemplate
 
 function SectionPlaceholder({ title }: { section: Exclude<RelaySection, "dashboard" | "projects">; title: string }) {
   return <section className={`${styles.card} ${styles.emptyPage}`}><h2>{title} overview</h2><p>This real Relay route uses the shared App Shell and capability-facing screen contract. Its full behavior belongs to a later ticket.</p></section>;
+}
+
+const blankSalaryPlan: SalaryPlanInput = { clientId: "", requiredProjectCount: 1, batchAmount: 0, startDate: "", notes: "" };
+
+function SalaryPlansPage({ controller, readOnly, onChanged }: { controller: SalaryPlanController; readOnly: boolean; onChanged(): void }) {
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(controller.model.plans[0]?.id ?? null);
+  const [draft, setDraft] = useState<SalaryPlanInput>(blankSalaryPlan);
+  const [correctionNotes, setCorrectionNotes] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState("");
+  const selected = selectedId ? controller.model.plans.find((plan) => plan.id === selectedId) ?? null : null;
+  const rows = controller.model.plans.filter((plan) => includeArchived || !plan.archived);
+
+  useEffect(() => {
+    if (!selected) {
+      setDraft(blankSalaryPlan);
+      return;
+    }
+    setDraft({ clientId: selected.clientId, requiredProjectCount: selected.requiredProjectCount, batchAmount: selected.batchAmount, startDate: selected.startDate, notes: selected.notes });
+  }, [selected?.id]);
+
+  function choose(id: string) {
+    setSelectedId(id);
+    setNotice("");
+  }
+
+  async function savePlan(event: React.FormEvent) {
+    event.preventDefault();
+    const result = selectedId ? await controller.actions.edit(selectedId, draft) : await controller.actions.create(draft);
+    setNotice(result.message);
+    if (result.ok) onChanged();
+  }
+
+  async function toggleArchive() {
+    if (!selected) return;
+    const result = selected.archived ? await controller.actions.restore(selected.id) : await controller.actions.archive(selected.id);
+    setNotice(result.message);
+    if (result.ok) onChanged();
+  }
+
+  return <PageContent>
+    {controller.model.planState.kind === "loading" ? <p role="status">Loading Salary Plans…</p> : null}
+    <div className={styles.salaryLayout}>
+      <section className={`${styles.card} ${styles.templateList}`} aria-labelledby="salary-plan-list-title">
+        <div className={styles.cardTitle}><h2 id="salary-plan-list-title">Salary Plans</h2>{controller.model.canManage ? <button className={styles.primaryButton} type="button" onClick={() => { setSelectedId(null); setDraft(blankSalaryPlan); }}>New Plan</button> : null}</div>
+        <label className={styles.templateArchiveFilter}><input type="checkbox" checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} />Include archived Salary Plans</label>
+        <ul className={styles.clientRows}>{rows.map((plan) => <li key={plan.id}><button type="button" aria-pressed={selectedId === plan.id} onClick={() => choose(plan.id)}><strong>{plan.clientName}</strong><span>{plan.deliveredProjectCount}/{plan.requiredProjectCount} delivered · {plan.currentAmount === null ? "No partial money" : plan.currentAmount.toLocaleString("en-US")}</span>{plan.archived ? <small>Archived</small> : null}</button></li>)}</ul>
+      </section>
+      <form className={`${styles.card} ${styles.templateEditor}`} onSubmit={(event) => void savePlan(event)}>
+        <div className={styles.cardTitle}><div><h2>{selected ? `Salary Plan · ${selected.clientName}` : "New Salary Plan"}</h2><span>One full amount is earned only after the required Project count.</span></div>{selected && controller.model.canManage ? <button type="button" onClick={() => void toggleArchive()}>{selected.archived ? "Restore" : "Archive"}</button> : null}</div>
+        <div className={styles.templateFields}>
+          <label>Client<select disabled={!controller.model.canManage} value={draft.clientId} onChange={(event) => setDraft({ ...draft, clientId: event.target.value })}><option value="">Choose a Client</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select></label>
+          <label>Required Projects<input disabled={!controller.model.canManage} type="number" min={1} max={500} value={draft.requiredProjectCount} onChange={(event) => setDraft({ ...draft, requiredProjectCount: Number(event.target.value) })} /></label>
+          <label>Full batch amount<input disabled={!controller.model.canManage} type="number" min={0} step="0.01" value={draft.batchAmount} onChange={(event) => setDraft({ ...draft, batchAmount: Number(event.target.value) })} /></label>
+          <label>Start date<input disabled={!controller.model.canManage} type="date" value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value })} /></label>
+          <label className={styles.fullField}>Notes<textarea disabled={!controller.model.canManage} maxLength={2000} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} /></label>
+        </div>
+        {controller.model.canManage ? <div className={styles.templateSave}><button className={styles.primaryButton} type="submit">{selected ? "Save Salary Plan" : "Create Salary Plan"}</button></div> : null}
+        {notice ? <p role="status">{notice}</p> : null}
+      </form>
+    </div>
+    <ContentSection title="Salary Batch history" bodyMode="flush"><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Client</th><th>Projects</th><th>Amount</th><th>Status</th><th>Notes</th><th /></tr></thead><tbody>{controller.model.batches.map((batch) => <tr key={batch.id}><td>{batch.clientName}</td><td>{batch.projectIds.length}/{batch.requiredProjectCount}</td><td>{batch.batchAmount.toLocaleString("en-US")}</td><td>{batch.receivedAt ? "Received" : "Unpaid"}</td><td>{batch.correctionNote ?? batch.notes}</td><td>{!readOnly && !batch.receivedAt ? <><input aria-label={`Correction note for ${batch.clientName} Salary Batch`} value={correctionNotes[batch.id] ?? ""} onChange={(event) => setCorrectionNotes({ ...correctionNotes, [batch.id]: event.target.value })} placeholder="Correction note" /><button type="button" onClick={() => void controller.actions.receive(batch.id, correctionNotes[batch.id]).then((result) => { setNotice(result.message); if (result.ok) onChanged(); })}>Mark received</button></> : null}</td></tr>)}</tbody></table></div>{controller.model.batches.length === 0 ? <p>No Salary Batches yet. Deliver Projects tied to a Salary Plan to create one.</p> : null}</ContentSection>
+  </PageContent>;
 }

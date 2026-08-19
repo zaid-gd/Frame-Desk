@@ -17,7 +17,7 @@ import {
   storedTeamRoleValidator,
   teamActivityKindValidator,
 } from "./domainValidators";
-import { projectGroupInputValidator, relayClientInputValidator, relayProjectValidator, workflowTemplateInputValidator } from "./relayWorkspaceValidators";
+import { projectGroupInputValidator, relayClientInputValidator, relayProjectValidator, salaryBatchValidator, salaryPlanInputValidator, workflowTemplateInputValidator } from "./relayWorkspaceValidators";
 import { mediaProviderValidator, outputReviewStateValidator } from "./relayWorkspaceValidators";
 
 export default defineSchema({
@@ -40,6 +40,24 @@ export default defineSchema({
     .index("by_ownerUserId", ["ownerUserId"])
     .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"]),
 
+  relaySalaryPlans: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    archived: v.boolean(),
+    ...salaryPlanInputValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_clientId", ["ownerUserId", "clientId"]),
+
+  relaySalaryBatches: defineTable({
+    ownerUserId: v.string(),
+    ...salaryBatchValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_id", ["ownerUserId", "id"])
+    .index("by_ownerUserId_and_planId", ["ownerUserId", "planId"]),
+
   relayProjectGroups: defineTable({
     ownerUserId: v.string(),
     durableId: v.string(),
@@ -56,7 +74,8 @@ export default defineSchema({
   })
     .index("by_ownerUserId", ["ownerUserId"])
     .index("by_ownerUserId_and_id", ["ownerUserId", "id"])
-    .index("by_ownerUserId_and_workflowTemplateId_and_workflowStageId", ["ownerUserId", "workflowTemplateId", "workflowStageId"]),
+    .index("by_ownerUserId_and_workflowTemplateId_and_workflowStageId", ["ownerUserId", "workflowTemplateId", "workflowStageId"])
+    .index("by_ownerUserId_and_salaryPlanId", ["ownerUserId", "salaryPlanId"]),
 
   relayProjectOutputs: defineTable({
     ownerUserId: v.string(),

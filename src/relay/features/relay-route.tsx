@@ -30,6 +30,11 @@ import { createLocalProjectPort } from "../infrastructure/local-project-port";
 import { createMemoryProjectPort } from "../infrastructure/memory-project-port";
 import { createSampleProjectPort } from "../infrastructure/sample-project-port";
 import { useCloudProjectPort } from "../infrastructure/cloud-project-port";
+import { useCloudSalaryPlanPort } from "../infrastructure/cloud-salary-plan-port";
+import { createLocalSalaryPlanPort } from "../infrastructure/local-salary-plan-port";
+import { createSampleSalaryPlanPort } from "../infrastructure/sample-salary-plan-port";
+import { createMemorySalaryPlanPort } from "../infrastructure/memory-salary-plan-port";
+import { createSalaryPlanController } from "../application/salary-plan-controller";
 import { useCloudProjectFilePort } from "../infrastructure/cloud-project-file-port";
 import { useCloudClientPortalPort } from "../infrastructure/cloud-client-portal-port";
 import { RelayExperience } from "../presentation/relay-experience";
@@ -110,7 +115,15 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
     return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
   }, [cloudProjectPort, hydrated, mode, projectClients, projectId, projectTemplates]);
-  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" });
+  const cloudSalaryPlanPort = useCloudSalaryPlanPort(mode === "cloud" && Boolean(auth.isSignedIn));
+  const selectedSalaryPlanPort = useMemo(() => {
+    if (mode === "sample") return createSampleSalaryPlanPort();
+    if (mode === "cloud") return cloudSalaryPlanPort;
+    if (hydrated) return createLocalSalaryPlanPort(window.localStorage, projectClients);
+    return createMemorySalaryPlanPort();
+  }, [cloudSalaryPlanPort, hydrated, mode, projectClients]);
+  const salaryPlanController = createSalaryPlanController({ port: selectedSalaryPlanPort, clients: projectClients, canManage: mode !== "sample" });
+  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample", salaryPlans: salaryPlanController.model.plans });
   const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
   const projectFiles = useCloudProjectFilePort(mode === "cloud" && Boolean(auth.isSignedIn), projectId);
   const selectedProject = selectedProjectPort.loadProjects().find(({ id }) => id === projectId) ?? null;
@@ -196,6 +209,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         clients: clientController,
         templates: templateController,
         projects: projectController,
+        salaryPlans: salaryPlanController,
         outputs: projectOutputController,
         files: projectFiles,
         portal: clientPortalController,
@@ -211,6 +225,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
       onProjectsChanged={() => setWorkspaceVersion((version) => version + 1)}
       onClientsChanged={() => setWorkspaceVersion((version) => version + 1)}
       onTemplatesChanged={() => setWorkspaceVersion((version) => version + 1)}
+      onSalaryPlansChanged={() => setWorkspaceVersion((version) => version + 1)}
     />
   );
 }

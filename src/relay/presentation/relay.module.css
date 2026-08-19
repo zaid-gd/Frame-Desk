@@ -192,6 +192,8 @@
 .clientDetail a { color: var(--relay-action); }
 .clientEmpty { color: var(--relay-muted); }
 .templatesGrid { display: grid; grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr); gap: 20px; align-items: start; }
+.salaryLayout { display: grid; grid-template-columns: minmax(260px, 0.55fr) minmax(0, 1.45fr); gap: 20px; align-items: start; }
+.salaryLayout .fullField { grid-column: 1 / -1; }
 .templateList { overflow: hidden; }
 .templateList .primaryButton { min-height: 36px; padding: 0 12px; font-size: 13px; }
 .templateArchiveFilter { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--relay-border); padding: 14px 18px; color: var(--relay-muted); font-size: 13px; }
@@ -295,7 +297,7 @@
   .dashboardGrid { grid-template-columns: 1fr; }
   .templatesGrid { grid-template-columns: 1fr; }
   .templateRow, .outputRow { grid-template-columns: 1fr; }
-  .projectCreate form, .groupForm { grid-template-columns: 1fr; }
+  .projectCreate form, .groupForm, .salaryLayout { grid-template-columns: 1fr; }
   .projectCreate .formActions, .groupForm .formActions, .groupForm .fullField, .groupForm h3 { grid-column: auto; }
   .projectFacts { grid-template-columns: 1fr; }
   .table { min-width: 680px; }
