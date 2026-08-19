@@ -10,11 +10,11 @@ import { deriveSalaryPlanProgress, type SalaryBatch } from "../domain/salary-pla
 
 function projectRecords(state: LocalWorkspaceState | null): ProjectRecord[] {
   return (state?.projects ?? []).flatMap((project) => project.workflowSetup && project.financialType
-    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), ...(project.salaryPlanId ? { salaryPlanId: project.salaryPlanId } : {}), stage: project.stage, workflowStageId: project.workflowStageId, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid", archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup, completedAt: project.completedAt }]
+    ? [{ id: project.id, name: project.name, clientId: project.clientId, ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}), ...(project.salaryPlanId ? { salaryPlanId: project.salaryPlanId } : {}), stage: project.stage, workflowStageId: project.workflowStageId, dueDate: project.due, financialType: project.financialType, paymentState: project.financialType === "nonBillable" ? "not-applicable" : project.paymentState ?? (project.agreedAmount !== undefined ? "unpaid" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid"), ...(project.agreedAmount !== undefined ? { agreedAmount: project.agreedAmount } : {}), ...(project.paidAt ? { paidAt: project.paidAt } : {}), archived: project.status === "past", lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [], progress: Number.parseFloat(project.progress) || 0, money: project.agreedAmount ?? project.outstandingAmount ?? 0, workflowSetup: project.workflowSetup, completedAt: project.completedAt, createdAt: project.createdAt, stageHistory: project.stageHistory }]
     : []);
 }
 
-export function createLocalProjectPort({ storage, clients, templates, selectedProjectId = "" }: { storage: Pick<Storage, "getItem" | "setItem">; clients: readonly ProjectChoice[]; templates: readonly ProjectTemplate[]; selectedProjectId?: string }): ProjectPort & ProjectOutputPort {
+export function createLocalProjectPort({ storage, clients, templates, selectedProjectId = "", now = () => new Date().toISOString() }: { storage: Pick<Storage, "getItem" | "setItem">; clients: readonly ProjectChoice[]; templates: readonly ProjectTemplate[]; selectedProjectId?: string; now?: () => string }): ProjectPort & ProjectOutputPort {
   const state = () => readLocalWorkspaceState(storage) ?? { clients: [], projects: [] };
   const save = (next: LocalWorkspaceState) => storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify(next));
   return {
@@ -29,6 +29,11 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
     },
     loadProjects: () => projectRecords(state()),
     projectId: selectedProjectId,
+    loadOutputCounts: () => {
+      const counts = new Map<string, number>();
+      for (const output of state().projectOutputs ?? []) counts.set(output.projectId, (counts.get(output.projectId) ?? 0) + 1);
+      return [...counts.entries()].map(([projectId, count]) => ({ projectId, count }));
+    },
     outputState: () => ({ kind: "ready" }),
     loadOutputs: () => (state().projectOutputs ?? []).filter((output) => output.projectId === selectedProjectId),
     async createProject(input: NewProjectInput) {
@@ -43,7 +48,9 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
       if (!client || !template || (input.projectGroupId && (!group || group.clientId !== input.clientId))) return { ok: false, error: { kind: "invalid", message: "Choose active Project setup options." } };
       const workflowSetup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
-      const project = { id, name: input.name.trim(), clientId: input.clientId, stage: workflowSetup.stages[0].label, tone: "planned" as const, due: input.dueDate, progress: "0%", status: "active" as const, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId, projectGroupName: group!.name } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), workflowTemplateId: template.id, workflowStageId: workflowSetup.stages[0].id, workflowSetup, financialType: input.financialType, lead: "Unassigned", assignees: [] };
+      const createdAt = now();
+      const agreedAmount = input.financialType === "projectValue" ? input.agreedAmount ?? 0 : 0;
+      const project = { id, name: input.name.trim(), clientId: input.clientId, stage: workflowSetup.stages[0].label, tone: "planned" as const, due: input.dueDate, progress: "0%", status: "active" as const, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId, projectGroupName: group!.name } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), workflowTemplateId: template.id, workflowStageId: workflowSetup.stages[0].id, workflowSetup, financialType: input.financialType, agreedAmount, paymentState: input.financialType === "nonBillable" ? "not-applicable" as const : "unpaid" as const, createdAt, stageHistory: [{ stageId: workflowSetup.stages[0].id, label: workflowSetup.stages[0].label, purpose: workflowSetup.stages[0].purpose, enteredAt: createdAt }], lead: "Unassigned", assignees: [] };
       const projectOutputs = workflowSetup.starterOutputs.map((starter) => ({
         id: `output_${crypto.randomUUID()}`,
         projectId: id,
@@ -86,22 +93,37 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
       try { save({ ...current, projects: current.projects.map((row) => row.id === id ? { ...row, status: archived ? "past" : "active" } : row) }); return { ok: true, value: undefined }; }
       catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project write." } }; }
     },
+    async setProjectPayment(id, paid) {
+      const current = state();
+      const project = current.projects.find((row) => row.id === id);
+      if (!project) return { ok: false, error: { kind: "not-found", message: "Project not found." } };
+      if (project.financialType !== "projectValue") return { ok: false, error: { kind: "invalid", message: "Only normal client Projects have a payment state." } };
+      try {
+        const paidAt = paid ? now() : undefined;
+        save({ ...current, projects: current.projects.map((row) => {
+          if (row.id !== id) return row;
+          const { paidAt: _previousPaidAt, ...withoutPaidAt } = row;
+          return { ...withoutPaidAt, paymentState: paid ? "paid" as const : "unpaid" as const, ...(paidAt ? { paidAt } : {}) };
+        }) });
+        return { ok: true, value: paidAt ? { paidAt } : {} };
+      } catch { return { ok: false, error: { kind: "unavailable", message: "Browser storage refused the Project payment update." } }; }
+    },
     async moveProjectStage(id, targetStageId, confirmed) {
       const current = state();
       const record = projectRecords(current).find((row) => row.id === id);
       if (!record) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };
-      const transition = projectStageTransition(record, targetStageId, new Date().toISOString(), confirmed);
+      const transition = projectStageTransition(record, targetStageId, now(), confirmed);
       if (!transition) return { ok: false, error: { kind: "invalid", message: "Choose a stage from this Project's workflow." } };
       if (transition.kind === "confirmation-required") return { ok: false, error: { kind: "invalid", message: "Confirm delivery before moving this Project to Delivered." } };
       try {
-        const nextProjects = current.projects.map((project) => project.id === id ? { ...project, stage: transition.project.stage, workflowStageId: transition.project.workflowStageId, progress: `${transition.project.progress}%`, tone: transition.tone, completedAt: transition.project.completedAt } : project);
+        const nextProjects = current.projects.map((project) => project.id === id ? { ...project, stage: transition.project.stage, workflowStageId: transition.project.workflowStageId, progress: `${transition.project.progress}%`, tone: transition.tone, completedAt: transition.project.completedAt, ...(transition.project.stageHistory ? { stageHistory: transition.project.stageHistory } : {}) } : project);
         const salaryPlan = transition.effect.kind === "salaryPlan" && transition.effect.change === "added" && transition.project.salaryPlanId ? (current.salaryPlans ?? []).find((plan) => plan.id === transition.project.salaryPlanId) : undefined;
         const salaryBatches = current.salaryBatches ?? [];
         const progress = salaryPlan ? deriveSalaryPlanProgress(salaryPlan, nextProjects, salaryBatches) : null;
         let effect = transition.effect;
         const nextBatches: SalaryBatch[] = [...salaryBatches];
         if (salaryPlan && progress && progress.deliveredProjectCount >= salaryPlan.requiredProjectCount) {
-          const batch: SalaryBatch = { id: `batch_${crypto.randomUUID()}`, planId: salaryPlan.id, clientId: salaryPlan.clientId, requiredProjectCount: salaryPlan.requiredProjectCount, batchAmount: salaryPlan.batchAmount, startDate: salaryPlan.startDate, notes: salaryPlan.notes, projectIds: [...progress.deliveredProjectIds.slice(0, salaryPlan.requiredProjectCount)], completedAt: new Date().toISOString(), receivedAt: null };
+          const batch: SalaryBatch = { id: `batch_${crypto.randomUUID()}`, planId: salaryPlan.id, clientId: salaryPlan.clientId, requiredProjectCount: salaryPlan.requiredProjectCount, batchAmount: salaryPlan.batchAmount, startDate: salaryPlan.startDate, notes: salaryPlan.notes, projectIds: [...progress.deliveredProjectIds.slice(0, salaryPlan.requiredProjectCount)], completedAt: now(), receivedAt: null };
           nextBatches.push(batch);
           effect = { kind: "salaryPlan", change: "added", batchId: batch.id };
         }

@@ -3,6 +3,7 @@ import type { ProjectWriteResult } from "./project-port";
 
 export type ProjectOutputPort = {
   projectId: string;
+  loadOutputCounts(): readonly { projectId: string; count: number }[];
   outputState(): { kind: "ready" | "loading" | "error"; message?: string };
   loadOutputs(): readonly ProjectOutput[];
   addOutput(input: { name: string }): Promise<ProjectWriteResult<{ id: string }>>;

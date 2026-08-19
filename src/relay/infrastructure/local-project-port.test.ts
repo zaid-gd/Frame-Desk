@@ -19,7 +19,7 @@ test("a local stage move persists delivery and reopening state", async () => {
   const storage = memoryStorage();
   const template = createDefaultWorkflowTemplate("template_default", "Default workflow");
   storage.setItem(RELAY_LOCAL_WORKSPACE_KEY, JSON.stringify({ clients: [], projects: [], salaryPlans: [{ id: "plan_acme", clientId: "client_acme", requiredProjectCount: 1, batchAmount: 3000, startDate: "2026-08-01", notes: "Local plan", archived: false }] }));
-  const port = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template] });
+  const port = createLocalProjectPort({ storage, clients: [{ id: "client_acme", name: "Acme", archived: false }], templates: [template], now: () => "2026-08-20T09:00:00.000Z" });
   const created = await port.createProject({ name: "Launch", clientId: "client_acme", projectGroupId: "", templateId: template.id, dueDate: "2026-09-12", financialType: "salaryPlan", salaryPlanId: "plan_acme" });
   if (!created.ok) throw new Error(created.error.message);
   const delivered = template.stages.find(({ purpose }) => purpose === "delivered")!;
@@ -27,9 +27,13 @@ test("a local stage move persists delivery and reopening state", async () => {
 
   await expect(port.moveProjectStage(created.value.id, delivered.id, false)).resolves.toMatchObject({ ok: false });
   await expect(port.moveProjectStage(created.value.id, delivered.id, true)).resolves.toMatchObject({ ok: true, value: { effect: { kind: "salaryPlan", change: "added" } } });
-  expect(port.loadProjects()[0]).toMatchObject({ stage: "Delivered", progress: 100, completedAt: expect.stringMatching(/^2026|^20/) });
+  expect(port.loadProjects()[0]).toMatchObject({ stage: "Delivered", progress: 100, completedAt: "2026-08-20T09:00:00.000Z", stageHistory: [expect.objectContaining({ purpose: "planned", exitedAt: "2026-08-20T09:00:00.000Z" }), expect.objectContaining({ purpose: "delivered", enteredAt: "2026-08-20T09:00:00.000Z" })] });
   await expect(port.moveProjectStage(created.value.id, editing.id, false)).resolves.toMatchObject({ ok: true, value: { effect: { kind: "salaryPlan", change: "removed" } } });
   expect(port.loadProjects()[0]).toMatchObject({ stage: "Editing", progress: 25, completedAt: undefined });
+  expect(port.loadProjects()[0].stageHistory).toEqual(expect.arrayContaining([
+    expect.objectContaining({ purpose: "delivered", exitedAt: "2026-08-20T09:00:00.000Z" }),
+    expect.objectContaining({ purpose: "editing", enteredAt: "2026-08-20T09:00:00.000Z" }),
+  ]));
 });
 
 test("a local delivery creates one snapshot Salary Batch", async () => {

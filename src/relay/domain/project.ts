@@ -14,6 +14,7 @@ export const newProjectSchema = z.object({
   dueDate: z.string().refine(isIsoCalendarDate, "Enter a valid due date."),
   financialType: z.enum(financialTypes),
   salaryPlanId: z.string().optional(),
+  agreedAmount: z.number().finite().nonnegative().optional(),
 }).strict();
 
 export type NewProjectInput = z.infer<typeof newProjectSchema>;
@@ -31,11 +32,23 @@ export type ProjectRecord = {
   assignees: string[];
   progress: number;
   money: number;
+  agreedAmount?: number;
   paymentState: "paid" | "unpaid" | "not-applicable";
+  paidAt?: string;
   archived: boolean;
   workflowSetup: ProjectSetup;
   workflowStageId?: string;
   completedAt?: string;
+  createdAt?: string;
+  stageHistory?: ProjectStageHistoryEntry[];
+};
+
+export type ProjectStageHistoryEntry = {
+  stageId: string;
+  label: string;
+  purpose: WorkflowStage["purpose"];
+  enteredAt: string;
+  exitedAt?: string;
 };
 
 export type ProjectStageEffect =
@@ -67,9 +80,17 @@ export function projectStageTransition(project: ProjectRecord, targetStageId: st
     : wasDelivered && !isDelivered && project.financialType === "salaryPlan" ? { kind: "salaryPlan", change: "removed" }
     : { kind: "none" };
   const tone: ProjectTone = isDelivered ? "delivered" : target.purpose === "clientReview" || target.purpose === "revisions" || target.purpose === "approved" ? "review" : "planned";
+  const currentId = current?.id ?? project.workflowStageId;
+  const stageHistory = currentId === target.id
+    ? project.stageHistory
+    : [
+      ...(project.stageHistory ?? (current ? [{ stageId: current.id, label: current.label, purpose: current.purpose, enteredAt: project.createdAt ?? completedAt }] : []))
+        .map((entry) => entry.stageId === currentId && !entry.exitedAt ? { ...entry, exitedAt: completedAt } : entry),
+      { stageId: target.id, label: target.label, purpose: target.purpose, enteredAt: completedAt },
+    ];
   return {
     kind: "ready" as const,
-    project: { ...project, stage: target.label, workflowStageId: target.id, progress: progressByPurpose[target.purpose], ...(isDelivered ? { completedAt: project.completedAt ?? completedAt } : { completedAt: undefined }) },
+    project: { ...project, stage: target.label, workflowStageId: target.id, progress: progressByPurpose[target.purpose], ...(stageHistory ? { stageHistory } : {}), ...(isDelivered ? { completedAt: project.completedAt ?? completedAt } : { completedAt: undefined }) },
     effect,
     tone,
   };

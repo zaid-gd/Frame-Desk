@@ -8,6 +8,7 @@ import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
 import { projectStageTransition, type ProjectRecord } from "../src/relay/domain/project";
 import { relayStorageUsage } from "./relayStorageUsage";
 import { maybeCreateSalaryBatch } from "./relaySalaryPlans";
+import { relayAccessForCurrentUser } from "./relayAccess";
 
 async function requireOwner(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -33,12 +34,12 @@ export const listGroups = query({
   args: { includeArchived: v.optional(v.boolean()) },
   returns: v.array(projectGroupValidator),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
     return groups.filter((group) => args.includeArchived || !group.archived).map((group) => {
-      const totals = deriveProjectGroupTotals(projects.map((project) => ({ projectGroupId: project.projectGroupId, progress: Number.parseFloat(project.progress) || 0, money: project.outstandingAmount ?? 0 })), group.durableId);
+      const totals = deriveProjectGroupTotals(projects.map((project) => ({ projectGroupId: project.projectGroupId, progress: Number.parseFloat(project.progress) || 0, money: project.agreedAmount ?? project.outstandingAmount ?? 0 })), group.durableId);
       return { id: group.durableId, name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes, archived: group.archived, ...totals };
     });
   },
@@ -98,6 +99,7 @@ export const createProject = mutation({
   handler: async (ctx, args) => {
     const ownerUserId = await requireOwner(ctx);
     if (!args.name.trim() || args.name.length > 200 || !isIsoCalendarDate(args.dueDate)) throw new Error("Enter valid Project details before saving.");
+    if (args.agreedAmount !== undefined && (!Number.isFinite(args.agreedAmount) || args.agreedAmount < 0)) throw new Error("Enter a valid agreed Project amount.");
     const client = await clientExists(ctx, ownerUserId, args.clientId);
     if (!client || client.archived) throw new Error("Choose an active Client for this Project.");
     const salaryPlanId = args.salaryPlanId?.trim() || undefined;
@@ -119,9 +121,11 @@ export const createProject = mutation({
     const setup = copyProjectSetup(template);
     const firstStage = setup.stages[0];
     const id = `project_${crypto.randomUUID()}`;
+    const createdAt = new Date().toISOString();
+    const agreedAmount = args.financialType === "projectValue" ? args.agreedAmount ?? 0 : 0;
     await ctx.db.insert("relayProjects", {
       ownerUserId,
-      importedAt: new Date().toISOString(),
+      importedAt: createdAt,
       id,
       name: args.name.trim(),
       clientId: args.clientId,
@@ -135,6 +139,10 @@ export const createProject = mutation({
       workflowStageId: firstStage.id,
       workflowSetup: setup,
       financialType: args.financialType,
+      agreedAmount,
+      paymentState: args.financialType === "nonBillable" ? "not-applicable" : "unpaid",
+      createdAt,
+      stageHistory: [{ stageId: firstStage.id, label: firstStage.label, purpose: firstStage.purpose, enteredAt: createdAt }],
       ...(salaryPlanId ? { salaryPlanId } : {}),
       lead: "Unassigned",
       assignees: [],
@@ -159,9 +167,9 @@ export const inspectProject = query({
   args: { id: v.string() },
   returns: v.union(projectDetailValidator, v.null()),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", identity.tokenIdentifier).eq("id", args.id)).unique();
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return null;
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", args.id)).unique();
     if (!project || !project.workflowSetup || !project.financialType) return null;
     const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
     return { ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] };
@@ -172,15 +180,21 @@ export const listProjects = query({
   args: {},
   returns: v.array(projectDetailValidator),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
     return projects.flatMap((project) => {
       if (!project.workflowSetup || !project.financialType) return [];
       const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
       return [{ ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] }];
     });
   },
+});
+
+export const myAccess = query({
+  args: {},
+  returns: v.union(v.object({ ownerUserId: v.string(), memberId: v.string(), role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")), canMarkPayments: v.boolean() }), v.null()),
+  handler: async (ctx) => relayAccessForCurrentUser(ctx),
 });
 
 export const setProjectArchived = mutation({
@@ -192,6 +206,24 @@ export const setProjectArchived = mutation({
     if (!project) throw new Error("Project not found.");
     await ctx.db.patch("relayProjects", project._id, { status: args.archived ? "past" : "active" });
     return null;
+  },
+});
+
+export const setProjectPayment = mutation({
+  args: { id: v.string(), paid: v.boolean() },
+  returns: v.object({ paidAt: v.optional(v.string()) }),
+  handler: async (ctx, args) => {
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access?.canMarkPayments) throw new Error("You do not have permission to mark Project payments.");
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", args.id)).unique();
+    if (!project) throw new Error("Project not found.");
+    if (project.financialType !== "projectValue") throw new Error("Only normal client Projects have a payment state.");
+    const paidAt = args.paid ? new Date().toISOString() : undefined;
+    await ctx.db.patch("relayProjects", project._id, {
+      paymentState: args.paid ? "paid" : "unpaid",
+      ...(paidAt ? { paidAt } : { paidAt: undefined }),
+    });
+    return paidAt ? { paidAt } : {};
   },
 });
 
@@ -211,12 +243,16 @@ export const moveProjectStage = mutation({
       stage: project.stage,
       dueDate: project.due,
       financialType: project.financialType,
-      paymentState: project.financialType === "nonBillable" ? "not-applicable" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid",
+      paymentState: project.financialType === "nonBillable" ? "not-applicable" : project.paymentState ?? (project.agreedAmount !== undefined ? "unpaid" : (project.outstandingAmount ?? 0) > 0 ? "unpaid" : "paid"),
       archived: project.status === "past",
       lead: project.lead ?? "Unassigned",
       assignees: project.assignees ?? [],
       progress: Number.parseFloat(project.progress) || 0,
-      money: project.outstandingAmount ?? 0,
+      money: project.agreedAmount ?? project.outstandingAmount ?? 0,
+      agreedAmount: project.agreedAmount,
+      paidAt: project.paidAt,
+      createdAt: project.createdAt,
+      stageHistory: project.stageHistory,
       workflowSetup: project.workflowSetup,
       workflowStageId: project.workflowStageId,
       completedAt: project.completedAt,
@@ -230,6 +266,7 @@ export const moveProjectStage = mutation({
       progress: `${transition.project.progress}%`,
       tone: transition.tone,
       completedAt: transition.project.completedAt,
+      ...(transition.project.stageHistory ? { stageHistory: transition.project.stageHistory } : {}),
     });
     const batchId = transition.effect.kind === "salaryPlan" && transition.effect.change === "added" && transition.project.salaryPlanId
       ? await maybeCreateSalaryBatch(ctx, ownerUserId, transition.project.salaryPlanId)

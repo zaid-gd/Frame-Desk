@@ -1,11 +1,13 @@
 import type { ClientId, ClientInput } from "../domain/client";
 import type { ClientPort, ClientWriteResult } from "../ports/client-port";
 
+type ClientMoney = { earned: number; collected: number; outstanding: number };
+
 function displayResult(result: ClientWriteResult, success: string) {
   return result.ok ? { ok: true as const, message: success, client: result.client } : { ok: false as const, kind: result.error.kind, message: result.error.message };
 }
 
-export function createClientController({ port }: { port: ClientPort }) {
+export function createClientController({ port, currencyCode = "USD", moneyByClient }: { port: ClientPort; currencyCode?: string; moneyByClient?: Readonly<Record<string, ClientMoney>> }) {
   const activeClients = () => port.loadClients().filter((client) => !client.archived);
   const copy = {
     listTitle: "Client records", searchLabel: "Search Clients", searchPlaceholder: "Name, company, or contact", includeArchivedLabel: "Include archived Clients",
@@ -34,11 +36,14 @@ export function createClientController({ port }: { port: ClientPort }) {
         const pastProjects = projects.filter((project) => project.status === "past");
         const projectGroups = port.loadProjectGroups().filter((group) => group.clientId === id).map((group) => ({ ...group, projectCount: projects.filter((project) => project.projectGroupId === group.id).length }));
         const total = projects.reduce((sum, project) => sum + project.outstandingAmount, 0);
-        const outstandingMoney = port.canViewMoney() ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(total) : null;
+        const canonicalMoney = moneyByClient?.[id];
+        const money = canonicalMoney ?? { earned: 0, collected: 0, outstanding: total };
+        const formatMoney = (value: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(value);
+        const outstandingMoney = port.canViewMoney() ? formatMoney(money.outstanding) : null;
         const portalLinks = projects.filter((project) => project.portalUrl).map((project) => ({ projectId: project.id, projectName: project.name, url: project.portalUrl! }));
         return { client, activeProjects, pastProjects, projectGroups, outstandingMoney, portalLinks,
           display: {
-            fields: [{ kind: "text" as const, label: "Company", value: client.company || "—" }, { kind: "text" as const, label: "Contact", value: client.contactName || "—" }, { kind: "email" as const, label: "Email", value: client.email || "—", href: client.email ? `mailto:${client.email}` : null }, { kind: "text" as const, label: "Phone", value: client.phone || "—" }, { kind: "text" as const, label: "Outstanding", value: outstandingMoney ?? copy.notAuthorized }],
+            fields: [{ kind: "text" as const, label: "Company", value: client.company || "—" }, { kind: "text" as const, label: "Contact", value: client.contactName || "—" }, { kind: "email" as const, label: "Email", value: client.email || "—", href: client.email ? `mailto:${client.email}` : null }, { kind: "text" as const, label: "Phone", value: client.phone || "—" }, { kind: "text" as const, label: "Earned", value: port.canViewMoney() ? formatMoney(money.earned) : copy.notAuthorized }, { kind: "text" as const, label: "Collected", value: port.canViewMoney() ? formatMoney(money.collected) : copy.notAuthorized }, { kind: "text" as const, label: "Outstanding", value: outstandingMoney ?? copy.notAuthorized }],
             relationships: [{ title: "Active Projects", rows: activeProjects.map((project) => `${project.name} · ${project.stage}`) }, { title: "Past Projects", rows: pastProjects.map((project) => `${project.name} · ${project.stage}`) }, { title: "Project Groups", rows: projectGroups.map((group) => `${group.name} · ${group.projectCount} projects`) }],
             portalTitle: "Client Portal links",
             notes: client.notes || copy.noNotes,

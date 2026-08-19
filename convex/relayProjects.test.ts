@@ -16,10 +16,13 @@ const projectInput: NewProjectInput = { name: "Launch film 01", clientId: "clien
 const createProject = makeFunctionReference<"mutation", typeof projectInput, { id: string }>("relayProjects:createProject");
 const inspectProject = makeFunctionReference<"query", { id: string }, Record<string, unknown> | null>("relayProjects:inspectProject");
 const archiveProject = makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjects:setProjectArchived");
+const setProjectPayment = makeFunctionReference<"mutation", { id: string; paid: boolean }, { paidAt?: string }>("relayProjects:setProjectPayment");
+const myAccess = makeFunctionReference<"query", Record<string, never>, { ownerUserId: string; memberId: string; role: "owner" | "editor" | "viewer"; canMarkPayments: boolean } | null>("relayProjects:myAccess");
 const deleteProject = makeFunctionReference<"mutation", { id: string }, null>("relayProjects:deleteProject");
 const moveProjectStage = makeFunctionReference<"mutation", { id: string; targetStageId: string; confirmed: boolean }, { projectName: string; stage: string; effect: { kind: "projectValue"; amount: number } | { kind: "salaryPlan"; change: "added" | "removed" } | { kind: "none" } }>("relayProjects:moveProjectStage");
 const listProjects = makeFunctionReference<"query", Record<string, never>, Array<Record<string, unknown>>>("relayProjects:listProjects");
 const listOutputs = makeFunctionReference<"query", { projectId: string }, Array<Record<string, unknown>>>("relayProjectOutputs:listOutputs");
+const listOutputCounts = makeFunctionReference<"query", Record<string, never>, Array<{ projectId: string; count: number }>>("relayProjectOutputs:listOutputCounts");
 const addOutput = makeFunctionReference<"mutation", { projectId: string; name: string }, { id: string }>("relayProjectOutputs:addOutput");
 const editOutput = makeFunctionReference<"mutation", { id: string; name: string }, null>("relayProjectOutputs:editOutput");
 const setOutputArchived = makeFunctionReference<"mutation", { id: string; archived: boolean }, null>("relayProjectOutputs:setOutputArchived");
@@ -85,6 +88,34 @@ describe("Relay cloud Projects and Project Groups", () => {
     await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ workflowSetup: { templateId: "template_default", templateName: "Default workflow" } });
   });
 
+  test("stores one agreed amount and keeps payment writes owner-scoped", async () => {
+    const t = convexTest(schema, modules);
+    const owner = t.withIdentity({ tokenIdentifier: "owner" });
+    const other = t.withIdentity({ tokenIdentifier: "other" });
+    const editor = t.withIdentity({ tokenIdentifier: "editor" });
+    const viewer = t.withIdentity({ tokenIdentifier: "viewer" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("relayClients", { ownerUserId: "owner", durableId: "client_acme", archived: false, name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "" });
+      const template = createDefaultWorkflowTemplate("template_launch", "Launch workflow");
+      const { id: durableId, ...input } = template;
+      await ctx.db.insert("relayWorkflowTemplates", { ownerUserId: "owner", durableId, order: 0, ...input });
+      const teamId = await ctx.db.insert("teamWorkspaces", { ownerUserId: "owner", name: "Relay Team", inviteCode: "RELAY1", createdAt: "2026-08-01T00:00:00.000Z" });
+      for (const user of [
+        { userId: "owner", role: "Owner" as const },
+        { userId: "editor", role: "Editor" as const },
+        { userId: "viewer", role: "Reviewer" as const },
+      ]) await ctx.db.insert("teamMembers", { teamId, userId: user.userId, email: `${user.userId}@example.com`, name: user.userId, role: user.role, status: "active", permissions: { editProjects: user.role !== "Reviewer" }, createdAt: "2026-08-01T00:00:00.000Z", joinedAt: "2026-08-01T00:00:00.000Z" });
+    });
+    const { id } = await owner.mutation(createProject, { ...projectInput, agreedAmount: 2400 });
+    await expect(editor.query(myAccess, {})).resolves.toMatchObject({ ownerUserId: "owner", role: "editor", canMarkPayments: true });
+    await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ agreedAmount: 2400, paymentState: "unpaid" });
+    await expect(owner.mutation(setProjectPayment, { id, paid: true })).resolves.toMatchObject({ paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
+    await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ paymentState: "paid", paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
+    await expect(editor.mutation(setProjectPayment, { id, paid: false })).resolves.toEqual({});
+    await expect(viewer.mutation(setProjectPayment, { id, paid: true })).rejects.toThrow("permission to mark");
+    await expect(other.mutation(setProjectPayment, { id, paid: false })).rejects.toThrow("Project not found");
+  });
+
   test("archives a Project with its history intact, then permanently deletes it", async () => {
     const t = convexTest(schema, modules);
     const owner = t.withIdentity({ tokenIdentifier: "owner" });
@@ -145,6 +176,7 @@ describe("Relay cloud Project Outputs", () => {
     await owner.mutation(editOutput, { id: addedId, name: "Cover image" });
     await owner.mutation(setOutputReviewState, { id: addedId, reviewState: "approved" });
     await owner.mutation(setOutputArchived, { id: addedId, archived: true });
+    await expect(owner.query(listOutputCounts, {})).resolves.toEqual([{ projectId, count: 3 }]);
 
     const outputId = String((await owner.query(listOutputs, { projectId }))[0].id);
     const first = await owner.mutation(addMediaVersion, { outputId, url: "https://youtu.be/dQw4w9WgXcQ?t=12" });

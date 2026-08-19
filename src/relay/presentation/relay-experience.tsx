@@ -43,6 +43,7 @@ import type { ClientPortalController } from "../application/client-portal-contro
 import type { ProjectFilePort } from "../ports/project-file-port";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import type { SalaryPlanInput } from "../domain/salary-plan";
+import { buildWorkspaceReport, createReportPeriod } from "../domain/reporting";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -205,7 +206,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard section={section} workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "reports" ? <SalaryPlansPage controller={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -283,32 +284,34 @@ function RelayPageHeader({ model, onNewProject }: { model: WorkspaceModel["page"
   );
 }
 
-function Dashboard({ section, workspace }: { section: "dashboard" | "projects"; workspace: WorkspaceModel }) {
+function Dashboard({ workspace }: { workspace: WorkspaceModel }) {
+  const dashboard = workspace.dashboard;
+  const money = dashboard.money;
+  const moneyText = (value: number) => new Intl.NumberFormat("en", { style: "currency", currency: workspace.currencyCode, maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value);
   return (
-    <>
-      <section className={`${styles.card} ${styles.metrics}`} aria-label="Workspace metrics">
-        {workspace.metrics.map(({ label, value }) => <div className={styles.metric} key={label}><span>{label}</span><strong>{value}</strong></div>)}
+    <div className={styles.dashboardStack}>
+      <section className={`${styles.card} ${styles.attentionCard}`} aria-labelledby="attention-title">
+        <div className={styles.cardTitle}><div><p className={styles.eyebrow}>Today</p><h2 id="attention-title">Work needing attention</h2></div><Link href="/relay/projects">Open Projects</Link></div>
+        {dashboard.attention.length ? <ul className={styles.attentionList}>{dashboard.attention.map((item) => <li key={item.projectId}><Link className={styles.projectTitle} href={`/relay/projects/${item.projectId}`}>{item.projectName}</Link><span>{item.clientName} · {item.stage}</span><strong>{item.reason} · {item.dueDate}</strong></li>)}</ul> : <p className={styles.dashboardEmpty}>Nothing needs action right now.</p>}
       </section>
-      <div className={styles.dashboardGrid}>
-        <section className={styles.card} aria-labelledby="production-queue-title">
-          <div className={styles.cardTitle}><h2 id="production-queue-title">{section === "projects" ? "Projects" : "Production queue"}</h2><Link href="/relay/projects">View all</Link></div>
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead><tr><th>Project</th><th>Stage</th><th>Due</th><th>Progress</th></tr></thead>
-              <tbody>{workspace.projects.map((project) => <tr key={project.id}><td><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span className={styles.projectMeta}>{project.clientName}</span></td><td><span className={`${styles.status} ${styles[project.tone]}`}>{project.stage}</span></td><td>{project.due}</td><td>{project.progress}</td></tr>)}</tbody>
-            </table>
-          </div>
-        </section>
-        <div className={styles.side}>
-          <section className={styles.card} aria-labelledby="due-soon-title"><div className={styles.cardTitle}><h2 id="due-soon-title">Due soon</h2></div><ul className={styles.list}>{workspace.projects.slice(0, 3).map((project) => <li key={project.name}><span>{project.name}<small>{project.stage}</small></span><span>{project.due.replace(", 2026", "")}</span></li>)}</ul></section>
-          <section className={styles.card} aria-labelledby="activity-title"><div className={styles.cardTitle}><h2 id="activity-title">Recent activity</h2></div><ul className={styles.list}>{workspace.activity.map((item) => <li key={item.name}><span>{item.name}<small>{item.detail}</small></span><span>{item.age}</span></li>)}</ul></section>
-        </div>
-      </div>
-    </>
+      <section className={styles.card} aria-labelledby="active-stages-title">
+        <div className={styles.cardTitle}><h2 id="active-stages-title">Active Projects by stage</h2><Link href="/relay/projects">View all</Link></div>
+        {dashboard.activeStages.length ? <div className={styles.stageSummary}>{dashboard.activeStages.map((stage) => <div key={stage.label}><span>{stage.label}</span><strong>{stage.count}</strong></div>)}</div> : <p className={styles.dashboardEmpty}>Create a Project to see active stages.</p>}
+      </section>
+      <section className={styles.card} aria-labelledby="due-soon-title">
+        <div className={styles.cardTitle}><h2 id="due-soon-title">Due soon</h2></div>
+        {dashboard.dueSoon.length ? <ul className={styles.list}>{dashboard.dueSoon.map((project) => <li key={project.projectId}><span><Link className={styles.projectTitle} href={`/relay/projects/${project.projectId}`}>{project.projectName}</Link><small>{project.clientName} · {project.stage}</small></span><strong>{project.dueDate}</strong></li>)}</ul> : <p className={styles.dashboardEmpty}>No active Projects are due in the next seven days.</p>}
+      </section>
+      {dashboard.salaryProgress.length ? <section className={styles.card} aria-labelledby="salary-progress-title"><div className={styles.cardTitle}><h2 id="salary-progress-title">Salary Plan progress</h2><Link href="/relay/reports">Reports</Link></div><div className={styles.salaryProgressList}>{dashboard.salaryProgress.map((plan) => <div key={plan.id}><div><strong>{workspace.reporting.clients.find((client) => client.id === plan.clientId)?.name ?? "Unknown Client"}</strong><span>{plan.deliveredProjectCount}/{plan.requiredProjectCount} delivered</span></div><progress max={plan.requiredProjectCount} value={plan.deliveredProjectCount}>{plan.deliveredProjectCount}/{plan.requiredProjectCount}</progress><span>{plan.currentAmount === null ? "No partial money" : moneyText(plan.currentAmount)}</span></div>)}</div></section> : null}
+      <section className={`${styles.card} ${styles.metrics}`} aria-label="Work and money summaries">
+        <div className={styles.metric}><span>Active projects</span><strong>{dashboard.work.activeProjectCount}</strong></div><div className={styles.metric}><span>Completed projects</span><strong>{dashboard.work.completedProjectCount}</strong></div><div className={styles.metric}><span>Earned</span><strong>{money ? moneyText(money.earned) : "Not authorized"}</strong></div><div className={styles.metric}><span>Collected</span><strong>{money ? moneyText(money.collected) : "Not authorized"}</strong></div><div className={styles.metric}><span>Outstanding</span><strong>{money ? moneyText(money.outstanding) : "Not authorized"}</strong></div>
+      </section>
+      <section className={styles.card} aria-labelledby="activity-title"><div className={styles.cardTitle}><h2 id="activity-title">Recent Activity</h2></div>{dashboard.activity.length ? <ul className={styles.list}>{dashboard.activity.map((item) => <li key={item.id}><span><strong>{item.projectName}</strong><small>{item.detail}</small></span><strong>{item.at.slice(0, 10)}</strong></li>)}</ul> : <p className={styles.dashboardEmpty}>Project activity will appear here.</p>}</section>
+    </div>
   );
 }
 
-const blankProject: NewProjectInput = { name: "", clientId: "", projectGroupId: "", templateId: "", dueDate: "", financialType: "projectValue", salaryPlanId: "" };
+const blankProject: NewProjectInput = { name: "", clientId: "", projectGroupId: "", templateId: "", dueDate: "", financialType: "projectValue", salaryPlanId: "", agreedAmount: 0 };
 const blankGroup: ProjectGroupInput = { name: "", clientId: "", startDate: "", endDate: "", notes: "" };
 
 function NewProjectForm({ controller, onCancel, onCreated }: { controller: ProjectController; onCancel(): void; onCreated(url: string): void }) {
@@ -333,9 +336,10 @@ function NewProjectForm({ controller, onCancel, onCreated }: { controller: Proje
         <form.Field name="templateId">{(field) => <label>Workflow Template<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Workflow Template</option>{controller.model.templates.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
         <form.Field name="dueDate">{(field) => <label>Due date<input type="date" value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
         <form.Field name="financialType">{(field) => <label>Financial type<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value as NewProjectInput["financialType"])}><option value="projectValue">Project value</option><option value="salaryPlan">Salary Plan</option><option value="nonBillable">Non-billable</option></select></label>}</form.Field>
+        <form.Subscribe selector={(state) => state.values.financialType}>{(financialType) => financialType === "projectValue" ? <form.Field name="agreedAmount">{(field) => <label>Agreed amount<input type="number" min="0" step="0.01" value={field.state.value ?? 0} onBlur={field.handleBlur} onChange={(event) => field.handleChange(Number(event.target.value))} /><small>Recorded in the Workspace currency.</small></label>}</form.Field> : null}</form.Subscribe>
         <div className={styles.formActions}><button type="button" onClick={onCancel}>Cancel</button><form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>{([canSubmit, isSubmitting]) => <button className={styles.primaryButton} disabled={!canSubmit || isSubmitting} type="submit">{isSubmitting ? "Creating…" : "Create Project"}</button>}</form.Subscribe></div>
       </form>
-      <form.Subscribe selector={(state) => state.errors}>{(errors) => errors.length ? <p className={styles.errorNotice} role="alert">{errors.map((error) => typeof error === "string" ? error : "Check the six Project fields and try again.").join(" ")}</p> : null}</form.Subscribe>
+      <form.Subscribe selector={(state) => state.errors}>{(errors) => errors.length ? <p className={styles.errorNotice} role="alert">{errors.map((error) => typeof error === "string" ? error : "Check the Project fields and try again.").join(" ")}</p> : null}</form.Subscribe>
       {notice ? <p role="status">{notice}</p> : null}
     </section>
   );
@@ -501,7 +505,8 @@ export function ProjectPage({ controller, outputController, filePort = null, por
   const project = controller.actions.inspectProject(projectId);
   const outputView = outputController.actions.view();
   const outputs = outputView.rows;
-  function changed(message: string) { setNotice(message); setRevision((value) => value + 1); onChanged(); }
+   function changed(message: string) { setNotice(message); setRevision((value) => value + 1); onChanged(); }
+   async function setPayment(paid: boolean) { changed((await controller.actions.setPayment(projectId, paid)).message); }
   const outputForm = useForm({
     defaultValues: { name: "" },
     onSubmit: async ({ value }) => {
@@ -514,7 +519,7 @@ export function ProjectPage({ controller, outputController, filePort = null, por
   const client = controller.model.clients.find(({ value }) => value === project.clientId)?.label ?? "Unknown Client";
   const headerFacts = <dl className={styles.projectFacts}><div><dt>Stage</dt><dd>{project.stage}</dd></div><div><dt>Client</dt><dd>{client}</dd></div><div><dt>Due date</dt><dd>{project.dueDate}</dd></div><div><dt>Lead</dt><dd>{project.lead}</dd></div><div><dt>Assignees</dt><dd>{project.assignees.length ? project.assignees.join(", ") : "Unassigned"}</dd></div></dl>;
   return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>
-    <ContentSection title="Overview"><p>Financial type: {project.financialType}. Workflow: {project.workflowSetup.templateName}.</p></ContentSection>
+     <ContentSection title="Overview"><p>Financial type: {project.financialType}. Workflow: {project.workflowSetup.templateName}.</p>{project.financialType === "projectValue" ? <div className={styles.paymentSummary}><div><strong>Agreed amount</strong><span>{project.money.toLocaleString("en-US")}</span></div><div><strong>Payment</strong><span>{project.paymentState === "paid" ? `Paid${project.paidAt ? ` · ${project.paidAt.slice(0, 10)}` : ""}` : "Unpaid"}</span></div>{controller.model.canMarkPayments && !readOnly ? <button type="button" onClick={() => void setPayment(project.paymentState !== "paid")}>{project.paymentState === "paid" ? "Mark unpaid" : "Mark paid"}</button> : null}</div> : <p>Salary Plan Projects earn through their Salary Plan and do not store a separate Project amount.</p>}</ContentSection>
     <ContentSection title="Outputs and Versions">
       <div className={styles.projectOutputs}>
         {!readOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void outputForm.handleSubmit(); }}><outputForm.Field name="name">{(field) => <label>New Project Output name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</outputForm.Field><button type="submit" className={styles.primaryButton}>Add Project Output</button></form> : null}
@@ -757,6 +762,31 @@ function TemplatesPage({ controller, onChanged }: { controller: WorkflowTemplate
 
 function SectionPlaceholder({ title }: { section: Exclude<RelaySection, "dashboard" | "projects">; title: string }) {
   return <section className={`${styles.card} ${styles.emptyPage}`}><h2>{title} overview</h2><p>This real Relay route uses the shared App Shell and capability-facing screen contract. Its full behavior belongs to a later ticket.</p></section>;
+}
+
+function ReportsPage({ workspace, salaryController, readOnly, onChanged }: { workspace: WorkspaceModel; salaryController: SalaryPlanController; readOnly: boolean; onChanged(): void }) {
+  const initialPeriod = workspace.report.period;
+  const [kind, setKind] = useState<"month" | "quarter" | "year" | "custom">(initialPeriod.kind);
+  const [value, setValue] = useState(initialPeriod.value);
+  const [customStart, setCustomStart] = useState(initialPeriod.start);
+  const [customEnd, setCustomEnd] = useState(initialPeriod.end);
+  const period = kind === "custom"
+    ? createReportPeriod({ kind: "custom", value: { start: customStart, end: customEnd } })
+    : createReportPeriod({ kind, value });
+  const report = buildWorkspaceReport({ period, ...workspace.reporting });
+  const comparison = buildWorkspaceReport({ period: createReportPeriod({ kind: "custom", value: { start: report.comparison.start, end: report.comparison.end } }), ...workspace.reporting });
+  const moneyText = (amount: number) => new Intl.NumberFormat("en", { style: "currency", currency: workspace.currencyCode, maximumFractionDigits: amount % 1 === 0 ? 0 : 2 }).format(amount);
+  return <WorkspacePage family="data-index">
+    <SharedPageHeader eyebrow="Workspace Reports" title="Reports" description="Delivered work, client money, and Salary Plan history in one currency." />
+    <PageContent>
+      <ContentSection title="Report period" description="Compare each selected range with the prior range of the same length." bodyMode="flush"><div className={styles.reportControls}><label>Period<select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option><option value="custom">Custom</option></select></label>{kind === "custom" ? <><label>Start<input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} /></label><label>End<input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} /></label></> : <label>Value<input value={value} onChange={(event) => setValue(event.target.value)} placeholder={kind === "month" ? "2026-08" : kind === "quarter" ? "2026-Q3" : "2026"} /></label>}<span className={styles.periodNote}>{period.label} · prior: {report.comparison.label}</span></div></ContentSection>
+      <MetricStrip aria-label="Report summary"><MetricItem label="Completed Projects" value={String(report.work.completedProjectCount)} supporting={`${comparison.work.completedProjectCount} prior`} /><MetricItem label="Project Outputs" value={String(report.work.outputCount)} supporting={`${comparison.work.outputCount} prior · ${report.work.averageTurnaroundDays === null ? "—" : report.work.averageTurnaroundDays.toFixed(1)} days avg vs ${comparison.work.averageTurnaroundDays === null ? "—" : comparison.work.averageTurnaroundDays.toFixed(1)} prior`} />{report.money ? <><MetricItem label="Earned" value={moneyText(report.money.earned)} supporting={`${moneyText(comparison.money?.earned ?? 0)} prior`} /><MetricItem label="Collected" value={moneyText(report.money.collected)} supporting={`${moneyText(comparison.money?.collected ?? 0)} prior`} /><MetricItem label="Outstanding" value={moneyText(report.money.outstanding)} supporting={`${moneyText(comparison.money?.outstanding ?? 0)} prior`} /></> : <MetricItem label="Money" value="Not authorized" supporting="Finance access is required" />}</MetricStrip>
+      <ContentSection title="Work" description="Completed Projects, output counts, turnaround, and stage delays." bodyMode="flush"><div className={styles.reportGrid}><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Project</th><th>Client</th><th>Outputs</th><th>Turnaround</th><th>Delivered</th></tr></thead><tbody>{report.work.completedProjects.map((project) => <tr key={project.projectId}><td>{project.projectName}</td><td>{project.clientName}</td><td>{project.outputCount}</td><td>{project.turnaroundDays === null ? "—" : `${project.turnaroundDays.toFixed(1)} days`}</td><td>{project.completedAt.slice(0, 10)}</td></tr>)}</tbody></table></div><div><h3>Stage delays</h3>{report.work.stageDelays.length ? <ul className={styles.list}>{report.work.stageDelays.map((stage) => <li key={stage.stageId}><span>{stage.label}<small>{stage.projectCount} completed Projects</small></span><strong>{stage.averageDays.toFixed(1)} days</strong></li>)}</ul> : <p className={styles.dashboardEmpty}>No stage delay data in this period.</p>}<p className={styles.periodNote}>{comparison.work.stageDelays.length} prior-period stage delay rows.</p></div></div></ContentSection>
+      {report.money ? <ContentSection title="Money" description="Earned, Collected, and Outstanding use the same delivered-work rules everywhere." bodyMode="flush"><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Client</th><th>Earned</th><th>Collected</th><th>Outstanding</th><th>Prior earned</th></tr></thead><tbody>{report.money.clientTotals.map((client) => { const prior = comparison.money?.clientTotals.find((row) => row.clientId === client.clientId); return <tr key={client.clientId}><td>{client.clientName}</td><td>{moneyText(client.earned)}</td><td>{moneyText(client.collected)}</td><td>{moneyText(client.outstanding)}</td><td>{moneyText(prior?.earned ?? 0)}</td></tr>; })}</tbody></table></div></ContentSection> : null}
+      {report.salary ? <ContentSection title="Salary Plans" description="Partial progress has no partial money value; a full amount appears only in a completed batch." bodyMode="flush"><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Client</th><th>Progress</th><th>Current amount</th><th>Batches</th></tr></thead><tbody>{report.salary.plans.map((plan) => <tr key={plan.id}><td>{workspace.reporting.clients.find((client) => client.id === plan.clientId)?.name ?? "Unknown Client"}</td><td>{plan.deliveredProjectCount}/{plan.requiredProjectCount}</td><td>{plan.currentAmount === null ? "No partial money" : moneyText(plan.currentAmount)}</td><td>{report.salary?.completedBatchCount ?? 0}</td></tr>)}</tbody></table></div><p>{report.salary.completedBatchCount} completed · {report.salary.receivedBatchCount} received · {report.salary.unpaidBatchCount} unpaid batches in this period. Prior period: {comparison.salary?.completedBatchCount ?? 0} completed · {comparison.salary?.receivedBatchCount ?? 0} received · {comparison.salary?.unpaidBatchCount ?? 0} unpaid.</p></ContentSection> : null}
+      <SalaryPlansPage controller={salaryController} readOnly={readOnly} onChanged={onChanged} />
+    </PageContent>
+  </WorkspacePage>;
 }
 
 const blankSalaryPlan: SalaryPlanInput = { clientId: "", requiredProjectCount: 1, batchAmount: 0, startDate: "", notes: "" };

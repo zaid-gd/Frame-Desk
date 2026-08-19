@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { isRelayClient, validateClientInput } from "../src/relay/domain/client";
 import { relayClientInputValidator, relayClientValidator } from "./relayWorkspaceValidators";
+import { relayAccessForCurrentUser } from "./relayAccess";
 
 async function owner(ctx: MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -13,10 +14,10 @@ export const list = query({
   args: { includeArchived: v.optional(v.boolean()), search: v.optional(v.string()) },
   returns: v.array(relayClientValidator),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
     const needle = args.search?.trim().toLocaleLowerCase() ?? "";
-    const rows = await ctx.db.query("relayClients").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(500);
+    const rows = await ctx.db.query("relayClients").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
     return rows.filter((row) => (args.includeArchived || !row.archived) && (!needle || [row.name, row.company, row.contactName, row.email, row.phone, row.notes].some((value) => value.toLocaleLowerCase().includes(needle))))
       .map(({ durableId, name, company, contactName, email, phone, notes, archived }) => ({ id: durableId, name, company, contactName, email, phone, notes, archived }));
   },

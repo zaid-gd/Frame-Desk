@@ -2,6 +2,10 @@ import type { WorkspaceMode } from "./entry-controller";
 import type { RelaySection } from "./routes";
 import type { WorkspacePort } from "../ports/workspace-port";
 import type { ProjectSetup } from "../domain/workflow-template";
+import type { ProjectRecord } from "../domain/project";
+import type { RelayClient } from "../domain/client";
+import type { SalaryBatch, SalaryPlan } from "../domain/salary-plan";
+import { buildDashboardSummary, buildWorkspaceReport, createReportPeriod, type ProjectOutputCount, type ReportAccess } from "../domain/reporting";
 
 const navigation = [
   { section: "dashboard", label: "Dashboard" },
@@ -15,8 +19,18 @@ const navigation = [
   { section: "settings", label: "Settings" },
 ] as const;
 
-export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard", defaultProjectSetup }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection; defaultProjectSetup?: ProjectSetup }) {
+export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard", defaultProjectSetup, projects = [], clients = [], salaryPlans = [], salaryBatches = [], outputCounts = [], currencyCode = "USD", access = { canViewMoney: true, canViewSalary: true } }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection; defaultProjectSetup?: ProjectSetup; projects?: readonly ProjectRecord[]; clients?: readonly RelayClient[]; salaryPlans?: readonly SalaryPlan[]; salaryBatches?: readonly SalaryBatch[]; outputCounts?: readonly ProjectOutputCount[]; currencyCode?: string; access?: ReportAccess }) {
   const title = section[0].toUpperCase() + section.slice(1);
+  const periodDate = new Date().toISOString().slice(0, 7);
+  const report = buildWorkspaceReport({ period: createReportPeriod({ kind: "month", value: periodDate }), currencyCode, clients, projects, outputCounts, salaryPlans, salaryBatches, access });
+  const dashboard = buildDashboardSummary({ today: new Date().toISOString().slice(0, 10), clients, projects, salaryPlans, salaryBatches, outputCounts, access });
+  const formatMoney = (value: number) => new Intl.NumberFormat("en", { style: "currency", currency: currencyCode, maximumFractionDigits: value % 1 === 0 ? 0 : 2 }).format(value);
+  const metrics = [
+    { label: "Active projects", value: String(dashboard.work.activeProjectCount) },
+    { label: "Due soon", value: String(dashboard.dueSoon.length) },
+    { label: "Attention", value: String(dashboard.attention.length) },
+    { label: "Collected", value: dashboard.money ? formatMoney(dashboard.money.collected) : "Not authorized" },
+  ];
   return {
     model: {
       mode,
@@ -33,17 +47,13 @@ export function createWorkspaceController({ mode, workspacePort, clientNames = {
         description: section === "dashboard" ? "What needs your attention across active production." : `Manage ${section} in the shared Relay workspace.`,
         canCreateProject: section === "dashboard" || section === "projects",
       },
-      metrics: [
-        { label: "Active projects", value: "12" },
-        { label: "Due this week", value: "4" },
-        { label: "Client reviews", value: "3" },
-        { label: "Salary due", value: "₹84,000" },
-      ],
+      currencyCode,
+      metrics,
       projects: workspacePort.loadProjects().map((project) => ({ ...project, clientName: clientNames[project.clientId] ?? "Unknown Client" })),
-      activity: [
-        { name: "Demo Project Beta", detail: "Marked delivered by Demo Editor", age: "2h" },
-        { name: "Demo Project Alpha", detail: "Moved to In review", age: "5h" },
-      ],
+      dashboard,
+      report,
+      reporting: { clients, projects, salaryPlans, salaryBatches, outputCounts, access, currencyCode },
+      activity: dashboard.activity.map((item) => ({ name: item.projectName, detail: item.detail, age: item.at.slice(0, 10) })),
     },
     actions: {
       async requestNewProject() {

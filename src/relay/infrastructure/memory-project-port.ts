@@ -18,6 +18,11 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
     loadTemplates: () => templates,
     loadProjects: () => savedProjects,
     projectId: selectedProjectId,
+    loadOutputCounts: () => {
+      const counts = new Map<string, number>();
+      for (const output of savedOutputs) counts.set(output.projectId, (counts.get(output.projectId) ?? 0) + 1);
+      return [...counts.entries()].map(([projectId, count]) => ({ projectId, count }));
+    },
     outputState: () => ({ kind: "ready" }),
     loadOutputs: () => savedOutputs.filter((output) => output.projectId === selectedProjectId),
     async createProject(input: NewProjectInput) {
@@ -30,7 +35,9 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
       if (!client || !template || template.archived || (input.projectGroupId && (!group || group.clientId !== input.clientId))) return { ok: false, error: { kind: "invalid", message: "Choose active Project setup options." } };
       const setup = copyProjectSetup(template);
       const id = `project_${crypto.randomUUID()}`;
-      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), stage: setup.stages[0].label, workflowStageId: setup.stages[0].id, dueDate: input.dueDate, financialType: input.financialType, paymentState: input.financialType === "nonBillable" ? "not-applicable" : "unpaid", archived: false, lead: "Unassigned", assignees: [], progress: 0, money: 0, workflowSetup: setup });
+      const createdAt = now();
+      const agreedAmount = input.financialType === "projectValue" ? input.agreedAmount ?? 0 : 0;
+      savedProjects.push({ id, name: input.name.trim(), clientId: input.clientId, ...(input.projectGroupId ? { projectGroupId: input.projectGroupId } : {}), ...(input.salaryPlanId ? { salaryPlanId: input.salaryPlanId } : {}), stage: setup.stages[0].label, workflowStageId: setup.stages[0].id, dueDate: input.dueDate, financialType: input.financialType, paymentState: input.financialType === "nonBillable" ? "not-applicable" : "unpaid", archived: false, lead: "Unassigned", assignees: [], progress: 0, money: agreedAmount, agreedAmount, workflowSetup: setup, createdAt, stageHistory: [{ stageId: setup.stages[0].id, label: setup.stages[0].label, purpose: setup.stages[0].purpose, enteredAt: createdAt }] });
       savedOutputs.push(...setup.starterOutputs.map((starter) => ({
         id: `output_${crypto.randomUUID()}`,
         projectId: id,
@@ -47,6 +54,15 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
     async editGroup(id, input) { const index = savedGroups.findIndex((group) => group.id === id); if (index < 0) return { ok: false, error: { kind: "unavailable", message: "Project Group not found." } }; savedGroups[index] = { ...savedGroups[index], ...input }; return { ok: true, value: undefined }; },
     async setGroupArchived(id, archived) { const group = savedGroups.find((row) => row.id === id); if (!group) return { ok: false, error: { kind: "unavailable", message: "Project Group not found." } }; group.archived = archived; return { ok: true, value: undefined }; },
     async setProjectArchived(id, archived) { const project = savedProjects.find((row) => row.id === id); if (!project) return { ok: false, error: { kind: "unavailable", message: "Project not found." } }; project.archived = archived; return { ok: true, value: undefined }; },
+    async setProjectPayment(id, paid) {
+      const project = savedProjects.find((row) => row.id === id);
+      if (!project) return { ok: false, error: { kind: "not-found", message: "Project not found." } };
+      if (project.financialType !== "projectValue") return { ok: false, error: { kind: "invalid", message: "Only normal client Projects have a payment state." } };
+      project.paymentState = paid ? "paid" : "unpaid";
+      if (paid) project.paidAt = now();
+      else delete project.paidAt;
+      return { ok: true, value: paid ? { paidAt: project.paidAt } : {} };
+    },
     async moveProjectStage(id, targetStageId, confirmed) {
       const index = savedProjects.findIndex((row) => row.id === id);
       if (index < 0) return { ok: false, error: { kind: "unavailable", message: "Project not found." } };

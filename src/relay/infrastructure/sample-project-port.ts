@@ -13,6 +13,7 @@ export function createSampleProjectPort(): ProjectPort & ProjectOutputPort {
     loadGroups: () => [{ id: "group_demo", name: "Launch campaign", clientId: "client_demo", startDate: "2026-08-01", endDate: "2026-08-31", notes: "Read-only sample", archived: false, projectCount: 1, progress: 60, money: 2400 }],
     loadTemplates: () => [template],
     loadProjects: () => [{ id: "demo_alpha", name: "Demo Project Alpha", clientId: "client_demo", projectGroupId: "group_demo", stage: "Client Review", dueDate: "2026-08-15", financialType: "projectValue", paymentState: "unpaid", archived: false, lead: "Demo Editor", assignees: ["Demo Editor"], progress: 60, money: 2400, workflowSetup: setup }],
+    loadOutputCounts: () => [{ projectId: "demo_alpha", count: 1 }],
     outputState: () => ({ kind: "ready" }),
     loadOutputs: () => [{ id: "output_demo_main", projectId: "demo_alpha", name: "Main video", reviewState: "in_review", archived: false, currentVersionId: "version_demo_2", unresolvedPreviousComments: 1, versions: [
       { id: "version_demo_1", number: 1, source: { provider: "youtube", providerId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, addedAt: "2026-08-10T09:00:00.000Z", comments: [{ id: "comment_demo", authorName: "Client", body: "Shorten the logo hold.", resolved: false, createdAt: "2026-08-10T10:00:00.000Z" }] },
@@ -23,6 +24,7 @@ export function createSampleProjectPort(): ProjectPort & ProjectOutputPort {
     async editGroup() { return projectWriteRefusal; },
     async setGroupArchived() { return projectWriteRefusal; },
     async setProjectArchived() { return projectWriteRefusal; },
+    async setProjectPayment() { return projectWriteRefusal; },
     async moveProjectStage() { return projectWriteRefusal; },
     async addOutput() { return projectWriteRefusal; },
     async editOutput() { return projectWriteRefusal; },

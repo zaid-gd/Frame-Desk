@@ -98,7 +98,6 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     const relationships = () => clientRelationships(selectedWorkspacePort.loadProjects());
     return createLocalClientPort(undefined, undefined, () => relationships().projects, () => relationships().groups);
   }, [cloudClientPort, mode, selectedWorkspacePort]);
-  const clientController = createClientController({ port: selectedClientPort });
   const cloudTemplatePort = useCloudWorkflowTemplatePort(mode === "cloud" && Boolean(auth.isSignedIn), selectedWorkspacePort.loadProjects());
   const selectedTemplatePort = useMemo(() => {
     if (mode === "sample") return createSampleWorkflowTemplatePort();
@@ -115,6 +114,22 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
     return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
   }, [cloudProjectPort, hydrated, mode, projectClients, projectId, projectTemplates]);
+  const clientViewPort = useMemo(() => ({
+    ...selectedClientPort,
+    loadProjects: () => selectedProjectPort.loadProjects().map((project) => ({
+      id: project.id,
+      clientId: project.clientId,
+      name: project.name,
+      stage: project.stage,
+      tone: project.completedAt ? "delivered" as const : project.dueDate < new Date().toISOString().slice(0, 10) ? "overdue" as const : project.workflowSetup.stages.find(({ id }) => id === project.workflowStageId)?.purpose === "clientReview" || project.workflowSetup.stages.find(({ id }) => id === project.workflowStageId)?.purpose === "revisions" ? "review" as const : "planned" as const,
+      due: project.dueDate,
+      progress: `${project.progress}%`,
+      status: project.archived ? "past" as const : "active" as const,
+      outstandingAmount: project.completedAt && project.paymentState === "unpaid" && project.financialType === "projectValue" ? project.money : 0,
+      ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}),
+    })),
+    loadProjectGroups: () => selectedProjectPort.loadGroups().map(({ id, clientId, name }) => ({ id, clientId, name })),
+  }), [selectedClientPort, selectedProjectPort]);
   const cloudSalaryPlanPort = useCloudSalaryPlanPort(mode === "cloud" && Boolean(auth.isSignedIn));
   const selectedSalaryPlanPort = useMemo(() => {
     if (mode === "sample") return createSampleSalaryPlanPort();
@@ -122,8 +137,9 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (hydrated) return createLocalSalaryPlanPort(window.localStorage, projectClients);
     return createMemorySalaryPlanPort();
   }, [cloudSalaryPlanPort, hydrated, mode, projectClients]);
-  const salaryPlanController = createSalaryPlanController({ port: selectedSalaryPlanPort, clients: projectClients, canManage: mode !== "sample" });
-  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample", salaryPlans: salaryPlanController.model.plans });
+  const projectAccess = selectedProjectPort.projectAccess?.() ?? { role: "owner" as const, memberId: "owner", editorsCanViewAll: true, team: false };
+  const salaryPlanController = createSalaryPlanController({ port: selectedSalaryPlanPort, clients: projectClients, canManage: mode !== "sample" && projectAccess.role === "owner" });
+  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" && projectAccess.role !== "viewer", access: projectAccess, salaryPlans: salaryPlanController.model.plans });
   const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
   const projectFiles = useCloudProjectFilePort(mode === "cloud" && Boolean(auth.isSignedIn), projectId);
   const selectedProject = selectedProjectPort.loadProjects().find(({ id }) => id === projectId) ?? null;
@@ -136,7 +152,22 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
   const firstTemplate = templateController.actions.list()[0];
   const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
-  const workspaceController = createWorkspaceController({ mode, workspacePort: selectedWorkspacePort, clientNames, section, defaultProjectSetup });
+  const workspaceController = createWorkspaceController({
+    mode,
+    workspacePort: selectedWorkspacePort,
+    clientNames,
+    section,
+    defaultProjectSetup,
+    projects: selectedProjectPort.loadProjects(),
+    clients: selectedClientPort.loadClients(),
+    salaryPlans: selectedSalaryPlanPort.loadPlans(),
+    salaryBatches: selectedSalaryPlanPort.loadBatches(),
+    outputCounts: selectedProjectPort.loadOutputCounts(),
+    currencyCode: "USD",
+    access: { canViewMoney: selectedClientPort.canViewMoney(), canViewSalary: mode !== "cloud" || projectAccess.role === "owner" },
+  });
+  const clientMoney = workspaceController.model.dashboard.money?.clientTotals.reduce<Record<string, { earned: number; collected: number; outstanding: number }>>((result, client) => { result[client.clientId] = client; return result; }, {}) ?? {};
+  const clientController = createClientController({ port: clientViewPort, currencyCode: workspaceController.model.currencyCode, moneyByClient: clientMoney });
   const localBackupPort = useMemo(
     () => hydrated ? createLocalWorkspaceBackupPort(window.localStorage, undefined, () => setWorkspaceVersion((version) => version + 1)) : null,
     [hydrated],

@@ -1,12 +1,10 @@
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectViewState } from "../domain/project";
-import type { ProjectPort, ProjectWriteResult } from "../ports/project-port";
+import type { ProjectAccess, ProjectPort, ProjectWriteResult } from "../ports/project-port";
 import type { SalaryPlan } from "../domain/salary-plan";
 
 function message<T>(result: ProjectWriteResult<T>, success: string) {
   return result.ok ? { ok: true as const, message: success } : { ok: false as const, kind: result.error.kind, message: result.error.message };
 }
-
-type ProjectAccess = { role: "owner" | "editor" | "viewer"; memberId: string; editorsCanViewAll: boolean; team?: boolean };
 
 export function createProjectController({ port, canManage = true, access = { role: "owner", memberId: "owner", editorsCanViewAll: true, team: false }, salaryPlans = [] }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess; salaryPlans?: readonly SalaryPlan[] }) {
   const clientNames = new Map(port.loadClients().map((client) => [client.id, client.name]));
@@ -45,6 +43,7 @@ export function createProjectController({ port, canManage = true, access = { rol
       groups: port.loadGroups(),
       projects: port.loadProjects(),
       projectState: port.projectState?.() ?? { kind: "ready" as const },
+      canMarkPayments: canManage && access.role !== "viewer",
       canDeletePermanently: canManage && access.role === "owner",
       deletionEffects: "Permanent deletion removes this Project. Its files, versions, Client Portal history, and Activity will no longer be available through the Project. This cannot be undone.",
     },
@@ -84,6 +83,11 @@ export function createProjectController({ port, canManage = true, access = { rol
       async setGroupArchived(id: string, archived: boolean) { return message(await port.setGroupArchived(id, archived), archived ? "Project Group archived." : "Project Group restored."); },
       async archive(id: string) { return message(await port.setProjectArchived(id, true), "Project archived. Its history remains available."); },
       async restore(id: string) { return message(await port.setProjectArchived(id, false), "Project restored."); },
+      async setPayment(id: string, paid: boolean) {
+        if (!canManage || access.role === "viewer") return { ok: false as const, kind: "forbidden" as const, message: "You do not have permission to change Project payment state." };
+        const result = await port.setProjectPayment(id, paid);
+        return result.ok ? { ok: true as const, message: paid ? "Payment marked paid." : "Payment marked unpaid." } : { ok: false as const, kind: result.error.kind, message: result.error.message };
+      },
       previewStageMove,
       async moveStage(id: string, targetStageId: string, confirmed: boolean) {
         const preview = previewStageMove(id, targetStageId);

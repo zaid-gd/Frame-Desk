@@ -122,4 +122,23 @@ describe("Project workflow", () => {
     await expect(controller.actions.moveStage("project_alpha", editing.id, false)).resolves.toEqual({ ok: true, message: "Alpha moved to Editing. This Project no longer counts toward incomplete Salary Plan progress; completed batches stay unchanged." });
     expect(port.loadProjects()[0]).toMatchObject({ stage: "Editing", progress: 25, completedAt: undefined });
   });
+
+  test("lets an authorized Editor mark normal client work paid and records the timestamp", async () => {
+    const port = createMemoryProjectPort({ now: () => "2026-08-19T10:00:00.000Z", projects: [project()] });
+    const controller = createProjectController({ port, canManage: true, access: { role: "editor", memberId: "editor_1", editorsCanViewAll: true, team: true } });
+
+    await expect(controller.actions.setPayment("project_alpha", true)).resolves.toEqual({ ok: true, message: "Payment marked paid." });
+    expect(port.loadProjects()[0]).toMatchObject({ paymentState: "paid", paidAt: "2026-08-19T10:00:00.000Z" });
+    await expect(controller.actions.setPayment("project_alpha", false)).resolves.toEqual({ ok: true, message: "Payment marked unpaid." });
+    expect(port.loadProjects()[0].paymentState).toBe("unpaid");
+    expect(port.loadProjects()[0].paidAt).toBeUndefined();
+  });
+
+  test("refuses payment changes for a Viewer", async () => {
+    const port = createMemoryProjectPort({ projects: [project()] });
+    const controller = createProjectController({ port, canManage: false, access: { role: "viewer", memberId: "viewer", editorsCanViewAll: true, team: true } });
+
+    await expect(controller.actions.setPayment("project_alpha", true)).resolves.toMatchObject({ ok: false, kind: "forbidden" });
+    expect(port.loadProjects()[0].paymentState).toBe("unpaid");
+  });
 });

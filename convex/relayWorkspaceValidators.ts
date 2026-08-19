@@ -4,6 +4,7 @@ export const workflowStagePurposeValidator = v.union(
   v.literal("planned"), v.literal("editing"), v.literal("clientReview"), v.literal("revisions"), v.literal("approved"), v.literal("delivered"),
 );
 export const workflowStageValidator = v.object({ id: v.string(), label: v.string(), purpose: workflowStagePurposeValidator });
+export const projectStageHistoryEntryValidator = v.object({ stageId: v.string(), label: v.string(), purpose: workflowStagePurposeValidator, enteredAt: v.string(), exitedAt: v.optional(v.string()) });
 export const workflowTemplateRoleValidator = v.object({ id: v.string(), label: v.string() });
 export const starterProjectOutputValidator = v.object({ id: v.string(), name: v.string(), relativeDeadlineDays: v.number(), roleId: v.union(v.string(), v.null()) });
 export const clientPortalDefaultsValidator = v.object({ enabled: v.boolean(), showDates: v.boolean(), showNotes: v.boolean(), allowComments: v.boolean() });
@@ -57,6 +58,9 @@ export const relayProjectValidator = v.object({
   progress: v.string(),
   status: v.optional(v.union(v.literal("active"), v.literal("past"))),
   outstandingAmount: v.optional(v.number()),
+  agreedAmount: v.optional(v.number()),
+  paymentState: v.optional(v.union(v.literal("paid"), v.literal("unpaid"), v.literal("not-applicable"))),
+  paidAt: v.optional(v.string()),
   salaryPlanId: v.optional(v.string()),
   projectGroupId: v.optional(v.string()),
   projectGroupName: v.optional(v.string()),
@@ -68,6 +72,8 @@ export const relayProjectValidator = v.object({
   lead: v.optional(v.string()),
   assignees: v.optional(v.array(v.string())),
   completedAt: v.optional(v.string()),
+  createdAt: v.optional(v.string()),
+  stageHistory: v.optional(v.array(projectStageHistoryEntryValidator)),
 });
 
 export const projectStageEffectValidator = v.union(
@@ -88,6 +94,7 @@ export const relayProjectOutputValidator = v.object({
   roleId: v.optional(v.string()), relativeDeadlineDays: v.optional(v.number()), versions: v.array(relayMediaVersionValidator),
   currentVersionId: v.optional(v.string()), unresolvedPreviousComments: v.number(),
 });
+export const projectOutputCountValidator = v.object({ projectId: v.string(), count: v.number() });
 
 export const newProjectInputValidator = v.object({
   name: v.string(),
@@ -97,6 +104,7 @@ export const newProjectInputValidator = v.object({
   dueDate: v.string(),
   financialType: v.union(v.literal("projectValue"), v.literal("salaryPlan"), v.literal("nonBillable")),
   salaryPlanId: v.optional(v.string()),
+  agreedAmount: v.optional(v.number()),
 });
 
 export const projectDetailValidator = relayProjectValidator.extend({

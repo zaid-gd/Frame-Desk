@@ -1,5 +1,5 @@
 import { validateWorkflowTemplate, type ProjectSetup } from "./workflow-template";
-import type { FinancialType } from "./project";
+import type { FinancialType, ProjectStageHistoryEntry } from "./project";
 
 export const MAX_RELAY_PROJECTS = 500;
 
@@ -13,6 +13,9 @@ export type WorkspaceProject = {
   progress: string;
   status?: "active" | "past";
   outstandingAmount?: number;
+  agreedAmount?: number;
+  paymentState?: "paid" | "unpaid" | "not-applicable";
+  paidAt?: string;
   projectGroupId?: string;
   projectGroupName?: string;
   portalUrl?: string;
@@ -24,6 +27,8 @@ export type WorkspaceProject = {
   lead?: string;
   assignees?: string[];
   completedAt?: string;
+  createdAt?: string;
+  stageHistory?: ProjectStageHistoryEntry[];
 };
 
 export function createWorkspaceProjectDraft(id: string, name: string, setup?: ProjectSetup): WorkspaceProject {
@@ -40,7 +45,7 @@ export function createWorkspaceProjectDraft(id: string, name: string, setup?: Pr
   };
 }
 
-const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup", "financialType", "salaryPlanId", "lead", "assignees", "completedAt"] as const;
+const projectKeys = ["id", "name", "clientId", "stage", "tone", "due", "progress", "status", "outstandingAmount", "agreedAmount", "paymentState", "paidAt", "projectGroupId", "projectGroupName", "portalUrl", "workflowTemplateId", "workflowStageId", "workflowSetup", "financialType", "salaryPlanId", "lead", "assignees", "completedAt", "createdAt", "stageHistory"] as const;
 const textByteLimits = { id: 100, name: 200, clientId: 100, stage: 80, due: 80, progress: 40 } as const;
 
 function safeText(value: unknown, maxBytes: number): value is string {
@@ -62,6 +67,9 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
     && safeText(record.progress, textByteLimits.progress)
     && (record.status === undefined || record.status === "active" || record.status === "past")
     && (record.outstandingAmount === undefined || (typeof record.outstandingAmount === "number" && Number.isFinite(record.outstandingAmount)))
+    && (record.agreedAmount === undefined || (typeof record.agreedAmount === "number" && Number.isFinite(record.agreedAmount) && record.agreedAmount >= 0))
+    && (record.paymentState === undefined || ["paid", "unpaid", "not-applicable"].includes(String(record.paymentState)))
+    && (record.paidAt === undefined || safeText(record.paidAt, 40))
     && (record.projectGroupId === undefined || safeText(record.projectGroupId, 100))
     && (record.projectGroupName === undefined || safeText(record.projectGroupName, 200))
     && (record.portalUrl === undefined || safeText(record.portalUrl, 1000))
@@ -72,7 +80,16 @@ export function isWorkspaceProject(value: unknown): value is WorkspaceProject {
     && (record.salaryPlanId === undefined || safeText(record.salaryPlanId, 100))
     && (record.lead === undefined || safeText(record.lead, 200))
     && (record.assignees === undefined || (Array.isArray(record.assignees) && record.assignees.every((value) => safeText(value, 200))))
-    && (record.completedAt === undefined || safeText(record.completedAt, 40));
+    && (record.completedAt === undefined || safeText(record.completedAt, 40))
+    && (record.createdAt === undefined || safeText(record.createdAt, 40))
+    && (record.stageHistory === undefined || (Array.isArray(record.stageHistory) && record.stageHistory.every((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const stage = entry as Record<string, unknown>;
+      return safeText(stage.stageId, 100) && safeText(stage.label, 80)
+        && ["planned", "editing", "clientReview", "revisions", "approved", "delivered"].includes(String(stage.purpose))
+        && safeText(stage.enteredAt, 40)
+        && (stage.exitedAt === undefined || safeText(stage.exitedAt, 40));
+    })));
 }
 
 function validProjectSetup(value: unknown) {

@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { outputReviewStateValidator, relayProjectOutputValidator } from "./relayWorkspaceValidators";
+import { outputReviewStateValidator, projectOutputCountValidator, relayProjectOutputValidator } from "./relayWorkspaceValidators";
 import { normalizeMediaSource } from "../src/relay/domain/project-output";
+import { relayAccessForCurrentUser } from "./relayAccess";
 
 const MAX_OUTPUTS = 100;
 const MAX_VERSIONS_PER_PROJECT = 500;
@@ -28,7 +29,9 @@ export const listOutputs = query({
   args: { projectId: v.string() },
   returns: v.array(relayProjectOutputValidator),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const ownerUserId = access.ownerUserId;
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.projectId)).unique();
     if (!project) return [];
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(MAX_OUTPUTS);
@@ -56,6 +59,21 @@ export const listOutputs = query({
         })),
       };
     });
+  },
+});
+
+export const listOutputCounts = query({
+  args: {},
+  returns: v.array(projectOutputCountValidator),
+  handler: async (ctx) => {
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const ownerUserId = access.ownerUserId;
+    const counts = new Map<string, number>();
+    for await (const output of ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId))) {
+      counts.set(output.projectId, (counts.get(output.projectId) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([projectId, count]) => ({ projectId, count }));
   },
 });
 

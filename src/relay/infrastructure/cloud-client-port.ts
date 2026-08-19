@@ -6,12 +6,16 @@ import type { WorkspaceProject } from "../domain/workspace-project";
 import type { ClientPort } from "../ports/client-port";
 import { clientRelationships } from "../domain/client-relationships";
 import { api } from "../../../convex/_generated/api";
+import { makeFunctionReference } from "convex/server";
+
+const accessRef = makeFunctionReference<"query", Record<string, never>, { role: "owner" | "editor" | "viewer" } | null>("relayProjects:myAccess");
 
 const { list: listClients, create: createClient, edit: editClient, setArchived } = api.relayClients;
 
 export function useCloudClientPort(enabled: boolean, projects: readonly WorkspaceProject[] = []): ClientPort {
   const relationships = clientRelationships(projects);
   const clients = useQuery(listClients, enabled ? { includeArchived: true } : "skip") ?? [];
+  const access = useQuery(accessRef, enabled ? {} : "skip");
   const createMutation = useMutation(createClient);
   const editMutation = useMutation(editClient);
   const archiveMutation = useMutation(setArchived);
@@ -19,7 +23,7 @@ export function useCloudClientPort(enabled: boolean, projects: readonly Workspac
     loadClients: () => clients,
     loadProjects: () => relationships.projects,
     loadProjectGroups: () => relationships.groups,
-    canViewMoney: () => enabled,
+    canViewMoney: () => enabled && access?.role !== "viewer",
     async createClient(input) {
       try { const { id } = await createMutation(input); return { ok: true as const, client: { id, archived: false, ...input } }; }
       catch (error) { return { ok: false as const, error: { kind: "unavailable" as const, message: error instanceof Error ? error.message : "Relay could not create this Client." } }; }
@@ -35,5 +39,5 @@ export function useCloudClientPort(enabled: boolean, projects: readonly Workspac
       try { await archiveMutation({ id, archived }); return { ok: true as const, client: clients.find((client) => client.id === id) }; }
       catch (error) { return { ok: false as const, error: { kind: "unavailable" as const, message: error instanceof Error ? error.message : "Relay could not update this Client." } }; }
     },
-  }), [archiveMutation, clients, createMutation, editMutation, relationships.groups, relationships.projects]);
+  }), [access, archiveMutation, clients, createMutation, editMutation, relationships.groups, relationships.projects]);
 }
