@@ -2,6 +2,7 @@ import type { ProjectWriteResult } from "./project-port";
 
 export type ProjectFile = {
   id: string;
+  projectId: string;
   title: string;
   fileName: string;
   mimeType: string;
@@ -15,6 +16,7 @@ export type ProjectFile = {
 export type ProjectFilePort = {
   state(): { kind: "loading" | "ready" };
   files(): readonly ProjectFile[];
+  workspaceFiles(): readonly ProjectFile[];
   usage(): { retainedBytes: number; limitBytes: number };
   upload(file: File, title: string): Promise<ProjectWriteResult<{ id: string }>>;
   setSharing(id: string, portalVisible: boolean, allowDownload: boolean): Promise<ProjectWriteResult>;

@@ -12,6 +12,7 @@ const refs = {
   groups: makeFunctionReference<"query", { includeArchived?: boolean }, ProjectGroup[]>("relayProjects:listGroups"),
   projects: makeFunctionReference<"query", Record<string, never>, Array<Omit<ProjectRecord, "progress" | "money" | "paymentState" | "archived"> & { progress: string; outstandingAmount?: number; status?: "active" | "past"; paymentState?: ProjectRecord["paymentState"] }>>("relayProjects:listProjects"),
   outputs: makeFunctionReference<"query", { projectId: string }, ProjectOutput[]>("relayProjectOutputs:listOutputs"),
+  workspaceOutputs: makeFunctionReference<"query", Record<string, never>, ProjectOutput[]>("relayProjectOutputs:listWorkspaceOutputs"),
   outputCounts: makeFunctionReference<"query", Record<string, never>, Array<{ projectId: string; count: number }>>("relayProjectOutputs:listOutputCounts"),
   access: makeFunctionReference<"query", Record<string, never>, { ownerUserId: string; memberId: string; role: "owner" | "editor" | "viewer"; canMarkPayments: boolean } | null>("relayProjects:myAccess"),
   createProject: makeFunctionReference<"mutation", NewProjectInput, { id: string }>("relayProjects:createProject"),
@@ -43,6 +44,7 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
   const groups = useQuery(refs.groups, enabled ? { includeArchived: true } : "skip");
   const projects = useQuery(refs.projects, enabled ? {} : "skip");
   const selectedOutputs = useQuery(refs.outputs, enabled && selectedProjectId ? { projectId: selectedProjectId } : "skip");
+  const workspaceOutputs = useQuery(refs.workspaceOutputs, enabled ? {} : "skip");
   const outputCounts = useQuery(refs.outputCounts, enabled ? {} : "skip");
   const access = useQuery(refs.access, enabled ? {} : "skip");
   const createProject = useMutation(refs.createProject);
@@ -70,6 +72,7 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
     loadProjects: () => (projects ?? []).map((project) => ({ ...project, progress: Number.parseFloat(project.progress) || 0, money: project.agreedAmount ?? project.outstandingAmount ?? 0, archived: project.status === "past", paymentState: project.financialType === "nonBillable" ? "not-applicable" as const : project.paymentState ?? (project.agreedAmount !== undefined ? "unpaid" as const : (project.outstandingAmount ?? 0) > 0 ? "unpaid" as const : "paid" as const) })),
     outputState: () => selectedProjectId && selectedOutputs === undefined ? { kind: "loading" as const } : { kind: "ready" as const },
     loadOutputs: () => selectedOutputs ?? [],
+    loadWorkspaceOutputs: () => workspaceOutputs ?? [],
     async createProject(input) { try { return { ok: true as const, value: await createProject(input) }; } catch (error) { return { ok: false as const, error: { kind: "invalid" as const, message: error instanceof Error ? error.message : "Project could not be created." } }; } },
     async createGroup(input) { try { return { ok: true as const, value: await createGroup(input) }; } catch (error) { return { ok: false as const, error: { kind: "invalid" as const, message: error instanceof Error ? error.message : "Project Group could not be created." } }; } },
     async editGroup(id, input) { try { await editGroup({ id, ...input }); return { ok: true as const, value: undefined }; } catch (error) { return { ok: false as const, error: { kind: "invalid" as const, message: error instanceof Error ? error.message : "Project Group could not be saved." } }; } },
@@ -84,5 +87,5 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
     async addMediaVersion(outputId, input) { try { return { ok: true as const, value: await addMediaVersion({ outputId, ...input }) }; } catch (error) { return cloudWriteError(error, "Media Version could not be added."); } },
     async resolveComment(id) { try { await resolveComment({ id }); return { ok: true as const, value: undefined }; } catch (error) { return cloudWriteError(error, "Comment could not be resolved."); } },
     async deleteProject(id) { try { await deleteProject({ id }); return { ok: true as const, value: undefined }; } catch (error) { return { ok: false as const, error: { kind: "invalid" as const, message: error instanceof Error ? error.message : "Project could not be deleted." } }; } },
-  }), [access, addMediaVersion, addOutput, archiveGroup, archiveProject, clients, createGroup, createProject, deleteProject, editGroup, editOutput, groups, moveProjectStage, outputCounts, projects, resolveComment, selectedOutputs, selectedProjectId, setOutputArchived, setOutputReviewState, setProjectPayment, templates]);
+  }), [access, addMediaVersion, addOutput, archiveGroup, archiveProject, clients, createGroup, createProject, deleteProject, editGroup, editOutput, groups, moveProjectStage, outputCounts, projects, resolveComment, selectedOutputs, selectedProjectId, setOutputArchived, setOutputReviewState, setProjectPayment, templates, workspaceOutputs]);
 }

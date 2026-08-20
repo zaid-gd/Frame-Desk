@@ -6,6 +6,7 @@ export type ProjectOutputPort = {
   loadOutputCounts(): readonly { projectId: string; count: number }[];
   outputState(): { kind: "ready" | "loading" | "error"; message?: string };
   loadOutputs(): readonly ProjectOutput[];
+  loadWorkspaceOutputs(): readonly ProjectOutput[];
   addOutput(input: { name: string }): Promise<ProjectWriteResult<{ id: string }>>;
   editOutput(id: string, input: { name: string }): Promise<ProjectWriteResult>;
   setOutputArchived(id: string, archived: boolean): Promise<ProjectWriteResult>;

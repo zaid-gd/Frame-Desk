@@ -25,6 +25,7 @@ export function createMemoryProjectPort({ clients = [], groups = [], templates =
     },
     outputState: () => ({ kind: "ready" }),
     loadOutputs: () => savedOutputs.filter((output) => output.projectId === selectedProjectId),
+    loadWorkspaceOutputs: () => savedOutputs,
     async createProject(input: NewProjectInput) {
       const template = templates.find(({ id }) => id === input.templateId);
       const client = clients.find(({ id, archived }) => id === input.clientId && !archived);

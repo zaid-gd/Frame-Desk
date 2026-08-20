@@ -9,6 +9,7 @@ import { projectFileEffects, type ProjectFile, type ProjectFilePort } from "../p
 type FileList = { retainedBytes: number; limitBytes: number; files: ProjectFile[] };
 const refs = {
   list: makeFunctionReference<"query", { projectId: string; now: number }, FileList>("relayProjectFiles:list"),
+  workspaceList: makeFunctionReference<"query", { now: number }, ProjectFile[]>("relayProjectFiles:listWorkspace"),
   prepare: makeFunctionReference<"mutation", { projectId: string; fileName: string; mimeType: string; size: number }, { uploadUrl: string; reservationId: Id<"relayUploadReservations"> }>("relayProjectFiles:prepareUpload"),
   finish: makeFunctionReference<"action", { projectId: string; reservationId: Id<"relayUploadReservations">; storageId: Id<"_storage">; fileName: string; mimeType: string; title: string }, { ok: true; id: string } | { ok: false; error: string }>("relayProjectFiles:finishUpload"),
   cancel: makeFunctionReference<"mutation", { reservationId: Id<"relayUploadReservations"> }, null>("relayProjectFiles:cancelUpload"),
@@ -25,19 +26,22 @@ export function useCloudProjectFilePort(enabled: boolean, projectId?: string): P
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);
   const result = useQuery(refs.list, enabled && projectId ? { projectId, now } : "skip");
+  const workspaceResult = useQuery(refs.workspaceList, enabled ? { now } : "skip");
   const prepare = useMutation(refs.prepare);
   const finish = useAction(refs.finish);
   const cancel = useMutation(refs.cancel);
   const sharing = useMutation(refs.sharing);
   const archive = useMutation(refs.archive);
   const remove = useMutation(refs.remove);
-  return useMemo(() => enabled && projectId ? ({
+  return useMemo(() => enabled ? ({
     state: () => ({ kind: result === undefined ? "loading" as const : "ready" as const }),
     files: () => result?.files ?? [],
+    workspaceFiles: () => workspaceResult ?? [],
     usage: () => ({ retainedBytes: result?.retainedBytes ?? 0, limitBytes: result?.limitBytes ?? 200 * 1024 * 1024 }),
     async upload(file, title) {
       let reservationId: Id<"relayUploadReservations"> | undefined;
       try {
+        if (!projectId) return failed(null, "Open a Project before uploading a file.");
         const prepared = await prepare({ projectId, fileName: file.name, mimeType: file.type, size: file.size });
         reservationId = prepared.reservationId;
         const { uploadUrl } = prepared;
@@ -57,5 +61,5 @@ export function useCloudProjectFilePort(enabled: boolean, projectId?: string): P
       return { ok: true as const, value: projectFileEffects(file.size) };
     },
     async permanentlyDelete(id) { try { await remove({ id }); return { ok: true as const, value: undefined }; } catch (error) { return failed(error, "File could not be permanently deleted."); } },
-  }) : null, [archive, cancel, enabled, finish, prepare, projectId, remove, result, sharing]);
+  }) : null, [archive, cancel, enabled, finish, prepare, projectId, remove, result, sharing, workspaceResult]);
 }

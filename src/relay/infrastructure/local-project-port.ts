@@ -36,6 +36,7 @@ export function createLocalProjectPort({ storage, clients, templates, selectedPr
     },
     outputState: () => ({ kind: "ready" }),
     loadOutputs: () => (state().projectOutputs ?? []).filter((output) => output.projectId === selectedProjectId),
+    loadWorkspaceOutputs: () => state().projectOutputs ?? [],
     async createProject(input: NewProjectInput) {
       const current = state();
       const client = clients.find((row) => row.id === input.clientId && !row.archived);

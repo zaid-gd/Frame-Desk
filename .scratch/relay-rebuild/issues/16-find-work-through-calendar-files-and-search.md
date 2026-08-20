@@ -4,10 +4,13 @@
 
 **Blocked by:** 15 — Track payments and report consistent money.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Calendar presents Project, Project Output, review, and payment dates without drag or event writes and exposes a read-only subscribed calendar feed.
-- [ ] Files provides a searchable Workspace-wide index, but create, update, version, visibility, archive, and deletion actions remain in the owning Project.
-- [ ] Global search finds allowed Clients, Projects, Project Groups, Project Outputs, and common actions without exposing archived or restricted data by default.
-- [ ] Calendar, Files, and search work with keyboard-only use, high zoom, reduced motion, stable shell scrolling, and the relevant local, sample, and cloud capabilities.
+- [x] Calendar presents Project, Project Output, review, and payment dates without drag or event writes and exposes a read-only subscribed calendar feed.
+- [x] Files provides a searchable Workspace-wide index, but create, update, version, visibility, archive, and deletion actions remain in the owning Project.
+- [x] Global search finds allowed Clients, Projects, Project Groups, Project Outputs, and common actions without exposing archived or restricted data by default.
+- [x] Calendar, Files, and search work with keyboard-only use, high zoom, reduced motion, stable shell scrolling, and the relevant local, sample, and cloud capabilities.
 
+## Answer
+
+Implemented read-only Workspace Calendar and Files views plus keyboard-first global search. Calendar derives Project, Output, review, and payment dates and exposes signed cloud subscriptions or importable local and sample feeds. Files combines Project files and linked Media Versions without moving write controls out of Projects. Search covers allowed active records and common actions. Focused unit, Convex, and browser tests cover filtering, feed access, keyboard use, reduced motion, zoom, and shell scrolling.

@@ -15,6 +15,7 @@ const modules = import.meta.glob("./**/*.ts");
 const prepareUpload = makeFunctionReference<"mutation">("relayProjectFiles:prepareUpload");
 const finishUpload = makeFunctionReference<"action">("relayProjectFiles:finishUpload");
 const list = makeFunctionReference<"query">("relayProjectFiles:list");
+const listWorkspace = makeFunctionReference<"query", { now: number }, Array<{ id: string; projectId: string; title: string; archived: boolean }>>("relayProjectFiles:listWorkspace");
 const setSharing = makeFunctionReference<"mutation">("relayProjectFiles:setSharing");
 const portalAccess = makeFunctionReference<"query">("relayProjectFiles:portalAccess");
 const portalFiles = makeFunctionReference<"query">("relayProjectFiles:portalFiles");
@@ -48,6 +49,21 @@ async function bindStorage(t: ReturnType<typeof convexTest>, reservationId: Id<"
 }
 
 describe("Relay Project files", () => {
+  test("indexes active Workspace files without archived files or Projects", async () => {
+    const { t, owner } = setup();
+    await seedProject(t);
+    await t.run(async (ctx) => {
+      const activeStorageId = await ctx.storage.store(new Blob(["active"], { type: "text/plain" }));
+      const archivedStorageId = await ctx.storage.store(new Blob(["archived"], { type: "text/plain" }));
+      await ctx.db.insert("relayProjectFiles", { ownerUserId: "owner|files", durableId: "file_active", projectId: "project_files", storageId: activeStorageId, title: "Active brief", fileName: "active.txt", mimeType: "text/plain", size: 6, archived: false, portalVisible: false, allowDownload: false, createdAt: "2026-08-18T00:00:00.000Z" });
+      await ctx.db.insert("relayProjectFiles", { ownerUserId: "owner|files", durableId: "file_archived", projectId: "project_files", storageId: archivedStorageId, title: "Archived brief", fileName: "archived.txt", mimeType: "text/plain", size: 8, archived: true, portalVisible: false, allowDownload: false, createdAt: "2026-08-18T00:00:00.000Z" });
+    });
+
+    await expect(owner.query(listWorkspace, { now: Date.parse("2026-08-20T00:00:00.000Z") })).resolves.toEqual([
+      expect.objectContaining({ id: "file_active", projectId: "project_files", title: "Active brief", archived: false }),
+    ]);
+  });
+
   test.each([
     ["brief.pdf", "application/pdf"], ["notes.txt", "text/plain"], ["readme.md", "text/markdown"],
     ["photo.jpg", "image/jpeg"], ["photo.png", "image/png"], ["photo.webp", "image/webp"],

@@ -17,7 +17,7 @@ export const list = query({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
     const needle = args.search?.trim().toLocaleLowerCase() ?? "";
-    const rows = await ctx.db.query("relayClients").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
+    const rows = await ctx.db.query("relayClients").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     return rows.filter((row) => (args.includeArchived || !row.archived) && (!needle || [row.name, row.company, row.contactName, row.email, row.phone, row.notes].some((value) => value.toLocaleLowerCase().includes(needle))))
       .map(({ durableId, name, company, contactName, email, phone, notes, archived }) => ({ id: durableId, name, company, contactName, email, phone, notes, archived }));
   },

@@ -132,7 +132,7 @@ describe("Project files public interface", () => {
     const projectPort = createMemoryProjectPort({ clients: [{ id: "client_acme", name: "Acme", archived: false }], projects: [project] });
     const uploaded: File[] = [];
     const filePort: ProjectFilePort = {
-      state: () => ({ kind: "ready" }), files: () => [], usage: () => ({ retainedBytes: 0, limitBytes: 200 * 1024 * 1024 }),
+      state: () => ({ kind: "ready" }), files: () => [], workspaceFiles: () => [], usage: () => ({ retainedBytes: 0, limitBytes: 200 * 1024 * 1024 }),
       async upload(file) { uploaded.push(file); return { ok: true, value: { id: "file_one" } }; },
       async setSharing() { return { ok: true, value: undefined }; }, async setArchived() { return { ok: true, value: undefined }; },
       async deletionImpact() { return { ok: true, value: { archiveEffect: "Archive keeps the bytes.", deleteEffect: "Delete frees the bytes." } }; },

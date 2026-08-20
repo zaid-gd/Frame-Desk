@@ -36,8 +36,8 @@ export const listGroups = query({
   handler: async (ctx, args) => {
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
-    const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
+    const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     return groups.filter((group) => args.includeArchived || !group.archived).map((group) => {
       const totals = deriveProjectGroupTotals(projects.map((project) => ({ projectGroupId: project.projectGroupId, progress: Number.parseFloat(project.progress) || 0, money: project.agreedAmount ?? project.outstandingAmount ?? 0 })), group.durableId);
       return { id: group.durableId, name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes, archived: group.archived, ...totals };
@@ -182,7 +182,7 @@ export const listProjects = query({
   handler: async (ctx) => {
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     return projects.flatMap((project) => {
       if (!project.workflowSetup || !project.financialType) return [];
       const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;

@@ -355,3 +355,32 @@
 .portalFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .portalPreview { border: 1px solid var(--app-border); border-radius: 12px; background: var(--app-soft-panel); padding: 16px; }
 @media (max-width: 700px) { .portalFields { grid-template-columns: 1fr; } }
+
+.globalSearch { position: relative; width: min(42rem, 58vw); }
+.globalSearch .search { width: 100%; }
+.searchResults { position: absolute; z-index: 50; top: calc(100% + 7px); inset-inline: 0; max-height: min(30rem, calc(100dvh - 6rem)); overflow-y: auto; border: 1px solid var(--relay-border); background: var(--relay-card); box-shadow: 0 18px 48px rgb(0 0 0 / 24%); }
+.searchResults > p { margin: 0; padding: 10px 13px; color: var(--relay-muted); font-size: 12px; }
+.searchResults ul, .calendarList, .fileIndex { margin: 0; padding: 0; list-style: none; }
+.searchResults a { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 13px; border-top: 1px solid var(--relay-border); color: var(--relay-ink); text-decoration: none; }
+.searchResults a span, .calendarList a, .fileIndex li > span { display: grid; min-width: 0; gap: 2px; }
+.searchResults small, .calendarList small, .fileIndex small { color: var(--relay-muted); }
+.discoveryPage { min-width: 0; }
+.discoveryPage .cardTitle { align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.discoveryPage .secondaryButton { color: var(--relay-ink); text-decoration: none; }
+.calendarList { padding: 0 22px 18px; }
+.calendarList li { display: grid; grid-template-columns: minmax(8rem, .7fr) minmax(6rem, .55fr) minmax(12rem, 3fr); align-items: center; gap: 16px; min-height: 60px; border-top: 1px solid var(--relay-border); }
+.calendarList time, .calendarList > li > span { color: var(--relay-muted); font-size: 12px; }
+.calendarList > li > span { text-transform: capitalize; }
+.fileSearch { display: grid; gap: 6px; margin: 18px 22px 0; color: var(--relay-muted); font-size: 12px; }
+.fileSearch input { width: min(100%, 34rem); min-height: 40px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 8px 10px; font: inherit; }
+.fileIndex { padding: 0 22px 18px; }
+.fileIndex li { display: flex; min-height: 64px; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--relay-border); }
+.fileIndex li > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px; }
+.fileIndex a { color: var(--relay-action); }
+
+@media (max-width: 700px) {
+  .globalSearch { width: calc(100vw - 7rem); }
+  .calendarList li { grid-template-columns: 1fr; gap: 5px; padding: 12px 0; }
+  .fileIndex li { align-items: flex-start; flex-direction: column; padding: 13px 0; }
+  .fileIndex li > div { justify-content: flex-start; }
+}

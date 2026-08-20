@@ -36,8 +36,12 @@ import { createSampleSalaryPlanPort } from "../infrastructure/sample-salary-plan
 import { createMemorySalaryPlanPort } from "../infrastructure/memory-salary-plan-port";
 import { createSalaryPlanController } from "../application/salary-plan-controller";
 import { useCloudProjectFilePort } from "../infrastructure/cloud-project-file-port";
+import { useCloudCalendarFeedUrl } from "../infrastructure/cloud-calendar-feed-port";
 import { useCloudClientPortalPort } from "../infrastructure/cloud-client-portal-port";
 import { RelayExperience } from "../presentation/relay-experience";
+import { createWorkspaceDiscoveryController } from "../application/workspace-discovery-controller";
+import { buildWorkspaceCalendarEvents } from "../domain/workspace-calendar";
+import { serializeCalendarFeed } from "../domain/calendar-feed";
 
 const THEME_KEY = "relay:theme:v1";
 const SIDEBAR_KEY = "relay:sidebar-collapsed:v1";
@@ -142,6 +146,8 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" && projectAccess.role !== "viewer", access: projectAccess, salaryPlans: salaryPlanController.model.plans });
   const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
   const projectFiles = useCloudProjectFilePort(mode === "cloud" && Boolean(auth.isSignedIn), projectId);
+  const appOrigin = hydrated ? window.location.origin : null;
+  const cloudCalendarFeedUrl = useCloudCalendarFeedUrl(mode === "cloud" && Boolean(auth.isSignedIn), appOrigin);
   const selectedProject = selectedProjectPort.loadProjects().find(({ id }) => id === projectId) ?? null;
   const cloudClientPortalPort = useCloudClientPortalPort(
     mode === "cloud" && Boolean(auth.isSignedIn),
@@ -165,6 +171,17 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     outputCounts: selectedProjectPort.loadOutputCounts(),
     currencyCode: "USD",
     access: { canViewMoney: selectedClientPort.canViewMoney(), canViewSalary: mode !== "cloud" || projectAccess.role === "owner" },
+  });
+  const workspaceOutputs = selectedProjectPort.loadWorkspaceOutputs();
+  const localCalendarEvents = buildWorkspaceCalendarEvents({ projects: selectedProjectPort.loadProjects(), outputs: workspaceOutputs });
+  const localCalendarFeedUrl = `data:text/calendar;charset=utf-8,${encodeURIComponent(serializeCalendarFeed({ name: "Relay commitments", events: localCalendarEvents.map(({ id, date, title, href }) => ({ id, date, title, url: appOrigin ? new URL(href, appOrigin).href : href })) }))}`;
+  const discoveryController = createWorkspaceDiscoveryController({
+    clients: selectedClientPort.loadClients(),
+    projects: selectedProjectPort.loadProjects(),
+    groups: selectedProjectPort.loadGroups(),
+    outputs: workspaceOutputs,
+    files: projectFiles?.workspaceFiles() ?? [],
+    calendarFeedUrl: mode === "cloud" ? cloudCalendarFeedUrl : localCalendarFeedUrl,
   });
   const clientMoney = workspaceController.model.dashboard.money?.clientTotals.reduce<Record<string, { earned: number; collected: number; outstanding: number }>>((result, client) => { result[client.clientId] = client; return result; }, {}) ?? {};
   const clientController = createClientController({ port: clientViewPort, currencyCode: workspaceController.model.currencyCode, moneyByClient: clientMoney });
@@ -244,6 +261,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         outputs: projectOutputController,
         files: projectFiles,
         portal: clientPortalController,
+        discovery: discoveryController,
         projectId,
       }}
       onChooseMode={chooseMode}

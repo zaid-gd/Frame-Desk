@@ -6,6 +6,7 @@ import { relayStorageUsage } from "./relayStorageUsage";
 import type { Id } from "./_generated/dataModel";
 import { createFileAccessUrl, createUploadUrl } from "./relayProjectFileAccess";
 import { env } from "./_generated/server";
+import { relayAccessForCurrentUser } from "./relayAccess";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const FREE_WORKSPACE_BYTES = 200 * 1024 * 1024;
@@ -19,7 +20,7 @@ const FILE_POLICIES = {
   "image/webp": { extensions: ["webp"], renderMode: "image", copyable: false },
 } as const;
 type SafeMimeType = keyof typeof FILE_POLICIES;
-const projectFileValidator = v.object({ id: v.string(), title: v.string(), fileName: v.string(), mimeType: v.string(), size: v.number(), archived: v.boolean(), portalVisible: v.boolean(), allowDownload: v.boolean(), accessUrl: v.union(v.string(), v.null()) });
+const projectFileValidator = v.object({ id: v.string(), projectId: v.string(), title: v.string(), fileName: v.string(), mimeType: v.string(), size: v.number(), archived: v.boolean(), portalVisible: v.boolean(), allowDownload: v.boolean(), accessUrl: v.union(v.string(), v.null()) });
 
 async function ownerId(ctx: QueryCtx | MutationCtx) {
   const identity = await ctx.auth.getUserIdentity();
@@ -268,7 +269,31 @@ export const list = query({
     const ownerUserId = await ownerId(ctx);
     await requireProject(ctx, ownerUserId, args.projectId);
     const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(500);
-    return { retainedBytes: await retainedBytes(ctx, ownerUserId), limitBytes: FREE_WORKSPACE_BYTES, files: await Promise.all(files.map(async (file) => ({ id: file.durableId, title: file.title, fileName: file.fileName, mimeType: file.mimeType, size: file.size, archived: file.archived, portalVisible: file.portalVisible, allowDownload: file.allowDownload, accessUrl: await createFileAccessUrl({ fileId: file.durableId, ownerUserId }, args.now) }))) };
+    return { retainedBytes: await retainedBytes(ctx, ownerUserId), limitBytes: FREE_WORKSPACE_BYTES, files: await Promise.all(files.map(async (file) => ({ id: file.durableId, projectId: file.projectId, title: file.title, fileName: file.fileName, mimeType: file.mimeType, size: file.size, archived: file.archived, portalVisible: file.portalVisible, allowDownload: file.allowDownload, accessUrl: await createFileAccessUrl({ fileId: file.durableId, ownerUserId }, args.now) }))) };
+  },
+});
+
+export const listWorkspace = query({
+  args: { now: v.number() },
+  returns: v.array(projectFileValidator),
+  handler: async (ctx, args) => {
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    const activeProjectIds = new Set(projects.filter(({ status }) => status !== "past").map(({ id }) => id));
+    const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    return Promise.all(files.filter((file) => !file.archived && activeProjectIds.has(file.projectId)).map(async (file) => ({
+      id: file.durableId,
+      projectId: file.projectId,
+      title: file.title,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      size: file.size,
+      archived: false,
+      portalVisible: file.portalVisible,
+      allowDownload: file.allowDownload,
+      accessUrl: await createFileAccessUrl({ fileId: file.durableId, ownerUserId: access.ownerUserId }, args.now),
+    })));
   },
 });
 

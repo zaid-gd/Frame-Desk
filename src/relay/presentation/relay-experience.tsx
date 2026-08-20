@@ -41,6 +41,7 @@ import type { SalaryPlanController } from "../application/salary-plan-controller
 import type { ProjectOutputController } from "../application/project-output-controller";
 import type { ClientPortalController } from "../application/client-portal-controller";
 import type { ProjectFilePort } from "../ports/project-file-port";
+import type { WorkspaceDiscoveryController } from "../application/workspace-discovery-controller";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import type { SalaryPlanInput } from "../domain/salary-plan";
 import { buildWorkspaceReport, createReportPeriod } from "../domain/reporting";
@@ -86,6 +87,7 @@ export type RelayExperienceProps = {
     outputs: ProjectOutputController;
     files: ProjectFilePort | null;
     portal?: ClientPortalController;
+    discovery: WorkspaceDiscoveryController;
     projectId?: string;
   };
   onChooseMode(mode: "local" | "sample"): void;
@@ -154,11 +156,16 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, salaryPlans, outputs, files, portal, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, salaryPlans, outputs, files, portal, discovery, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
+  const shellSearchParams = useSearchParams();
   const readOnly = mode === "sample";
   const person = identity ?? workspace.fallbackIdentity;
+
+  useEffect(() => {
+    if (section === "projects" && shellSearchParams.get("new") === "true" && !readOnly) setShowNewProject(true);
+  }, [readOnly, section, shellSearchParams]);
 
   return (
     <div className={styles.relay} data-theme={theme}>
@@ -196,7 +203,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
           </DropdownMenu>
         </aside>
         <header className={`${styles.topbar} ${collapsed ? styles.topbarCollapsed : ""}`}>
-          <div className={styles.search}><Search size={18} aria-hidden="true" /><input aria-label="Search projects and actions" placeholder="Search projects and actions" /></div>
+          <WorkspaceSearch controller={discovery} />
           <button className={`${styles.iconButton} ${styles.themeButton}`} type="button" aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`} onClick={onToggleTheme}>
             {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
           </button>
@@ -206,12 +213,67 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "calendar" ? <CalendarPage controller={discovery} /> : section === "files" ? <FilesPage controller={discovery} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
       </div>
     </div>
+  );
+}
+
+export function WorkspaceSearch({ controller }: { controller: WorkspaceDiscoveryController }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const results = controller.actions.search(query);
+
+  useEffect(() => {
+    function focusSearch(event: KeyboardEvent) {
+      const target = event.target;
+      const editing = target instanceof HTMLElement && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      if (((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "k") || (!editing && event.key === "/")) {
+        event.preventDefault();
+        inputRef.current?.focus();
+        setOpen(true);
+      }
+      if (event.key === "Escape" && document.activeElement === inputRef.current) {
+        setQuery("");
+        setOpen(false);
+        inputRef.current?.blur();
+      }
+    }
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, []);
+
+  return (
+    <div className={styles.globalSearch}>
+      <div className={styles.search}><Search size={18} aria-hidden="true" /><input ref={inputRef} type="search" aria-label="Search Workspace" aria-expanded={open} aria-controls="relay-search-results" placeholder="Search Clients, Projects, Outputs, and actions" value={query} onFocus={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); }} /></div>
+      {open ? <div className={styles.searchResults} id="relay-search-results" aria-label="Workspace search results"><p>{query ? `${results.length} result${results.length === 1 ? "" : "s"}` : "Common actions"}</p>{results.length ? <ul>{results.map((result) => <li key={`${result.kind}:${result.id}`}><Link href={result.href}><span><strong>{result.title}</strong><small>{result.detail}</small></span><ArrowRight size={16} aria-hidden="true" /></Link></li>)}</ul> : <p role="status">No allowed Workspace records found.</p>}</div> : null}
+    </div>
+  );
+}
+
+export function CalendarPage({ controller }: { controller: WorkspaceDiscoveryController }) {
+  const { events, feedUrl } = controller.model.calendar;
+  return (
+    <section className={`${styles.card} ${styles.discoveryPage}`} aria-labelledby="calendar-index-title">
+      <div className={styles.cardTitle}><h2 id="calendar-index-title">Calendar</h2>{feedUrl ? <a className={styles.secondaryButton} href={feedUrl} {...(feedUrl.startsWith("data:") ? { download: "relay-calendar.ics" } : {})}>{feedUrl.startsWith("data:") ? "Download calendar" : "Subscribe to calendar"}</a> : <span>Calendar subscription is available in a signed-in cloud Workspace.</span>}</div>
+      {events.length ? <ol className={styles.calendarList}>{events.map((event) => <li key={event.id}><time dateTime={event.date}>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${event.date}T00:00:00Z`))}</time><span data-kind={event.kind}>{event.kind.replace("-", " ")}</span><Link href={event.href}><strong>{event.title}</strong><small>{event.projectName}</small></Link></li>)}</ol> : <p role="status">No active Workspace dates to show.</p>}
+    </section>
+  );
+}
+
+export function FilesPage({ controller }: { controller: WorkspaceDiscoveryController }) {
+  const [query, setQuery] = useState("");
+  const files = controller.actions.searchFiles(query);
+  return (
+    <section className={`${styles.card} ${styles.discoveryPage}`} aria-labelledby="workspace-files-title">
+      <div className={styles.cardTitle}><h2 id="workspace-files-title">Workspace Files</h2></div>
+      <label className={styles.fileSearch}>Search Workspace Files<input type="search" aria-label="Search Workspace Files" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="File, version, or Project" /></label>
+      {files.length ? <ul className={styles.fileIndex}>{files.map((file) => <li key={`${file.kind}:${file.id}`}><span><strong>{file.title}</strong><small>{file.projectName} · {file.detail}</small></span><div>{file.openUrl ? <a href={file.openUrl} target="_blank" rel="noreferrer">Open</a> : null}<Link href={file.ownerUrl}>Manage in {file.projectName}</Link></div></li>)}</ul> : <p role="status">No Workspace files match this search.</p>}
+    </section>
   );
 }
 
@@ -520,7 +582,7 @@ export function ProjectPage({ controller, outputController, filePort = null, por
   const headerFacts = <dl className={styles.projectFacts}><div><dt>Stage</dt><dd>{project.stage}</dd></div><div><dt>Client</dt><dd>{client}</dd></div><div><dt>Due date</dt><dd>{project.dueDate}</dd></div><div><dt>Lead</dt><dd>{project.lead}</dd></div><div><dt>Assignees</dt><dd>{project.assignees.length ? project.assignees.join(", ") : "Unassigned"}</dd></div></dl>;
   return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>
      <ContentSection title="Overview"><p>Financial type: {project.financialType}. Workflow: {project.workflowSetup.templateName}.</p>{project.financialType === "projectValue" ? <div className={styles.paymentSummary}><div><strong>Agreed amount</strong><span>{project.money.toLocaleString("en-US")}</span></div><div><strong>Payment</strong><span>{project.paymentState === "paid" ? `Paid${project.paidAt ? ` · ${project.paidAt.slice(0, 10)}` : ""}` : "Unpaid"}</span></div>{controller.model.canMarkPayments && !readOnly ? <button type="button" onClick={() => void setPayment(project.paymentState !== "paid")}>{project.paymentState === "paid" ? "Mark unpaid" : "Mark paid"}</button> : null}</div> : <p>Salary Plan Projects earn through their Salary Plan and do not store a separate Project amount.</p>}</ContentSection>
-    <ContentSection title="Outputs and Versions">
+    <ContentSection id="outputs" title="Outputs and Versions">
       <div className={styles.projectOutputs}>
         {!readOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void outputForm.handleSubmit(); }}><outputForm.Field name="name">{(field) => <label>New Project Output name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</outputForm.Field><button type="submit" className={styles.primaryButton}>Add Project Output</button></form> : null}
         {notice ? <p role="status">{notice}</p> : null}
@@ -529,7 +591,7 @@ export function ProjectPage({ controller, outputController, filePort = null, por
       </div>
     </ContentSection>
     <ContentSection title="Client Review">{portalController ? <ClientPortalEditor controller={portalController} onChanged={changed} /> : <p>Client Portals are available for signed-in cloud Workspaces.</p>}</ContentSection>
-    <ContentSection title="Files and Links">{filePort ? <ProjectFiles port={filePort} onChanged={changed} /> : <p>Safe Project file uploads are available in signed-in cloud Workspaces.</p>}</ContentSection>
+    <ContentSection id="files" title="Files and Links">{filePort ? <ProjectFiles port={filePort} onChanged={changed} /> : <p>Safe Project file uploads are available in signed-in cloud Workspaces.</p>}</ContentSection>
     <ContentSection title="Activity"><p>Activity will stay attached to this Project as its work grows.</p></ContentSection>
   </PageContent></WorkspacePage>;
 }
@@ -632,9 +694,10 @@ function ProjectOutputEditor({ output, controller, readOnly, onChanged }: { outp
 const blankClient: ClientInput = { name: "", company: "", contactName: "", email: "", phone: "", notes: "" };
 
 function ClientsPage({ controller, readOnly, onChanged }: { controller: ClientController; readOnly: boolean; onChanged(): void }) {
+  const clientParam = useSearchParams().get("client");
   const [query, setQuery] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(clientParam);
   const [draft, setDraft] = useState<ClientInput>(blankClient);
   const [editing, setEditing] = useState<string | null>(null);
   const [notice, setNotice] = useState("");

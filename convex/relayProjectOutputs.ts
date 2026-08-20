@@ -62,6 +62,37 @@ export const listOutputs = query({
   },
 });
 
+export const listWorkspaceOutputs = query({
+  args: {},
+  returns: v.array(relayProjectOutputValidator),
+  handler: async (ctx) => {
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    const activeProjectIds = new Set(projects.filter(({ status }) => status !== "past").map(({ id }) => id));
+    const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    const versions = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_outputId_and_number", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    return outputs.filter((output) => !output.archived && activeProjectIds.has(output.projectId)).map((output) => ({
+      id: output.durableId,
+      projectId: output.projectId,
+      name: output.name,
+      reviewState: output.reviewState,
+      archived: false,
+      roleId: output.roleId,
+      relativeDeadlineDays: output.relativeDeadlineDays,
+      currentVersionId: output.currentVersionId,
+      unresolvedPreviousComments: 0,
+      versions: versions.filter(({ outputId }) => outputId === output.durableId).sort((left, right) => left.number - right.number).map((version) => ({
+        id: version.durableId,
+        number: version.number,
+        source: { provider: version.provider, providerId: version.providerId ?? null, url: version.normalizedUrl },
+        addedAt: version.addedAt,
+        comments: [],
+      })),
+    }));
+  },
+});
+
 export const listOutputCounts = query({
   args: {},
   returns: v.array(projectOutputCountValidator),
