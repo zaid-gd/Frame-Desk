@@ -9,7 +9,7 @@ function validatePublish(input: ClientPortalPublishInput, outputIds: ReadonlySet
   return null;
 }
 
-export function createClientPortalController({ port }: { port: ClientPortalPort }) {
+export function createClientPortalController({ port, onPortalOpened }: { port: ClientPortalPort; onPortalOpened?: () => void }) {
   return {
     actions: {
       view() {
@@ -48,6 +48,7 @@ export function createClientPortalController({ port }: { port: ClientPortalPort 
       },
       async open() {
         const result = await port.setOpen(true);
+        if (result.ok) onPortalOpened?.();
         return result.ok ? { ok: true as const, message: "Client Portal opened." } : { ok: false as const, kind: result.error.kind, message: result.error.message };
       },
       async close() {

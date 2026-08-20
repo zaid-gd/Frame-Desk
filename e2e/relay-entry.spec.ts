@@ -18,6 +18,7 @@ test.beforeEach(async ({ page }) => {
     window.localStorage.removeItem("relay:local-workspace:v2");
     window.localStorage.removeItem("relay:theme:v1");
     window.localStorage.removeItem("relay:sidebar-collapsed:v1");
+    window.localStorage.setItem("relay:analytics:local:v1", "disabled");
   });
   await page.reload();
 });
@@ -30,6 +31,17 @@ test("offers Local Mode, account creation, and Sample Workspace before Sign In",
   const sampleBox = await page.getByRole("button", { name: "Open Sample Workspace" }).boundingBox();
   const signInBox = await page.getByRole("button", { name: "Sign in" }).boundingBox();
   expect(signInBox?.y ?? 0).toBeGreaterThan(sampleBox?.y ?? 0);
+});
+
+test("asks before Local Mode analytics and keeps work available when declined", async ({ page }) => {
+  await page.evaluate(() => localStorage.removeItem("relay:analytics:local:v1"));
+  await page.reload();
+  await page.getByRole("button", { name: "Use Local Mode" }).click();
+  await expect(page.getByRole("heading", { name: "Help improve Relay?" })).toBeVisible();
+  await page.getByRole("button", { name: "Continue without analytics" }).click();
+  await expect(page).toHaveURL(/\/relay\/dashboard$/);
+  await page.getByRole("link", { name: "Settings" }).click();
+  await expect(page.getByRole("checkbox", { name: "Share product analytics" })).not.toBeChecked();
 });
 
 test("keeps Local Mode across reloads and warns about browser storage", async ({ page }) => {

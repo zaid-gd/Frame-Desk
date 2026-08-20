@@ -34,7 +34,7 @@ export function useCloudProjectFilePort(enabled: boolean, projectId?: string): P
   const archive = useMutation(refs.archive);
   const remove = useMutation(refs.remove);
   return useMemo(() => enabled ? ({
-    state: () => ({ kind: result === undefined ? "loading" as const : "ready" as const }),
+    state: () => ({ kind: workspaceResult === undefined || (projectId && result === undefined) ? "loading" as const : "ready" as const }),
     files: () => result?.files ?? [],
     workspaceFiles: () => workspaceResult ?? [],
     usage: () => ({ retainedBytes: result?.retainedBytes ?? 0, limitBytes: result?.limitBytes ?? 200 * 1024 * 1024 }),

@@ -45,6 +45,9 @@ import { serializeCalendarFeed } from "../domain/calendar-feed";
 import { buildTeamAccess } from "../domain/team-access";
 import { useCloudTeamAccessPort } from "../infrastructure/cloud-team-access-port";
 import { createTeamAccessController } from "../application/team-access-controller";
+import { createTelemetryBoundary } from "../domain/telemetry";
+import { createBrowserTelemetryPreferences, sendBrowserTelemetry } from "../infrastructure/browser-telemetry";
+import { useWorkspaceTelemetry } from "../infrastructure/use-workspace-telemetry";
 
 const THEME_KEY = "relay:theme:v1";
 const SIDEBAR_KEY = "relay:sidebar-collapsed:v1";
@@ -76,6 +79,8 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [collapsed, setCollapsed] = useState(false);
   const [, setWorkspaceVersion] = useState(0);
+  const [privacyVersion, setPrivacyVersion] = useState(0);
+  const [showLocalConsent, setShowLocalConsent] = useState(false);
 
   useEffect(() => {
     setHydrated(true);
@@ -95,6 +100,9 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   );
   const entryController = createEntryController({ entryPort, session: sessionFromAuth(auth) });
   const mode = entryController.model.mode ?? "local";
+  const preferences = useMemo(() => hydrated ? createBrowserTelemetryPreferences(window.localStorage) : null, [hydrated, privacyVersion]);
+  const analyticsEnabled = preferences?.analyticsEnabled(mode) ?? false;
+  const telemetry = useMemo(() => createTelemetryBoundary({ analyticsEnabled, send: sendBrowserTelemetry }), [analyticsEnabled]);
   const cloudPort = useCloudWorkspacePort(mode === "cloud" && Boolean(auth.isSignedIn));
   const teamAccess = useCloudTeamAccessPort(mode === "cloud" && Boolean(auth.isSignedIn));
   const teamController = createTeamAccessController(teamAccess);
@@ -162,7 +170,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     selectedProject ? { id: selectedProject.id, name: selectedProject.name, stage: selectedProject.stage, progress: selectedProject.progress, dueDate: selectedProject.dueDate, completedAt: selectedProject.completedAt } : null,
     selectedProjectPort.loadOutputs(),
   );
-  const clientPortalController = cloudClientPortalPort ? createClientPortalController({ port: cloudClientPortalPort }) : undefined;
+  const clientPortalController = cloudClientPortalPort ? createClientPortalController({ port: cloudClientPortalPort, onPortalOpened: () => { void telemetry.track({ name: "client_portal_opened", count: 1 }); } }) : undefined;
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
   const firstTemplate = templateController.actions.list().find(({ id }) => id === teamWorkspace?.defaultWorkflowTemplateId) ?? templateController.actions.list()[0];
   const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
@@ -199,14 +207,51 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     [hydrated],
   );
   const backupController = createWorkspaceBackupController({ mode, backupPort: mode === "cloud" ? cloudBackupPort : localBackupPort });
+  const measures = useMemo(() => ({
+    projects: selectedProjectPort.loadProjects().length,
+    delivered: selectedProjectPort.loadProjects().filter(({ completedAt }) => completedAt).length,
+    comments: workspaceOutputs.flatMap(({ versions }) => versions).flatMap(({ comments }) => comments).length,
+    plans: selectedSalaryPlanPort.loadPlans().length,
+    batches: selectedSalaryPlanPort.loadBatches().length,
+    storage: projectFiles?.workspaceFiles().reduce((total, file) => total + file.size, 0) ?? 0,
+  }), [projectFiles, selectedProjectPort, selectedSalaryPlanPort, workspaceOutputs]);
+  useWorkspaceTelemetry({
+    analyticsEnabled,
+    hydrated,
+    mode,
+    ready: hydrated && projectController.model.projectState.kind === "ready" && salaryPlanController.model.planState.kind === "ready" && (mode !== "cloud" || projectFiles?.state().kind === "ready"),
+    workspaceOpen: entryController.model.state === "workspace",
+    measures,
+    telemetry,
+  });
 
   useEffect(() => {
     if (hydrated && !section && entryController.model.state === "workspace") router.replace("/relay/dashboard");
   }, [entryController.model.state, hydrated, router, section]);
 
   function chooseMode(nextMode: "local" | "sample") {
+    if (nextMode === "local" && preferences?.localConsent() === "unknown") {
+      setShowLocalConsent(true);
+      return;
+    }
     entryController.actions.chooseMode(nextMode);
+    if (nextMode === "local") void telemetry.track({ name: "activation", milestone: "local_workspace_opened" });
     router.push("/relay/dashboard");
+  }
+
+  function chooseLocalConsent(enabled: boolean) {
+    preferences?.setLocalConsent(enabled);
+    if (enabled) void createTelemetryBoundary({ analyticsEnabled: true, send: sendBrowserTelemetry }).track({ name: "activation", milestone: "local_workspace_opened" });
+    setPrivacyVersion((version) => version + 1);
+    setShowLocalConsent(false);
+    entryController.actions.chooseMode("local");
+    router.push("/relay/dashboard");
+  }
+
+  function setOptionalAnalytics(enabled: boolean) {
+    if (mode === "local") preferences?.setLocalConsent(enabled);
+    if (mode === "cloud") preferences?.setCloudAnalytics(enabled);
+    setPrivacyVersion((version) => version + 1);
   }
 
   function startAccount(action: "sign-up" | "sign-in") {
@@ -263,6 +308,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
       section={section}
       entry={entryController.model}
       entryMessage={entryMessage}
+      privacy={{ analyticsEnabled, showLocalConsent }}
       shell={{
         collapsed,
         theme,
@@ -283,6 +329,8 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         projectId,
       }}
       onChooseMode={chooseMode}
+      onChooseLocalConsent={chooseLocalConsent}
+      onSetOptionalAnalytics={setOptionalAnalytics}
       onStartAccount={startAccount}
       onToggleSidebar={toggleSidebar}
       onToggleTheme={toggleTheme}

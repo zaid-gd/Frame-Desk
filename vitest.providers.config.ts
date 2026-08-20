@@ -13,6 +13,7 @@ export default defineConfig({
       "src/app/providers.test.tsx",
       "src/app/relay-global-surfaces.test.tsx",
       "src/app/api/access/route.test.ts",
+      "src/app/api/relay-telemetry/route.test.ts",
     ],
   },
 });

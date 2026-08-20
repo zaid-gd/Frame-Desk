@@ -35,7 +35,7 @@ export default function PrivacyPolicyRoute() {
         {
           title: "How We Use Information",
           body: (
-            <p>We use information to run the app, save your workspace, authenticate users, sync data when enabled, personalize profile and organization pages, support integrations you configure, maintain security, diagnose errors, prevent abuse, and respond to support or privacy requests.</p>
+            <><p>We use information to run the app, save your workspace, authenticate users, sync data when enabled, personalize profile and organization pages, support integrations you configure, maintain security, diagnose errors, prevent abuse, and respond to support or privacy requests.</p><p>Relay asks Local Mode users before sending optional product analytics. Signed-in users can turn optional analytics off in Workspace settings. These reports measure feature use and storage totals. They exclude Client names, Project names, Comments, file names, links, portal tokens, and money. Essential security and error logs remain active and use the same work-data limits.</p></>
           )
         },
         {

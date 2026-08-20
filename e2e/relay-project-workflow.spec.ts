@@ -24,6 +24,7 @@ async function openBoard(page: Page) {
       portalDefaults: { enabled: false, showDates: true, showNotes: false, allowComments: true },
     };
     localStorage.setItem("relay:entry-mode:v1", "local");
+    localStorage.setItem("relay:analytics:local:v1", "disabled");
     localStorage.setItem("relay:local-workspace:v2", JSON.stringify({
       clients: [{ id: "client_acme", name: "Acme", company: "", contactName: "", email: "", phone: "", notes: "", archived: false }],
       projects: [{ id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Planned", tone: "planned", due: "2026-09-12", progress: "0%", status: "active", outstandingAmount: 1200, workflowTemplateId: "template_default", workflowStageId: workflowStages[0].id, workflowSetup, financialType: "projectValue", lead: "Owner", assignees: [] }],

@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page).toHaveURL(/\/relay$/);
   }
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => { localStorage.clear(); localStorage.setItem("relay:analytics:local:v1", "disabled"); });
   await page.reload();
 });
 
