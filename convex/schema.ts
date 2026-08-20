@@ -21,6 +21,45 @@ import { projectGroupInputValidator, relayClientInputValidator, relayProjectVali
 import { mediaProviderValidator, outputReviewStateValidator } from "./relayWorkspaceValidators";
 
 export default defineSchema({
+  relayTeamWorkspaces: defineTable({
+    dataOwnerUserId: v.string(),
+    currentOwnerUserId: v.string(),
+    name: v.string(),
+    currencyCode: v.string(),
+    timeZone: v.string(),
+    defaultWorkflowTemplateId: v.string(),
+    editorsCanViewAll: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_dataOwnerUserId", ["dataOwnerUserId"])
+    .index("by_currentOwnerUserId", ["currentOwnerUserId"]),
+
+  relayTeamMembers: defineTable({
+    workspaceId: v.id("relayTeamWorkspaces"),
+    userId: v.string(),
+    email: v.string(),
+    name: v.string(),
+    role: v.union(v.literal("Owner"), v.literal("Editor"), v.literal("Viewer")),
+    status: memberStatusValidator,
+    permissions: v.object({ projects: v.boolean(), reviews: v.boolean(), portals: v.boolean(), finance: v.boolean() }),
+    createdAt: v.string(),
+    joinedAt: v.optional(v.string()),
+  })
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_userId_and_status", ["userId", "status"])
+    .index("by_email_and_status", ["email", "status"])
+    .index("by_workspaceId_and_userId", ["workspaceId", "userId"])
+    .index("by_workspaceId_and_email", ["workspaceId", "email"]),
+
+  relayTeamActivity: defineTable({
+    workspaceId: v.id("relayTeamWorkspaces"),
+    actorUserId: v.string(),
+    actorName: v.string(),
+    kind: v.union(v.literal("member_invited"), v.literal("member_joined"), v.literal("member_role_updated"), v.literal("member_removed"), v.literal("member_left")),
+    message: v.string(),
+    createdAt: v.string(),
+  }).index("by_workspaceId_and_createdAt", ["workspaceId", "createdAt"]),
+
   relayWorkflowTemplates: defineTable({
     ownerUserId: v.string(),
     durableId: v.string(),

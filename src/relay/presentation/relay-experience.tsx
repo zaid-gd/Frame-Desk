@@ -42,6 +42,8 @@ import type { ProjectOutputController } from "../application/project-output-cont
 import type { ClientPortalController } from "../application/client-portal-controller";
 import type { ProjectFilePort } from "../ports/project-file-port";
 import type { WorkspaceDiscoveryController } from "../application/workspace-discovery-controller";
+import type { TeamMemberView } from "../ports/team-access-port";
+import type { TeamAccessController } from "../application/team-access-controller";
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectRecord } from "../domain/project";
 import type { SalaryPlanInput } from "../domain/salary-plan";
 import { buildWorkspaceReport, createReportPeriod } from "../domain/reporting";
@@ -80,6 +82,7 @@ export type RelayExperienceProps = {
     storageWarning?: string;
     workspace: WorkspaceModel;
     backup: WorkspaceBackupController;
+    team: TeamAccessController;
     clients: ClientController;
     templates: WorkflowTemplateController;
     projects: ProjectController;
@@ -95,6 +98,7 @@ export type RelayExperienceProps = {
   onToggleSidebar(): void;
   onToggleTheme(): void;
   onLeaveWorkspace(): Promise<void>;
+  onDeleteAccount(): Promise<void>;
   onRequestNewProject(): Promise<{ ok: boolean; message: string }>;
   onProjectCreated(url: string): void;
   onProjectsChanged(): void;
@@ -139,7 +143,7 @@ export function RelayExperience(props: RelayExperienceProps) {
     );
   }
 
-  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onRequestNewProject={props.onRequestNewProject} onProjectCreated={props.onProjectCreated} onProjectsChanged={props.onProjectsChanged} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} onSalaryPlansChanged={props.onSalaryPlansChanged} />;
+  return <RelayShell section={props.section ?? "dashboard"} {...props.shell} onToggleSidebar={props.onToggleSidebar} onToggleTheme={props.onToggleTheme} onLeaveWorkspace={props.onLeaveWorkspace} onDeleteAccount={props.onDeleteAccount} onRequestNewProject={props.onRequestNewProject} onProjectCreated={props.onProjectCreated} onProjectsChanged={props.onProjectsChanged} onClientsChanged={props.onClientsChanged} onTemplatesChanged={props.onTemplatesChanged} onSalaryPlansChanged={props.onSalaryPlansChanged} />;
 }
 
 function EntryChoice({ icon: Icon, label, detail, onClick }: { icon: typeof Cloud; label: string; detail: string; onClick: () => void }) {
@@ -156,11 +160,12 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, clients, templates, projects, salaryPlans, outputs, files, portal, discovery, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, team, clients, templates, projects, salaryPlans, outputs, files, portal, discovery, collapsed, theme, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onDeleteAccount, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onDeleteAccount(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const shellSearchParams = useSearchParams();
   const readOnly = mode === "sample";
+  const projectReadOnly = readOnly || !projects.model.canManage;
   const person = identity ?? workspace.fallbackIdentity;
 
   useEffect(() => {
@@ -213,7 +218,7 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
             {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
-            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={readOnly} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={readOnly} showNewProject={showNewProject} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={readOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "calendar" ? <CalendarPage controller={discovery} /> : section === "files" ? <FilesPage controller={discovery} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "settings" ? <BackupSettings controller={backup} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
+            {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={projectReadOnly} reviewReadOnly={readOnly || !projects.model.canReview} portalReadOnly={readOnly || !projects.model.canManagePortals} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={projectReadOnly} showNewProject={showNewProject} onNewProject={() => projectReadOnly ? setMessage("You do not have permission to change Projects in this Workspace.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={projectReadOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "calendar" ? <CalendarPage controller={discovery} /> : section === "files" ? <FilesPage controller={discovery} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "team" ? <TeamPage controller={team} /> : section === "settings" ? <WorkspaceSettings controller={team} backup={backup} templates={templates} onDeleteAccount={onDeleteAccount} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>
         {message ? <div className={styles.toast} role="status">{message}</div> : null}
@@ -275,6 +280,71 @@ export function FilesPage({ controller }: { controller: WorkspaceDiscoveryContro
       {files.length ? <ul className={styles.fileIndex}>{files.map((file) => <li key={`${file.kind}:${file.id}`}><span><strong>{file.title}</strong><small>{file.projectName} · {file.detail}</small></span><div>{file.openUrl ? <a href={file.openUrl} target="_blank" rel="noreferrer">Open</a> : null}<Link href={file.ownerUrl}>Manage in {file.projectName}</Link></div></li>)}</ul> : <p role="status">No Workspace files match this search.</p>}
     </section>
   );
+}
+
+export function TeamPage({ controller }: { controller: TeamAccessController }) {
+  const workspace = controller.model.workspace;
+  const [selectedId, setSelectedId] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const [invite, setInvite] = useState({ name: "", email: "", role: "Editor" as "Editor" | "Viewer" });
+  const [notice, setNotice] = useState("");
+  const selected = workspace?.members.find((member) => member.userId === selectedId) ?? workspace?.members[0] ?? null;
+  const owner = controller.model.owner;
+
+  if (controller.model.state.kind === "loading") return <section className={`${styles.card} ${styles.emptyPage}`}><p role="status">Loading Team access.</p></section>;
+  if (!workspace) return <section className={`${styles.card} ${styles.emptyPage}`}><h2>Cloud Team access</h2><p>Team roles and shared Workspace settings become available after you sign in to a cloud Workspace. Local Mode stays solo on this device.</p></section>;
+
+  async function submitInvite(event: React.FormEvent) {
+    event.preventDefault();
+    const result = await controller.actions.invite(invite); setNotice(result.message);
+    if (result.ok) { setInvite({ name: "", email: "", role: "Editor" }); setShowInvite(false); }
+  }
+
+  return (
+    <div className={styles.teamStack}>
+      <section className={`${styles.card} ${styles.metrics}`} aria-label="Team summary">
+        <div className={styles.metric}><span>Seats used</span><strong>{workspace.members.length}/3</strong></div>
+        <div className={styles.metric}><span>Active</span><strong>{workspace.members.filter(({ status }) => status === "active").length}</strong></div>
+        <div className={styles.metric}><span>Invited</span><strong>{workspace.members.filter(({ status }) => status === "invited").length}</strong></div>
+        <div className={styles.metric}><span>Plan</span><strong>Free</strong></div>
+      </section>
+      {owner ? <div className={styles.teamToolbar}><span>One Owner and two invited members are included.</span><button className={styles.primaryButton} type="button" disabled={workspace.members.length >= 3} onClick={() => setShowInvite((value) => !value)}><Plus size={17} />Invite member</button></div> : null}
+      {showInvite ? <form className={`${styles.card} ${styles.inviteForm}`} onSubmit={submitInvite}><label>Name<input required value={invite.name} onChange={(event) => setInvite({ ...invite, name: event.target.value })} /></label><label>Email<input required type="email" value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} /></label><label>Role<select value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value === "Viewer" ? "Viewer" : "Editor" })}><option>Editor</option><option>Viewer</option></select></label><button className={styles.primaryButton} type="submit">Send invite</button></form> : null}
+      <section className={`${styles.card} ${styles.teamGrid}`}>
+        <div className={styles.teamTable}><div className={styles.cardTitle}><h2>Members</h2><span>{workspace.members.length} of 3 seats</span></div><div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Member</th><th>Role</th><th>Status</th></tr></thead><tbody>{workspace.members.map((member) => <tr key={member.id} data-selected={selected?.id === member.id}><td><button type="button" aria-label={`Select ${member.name}`} onClick={() => setSelectedId(member.userId)}><strong>{member.name}</strong><small>{member.email}</small></button></td><td>{member.role}</td><td>{member.status}</td></tr>)}</tbody></table></div></div>
+        <MemberInspector member={selected} owner={owner} currentMemberId={workspace.currentMemberId} controller={controller} onNotice={setNotice} />
+      </section>
+      {notice ? <p className={styles.successNotice} role="status">{notice}</p> : null}
+    </div>
+  );
+}
+
+function MemberInspector({ member, owner, currentMemberId, controller, onNotice }: { member: TeamMemberView | null; owner: boolean; currentMemberId: string; controller: TeamAccessController; onNotice(message: string): void }) {
+  const [role, setRole] = useState<"Editor" | "Viewer">("Editor");
+  const [permissions, setPermissions] = useState({ projects: true, reviews: true, portals: true, finance: false });
+  useEffect(() => {
+    if (!member) return;
+    setRole(member.role === "Viewer" ? "Viewer" : "Editor");
+    setPermissions({ ...member.permissions });
+  }, [member]);
+  if (!member) return <aside className={styles.memberInspector}><p>Select a Team member.</p></aside>;
+  const locked = !owner || member.role === "Owner";
+  const memberId = member.userId;
+  async function save() {
+    onNotice((await controller.actions.updateMember({ memberId, role, permissions })).message);
+  }
+  return <aside className={styles.memberInspector}><div className={styles.cardTitle}><h2>Member access</h2></div><div className={styles.inspectorBody}><div><strong>{member.name}</strong><small>{member.email}</small></div><label>Role<select disabled={locked} value={member.role === "Owner" ? "Owner" : role} onChange={(event) => setRole(event.target.value === "Viewer" ? "Viewer" : "Editor")}><option value="Owner">Owner</option><option value="Editor">Editor</option><option value="Viewer">Viewer</option></select></label><fieldset disabled={locked || role === "Viewer"}><legend>Permissions</legend>{(["projects", "reviews", "portals", "finance"] as const).map((key) => <label key={key}><input type="checkbox" checked={permissions[key]} onChange={(event) => setPermissions({ ...permissions, [key]: event.target.checked })} />{key[0].toUpperCase() + key.slice(1)}</label>)}</fieldset>{member.role === "Viewer" || role === "Viewer" ? <p>Viewers can read allowed Workspace records but cannot change them. Finance stays hidden.</p> : null}{owner && member.role !== "Owner" ? <div className={styles.inspectorActions}><button className={styles.primaryButton} type="button" onClick={() => void save()}>Save access</button>{member.status === "active" ? <button type="button" onClick={() => void controller.actions.transferOwnership(member.userId).then((result) => onNotice(result.message))}>Transfer ownership</button> : null}<button type="button" onClick={() => { if (window.confirm(`Remove ${member.name}? Projects and Activity stay in the Workspace; open assignments will be cleared.`)) void controller.actions.removeMember(member.userId).then((result) => onNotice(result.message)); }}>Remove member</button></div> : member.userId === currentMemberId && member.role === "Owner" ? <p>Transfer ownership before leaving this Workspace or deleting your account.</p> : member.userId === currentMemberId ? <button type="button" onClick={() => void controller.actions.leaveWorkspace().then((result) => onNotice(result.message))}>Leave Workspace</button> : null}</div></aside>;
+}
+
+function WorkspaceSettings({ controller, backup, templates, onDeleteAccount }: { controller: TeamAccessController; backup: WorkspaceBackupController; templates: WorkflowTemplateController; onDeleteAccount(): Promise<void> }) {
+  const workspace = controller.model.workspace;
+  const [form, setForm] = useState({ name: "Production Desk", currencyCode: "USD", timeZone: "UTC", defaultWorkflowTemplateId: "template_default", editorsCanViewAll: false });
+  const [notice, setNotice] = useState("");
+  useEffect(() => { if (workspace) setForm({ name: workspace.name, currencyCode: workspace.currencyCode, timeZone: workspace.timeZone, defaultWorkflowTemplateId: workspace.defaultWorkflowTemplateId, editorsCanViewAll: workspace.editorsCanViewAll }); }, [workspace]);
+  const owner = controller.model.owner;
+  async function save(event: React.FormEvent) { event.preventDefault(); setNotice((await controller.actions.updateSettings(form)).message); }
+  const accountControls = workspace ? <section className={styles.card}><div className={styles.cardTitle}><h2>Account</h2></div><p>{controller.model.accountDeletionMessage}</p>{!owner ? <button type="button" onClick={() => { if (window.confirm("Delete this account? This cannot be undone.")) void onDeleteAccount(); }}>Delete account</button> : <button type="button" disabled>Delete account</button>}</section> : null;
+  return <div className={styles.settingsStack}>{workspace ? <section className={`${styles.card} ${styles.workspaceSettings}`}><div className={styles.cardTitle}><h2>Workspace</h2><span>{owner ? "Owner controls" : "Read only"}</span></div><form onSubmit={save}><label>Workspace name<input disabled={!owner} required maxLength={80} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>Currency<select disabled={!owner} value={form.currencyCode} onChange={(event) => setForm({ ...form, currencyCode: event.target.value })}>{["USD", "AED", "EUR", "GBP", "CAD", "AUD"].map((currency) => <option key={currency}>{currency}</option>)}</select></label><label>Time zone<select disabled={!owner} value={form.timeZone} onChange={(event) => setForm({ ...form, timeZone: event.target.value })}>{["UTC", "Asia/Dubai", "America/New_York", "Europe/London", "Asia/Kolkata", "Australia/Sydney"].map((zone) => <option key={zone}>{zone}</option>)}</select></label><label>Default Workflow Template<select disabled={!owner} value={form.defaultWorkflowTemplateId} onChange={(event) => setForm({ ...form, defaultWorkflowTemplateId: event.target.value })}>{templates.actions.list().map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><label className={styles.settingsToggle}><input disabled={!owner} type="checkbox" checked={form.editorsCanViewAll} onChange={(event) => setForm({ ...form, editorsCanViewAll: event.target.checked })} /><span><strong>Editors can see all Team Projects</strong><small>Off keeps Editors limited to Projects they lead or are assigned to.</small></span></label>{owner ? <div className={styles.formActions}><button className={styles.primaryButton} type="submit">Save Workspace</button></div> : null}</form>{notice ? <p className={styles.successNotice} role="status">{notice}</p> : null}</section> : <section className={`${styles.card} ${styles.emptyPage}`}><h2>Local Workspace</h2><p>Local Mode stays solo. Sign in to create a shared Team Workspace and manage its cloud settings.</p></section>}{accountControls}<BackupSettings controller={backup} /></div>;
 }
 
 function BackupSettings({ controller }: { controller: WorkspaceBackupController }) {
@@ -379,7 +449,7 @@ const blankGroup: ProjectGroupInput = { name: "", clientId: "", startDate: "", e
 function NewProjectForm({ controller, onCancel, onCreated }: { controller: ProjectController; onCancel(): void; onCreated(url: string): void }) {
   const [notice, setNotice] = useState("");
   const form = useForm({
-    defaultValues: blankProject,
+    defaultValues: { ...blankProject, templateId: controller.model.defaultTemplateId },
     validators: { onSubmit: newProjectSchema },
     onSubmit: async ({ value }) => {
       const result = await controller.actions.create(value);
@@ -392,13 +462,12 @@ function NewProjectForm({ controller, onCancel, onCreated }: { controller: Proje
       <div className={styles.cardTitle}><div><p className={styles.eyebrow}>Short setup</p><h2 id="new-project-title">Create Project</h2></div><button type="button" onClick={onCancel}>Close</button></div>
       <form onSubmit={(event) => { event.preventDefault(); event.stopPropagation(); void form.handleSubmit(); }}>
         <form.Field name="name">{(field) => <label>Project name<input autoFocus value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
-        <form.Field name="salaryPlanId">{(field) => <label>Salary Plan <span>(optional)</span><select value={field.state.value ?? ""} onChange={(event) => { const selection = controller.actions.salaryPlanSelection(event.target.value); field.handleChange(selection.salaryPlanId); form.setFieldValue("financialType", selection.financialType); if (selection.clientId) form.setFieldValue("clientId", selection.clientId); }}><option value="">No Salary Plan</option>{controller.model.salaryPlans.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
+        {controller.model.canManageSalaryPlans ? <form.Field name="salaryPlanId">{(field) => <label>Salary Plan <span>(optional)</span><select value={field.state.value ?? ""} onChange={(event) => { const selection = controller.actions.salaryPlanSelection(event.target.value); field.handleChange(selection.salaryPlanId); form.setFieldValue("financialType", selection.financialType); if (selection.clientId) form.setFieldValue("clientId", selection.clientId); }}><option value="">No Salary Plan</option>{controller.model.salaryPlans.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field> : null}
         <form.Subscribe selector={(state) => state.values.salaryPlanId}>{(salaryPlanId) => <form.Field name="clientId">{(field) => <label>Client<select disabled={Boolean(salaryPlanId)} value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Client</option>{controller.model.clients.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{salaryPlanId ? <small>Salary Plan selection fixes this Client.</small> : null}</label>}</form.Field>}</form.Subscribe>
         <form.Subscribe selector={(state) => state.values.clientId}>{(clientId) => <form.Field name="projectGroupId">{(field) => <label>Project Group <span>(optional)</span><select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">No Project Group</option>{controller.actions.groupOptions(clientId).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>}</form.Subscribe>
         <form.Field name="templateId">{(field) => <label>Workflow Template<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value)}><option value="">Choose a Workflow Template</option>{controller.model.templates.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>}</form.Field>
         <form.Field name="dueDate">{(field) => <label>Due date<input type="date" value={field.state.value} onChange={(event) => field.handleChange(event.target.value)} /></label>}</form.Field>
-        <form.Field name="financialType">{(field) => <label>Financial type<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value as NewProjectInput["financialType"])}><option value="projectValue">Project value</option><option value="salaryPlan">Salary Plan</option><option value="nonBillable">Non-billable</option></select></label>}</form.Field>
-        <form.Subscribe selector={(state) => state.values.financialType}>{(financialType) => financialType === "projectValue" ? <form.Field name="agreedAmount">{(field) => <label>Agreed amount<input type="number" min="0" step="0.01" value={field.state.value ?? 0} onBlur={field.handleBlur} onChange={(event) => field.handleChange(Number(event.target.value))} /><small>Recorded in the Workspace currency.</small></label>}</form.Field> : null}</form.Subscribe>
+        {controller.model.canViewFinance ? <><form.Field name="financialType">{(field) => <label>Financial type<select value={field.state.value} onChange={(event) => field.handleChange(event.target.value as NewProjectInput["financialType"])}><option value="projectValue">Project value</option>{controller.model.canManageSalaryPlans ? <option value="salaryPlan">Salary Plan</option> : null}<option value="nonBillable">Non-billable</option></select></label>}</form.Field><form.Subscribe selector={(state) => state.values.financialType}>{(financialType) => financialType === "projectValue" ? <form.Field name="agreedAmount">{(field) => <label>Agreed amount<input type="number" min="0" step="0.01" value={field.state.value ?? 0} onBlur={field.handleBlur} onChange={(event) => field.handleChange(Number(event.target.value))} /><small>Recorded in the Workspace currency.</small></label>}</form.Field> : null}</form.Subscribe></> : null}
         <div className={styles.formActions}><button type="button" onClick={onCancel}>Cancel</button><form.Subscribe selector={(state) => [state.canSubmit, state.isSubmitting]}>{([canSubmit, isSubmitting]) => <button className={styles.primaryButton} disabled={!canSubmit || isSubmitting} type="submit">{isSubmitting ? "Creating…" : "Create Project"}</button>}</form.Subscribe></div>
       </form>
       <form.Subscribe selector={(state) => state.errors}>{(errors) => errors.length ? <p className={styles.errorNotice} role="alert">{errors.map((error) => typeof error === "string" ? error : "Check the Project fields and try again.").join(" ")}</p> : null}</form.Subscribe>
@@ -457,8 +526,10 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
   const columns: ColumnDef<ProjectRow>[] = [
     { accessorKey: "name", header: "Project", cell: ({ row }) => <Link className={styles.projectTitle} href={`/relay/projects/${row.original.id}`}>{row.original.name}</Link> },
     { accessorKey: "clientName", header: "Client" }, { accessorKey: "stage", header: "Stage" }, { accessorKey: "dueDate", header: "Due" },
-    { accessorKey: "paymentState", header: "Payment", cell: ({ row }) => row.original.paymentState === "not-applicable" ? "—" : row.original.paymentState === "paid" ? "Paid" : "Unpaid" },
-    { accessorKey: "financialType", header: "Salary", cell: ({ row }) => row.original.financialType === "salaryPlan" ? "Salary Plan" : "—" },
+    ...(controller.model.canViewFinance ? [
+      { accessorKey: "paymentState", header: "Payment", cell: ({ row }: { row: { original: ProjectRow } }) => row.original.paymentState === "not-applicable" ? "—" : row.original.paymentState === "paid" ? "Paid" : "Unpaid" },
+      { accessorKey: "financialType", header: "Salary", cell: ({ row }: { row: { original: ProjectRow } }) => row.original.financialType === "salaryPlan" ? "Salary Plan" : "—" },
+    ] satisfies ColumnDef<ProjectRow>[] : []),
     ...(table.showAssignees ? [{ accessorKey: "assignees", header: "Assignees", cell: ({ row }: { row: { original: ProjectRow } }) => row.original.assignees.join(", ") || "Unassigned" } satisfies ColumnDef<ProjectRow>] : []),
     { id: "actions", header: "Actions", cell: ({ row }) => readOnly ? <span>Read-only</span> : <><button type="button" onClick={() => void archiveProject(row.original.id, row.original.archived)}>{row.original.archived ? "Restore" : "Archive"}</button>{controller.model.canDeletePermanently ? <button type="button" onClick={() => setDeleteId(row.original.id)}>Delete permanently</button> : null}</> },
   ];
@@ -472,7 +543,7 @@ export function ProjectsPage({ controller, workspace, readOnly, showNewProject, 
       <PageContent>
       {showNewProject ? <NewProjectForm controller={controller} onCancel={onCancelNewProject} onCreated={onProjectCreated} /> : null}
       <MetricStrip aria-label="Workspace metrics">{workspace.metrics.map((metric) => <MetricItem key={metric.label} label={metric.label} value={metric.value} />)}</MetricStrip>
-      <ContentSection title="Projects" bodyMode="flush"><PageToolbar className={styles.formActions}><input aria-label="Search Projects" placeholder="Search Projects" value={state.query ?? ""} onChange={(event) => setViewState({ ...state, query: event.target.value || undefined })} /><select aria-label="Filter by Client" value={state.client ?? ""} onChange={(event) => setViewState({ ...state, client: event.target.value || undefined })}><option value="">All Clients</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select><select aria-label="Filter by stage" value={state.stage ?? ""} onChange={(event) => setViewState({ ...state, stage: event.target.value || undefined })}><option value="">All stages</option>{[...new Set(controller.model.projects.map((project) => project.stage))].map((stage) => <option key={stage}>{stage}</option>)}</select><select aria-label="Filter by payment" value={state.payment ?? ""} onChange={(event) => setViewState({ ...state, payment: (event.target.value || undefined) as typeof state.payment })}><option value="">All payment states</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="not-applicable">Not applicable</option></select><select aria-label="Filter by salary" value={state.salary ?? ""} onChange={(event) => setViewState({ ...state, salary: (event.target.value || undefined) as typeof state.salary })}><option value="">All financial types</option><option value="salary">Salary Plan</option><option value="other">Other</option></select><select aria-label="Sort Projects" value={state.sort ?? "due"} onChange={(event) => setViewState({ ...state, sort: event.target.value as typeof state.sort })}><option value="due">Due date</option><option value="name">Name</option><option value="client">Client</option><option value="stage">Stage</option><option value="payment">Payment</option></select><button type="button" aria-label={`Sort ${state.direction === "desc" ? "ascending" : "descending"}`} onClick={() => setViewState({ ...state, direction: state.direction === "desc" ? "asc" : "desc" })}>{state.direction === "desc" ? "Descending" : "Ascending"}</button><label className={styles.check}><input type="checkbox" checked={state.archived === "include"} onChange={(event) => setViewState({ ...state, archived: event.target.checked ? "include" : undefined })} />Archived</label><button type="button" aria-pressed={table.view === "table"} onClick={() => setViewState({ ...state, view: "table" })}>Table</button><button type="button" aria-pressed={table.view === "board"} onClick={() => setViewState({ ...state, view: "board" })}>Board</button></PageToolbar>{table.view === "board" ? board : projectTable}</ContentSection>
+      <ContentSection title="Projects" bodyMode="flush"><PageToolbar className={styles.formActions}><input aria-label="Search Projects" placeholder="Search Projects" value={state.query ?? ""} onChange={(event) => setViewState({ ...state, query: event.target.value || undefined })} /><select aria-label="Filter by Client" value={state.client ?? ""} onChange={(event) => setViewState({ ...state, client: event.target.value || undefined })}><option value="">All Clients</option>{controller.model.clients.map((client) => <option key={client.value} value={client.value}>{client.label}</option>)}</select><select aria-label="Filter by stage" value={state.stage ?? ""} onChange={(event) => setViewState({ ...state, stage: event.target.value || undefined })}><option value="">All stages</option>{[...new Set(controller.model.projects.map((project) => project.stage))].map((stage) => <option key={stage}>{stage}</option>)}</select>{controller.model.canViewFinance ? <><select aria-label="Filter by payment" value={state.payment ?? ""} onChange={(event) => setViewState({ ...state, payment: (event.target.value || undefined) as typeof state.payment })}><option value="">All payment states</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option><option value="not-applicable">Not applicable</option></select><select aria-label="Filter by salary" value={state.salary ?? ""} onChange={(event) => setViewState({ ...state, salary: (event.target.value || undefined) as typeof state.salary })}><option value="">All financial types</option><option value="salary">Salary Plan</option><option value="other">Other</option></select></> : null}<select aria-label="Sort Projects" value={state.sort ?? "due"} onChange={(event) => setViewState({ ...state, sort: event.target.value as typeof state.sort })}><option value="due">Due date</option><option value="name">Name</option><option value="client">Client</option><option value="stage">Stage</option>{controller.model.canViewFinance ? <option value="payment">Payment</option> : null}</select><button type="button" aria-label={`Sort ${state.direction === "desc" ? "ascending" : "descending"}`} onClick={() => setViewState({ ...state, direction: state.direction === "desc" ? "asc" : "desc" })}>{state.direction === "desc" ? "Descending" : "Ascending"}</button><label className={styles.check}><input type="checkbox" checked={state.archived === "include"} onChange={(event) => setViewState({ ...state, archived: event.target.checked ? "include" : undefined })} />Archived</label><button type="button" aria-pressed={table.view === "table"} onClick={() => setViewState({ ...state, view: "table" })}>Table</button><button type="button" aria-pressed={table.view === "board"} onClick={() => setViewState({ ...state, view: "board" })}>Board</button></PageToolbar>{table.view === "board" ? board : projectTable}</ContentSection>
       {deleteId ? <div role="alertdialog" aria-modal="true" aria-labelledby="delete-project-title" className={styles.card}><h3 id="delete-project-title">Permanently delete this Project?</h3><p>{controller.model.deletionEffects}</p><div className={styles.formActions}><button type="button" onClick={() => setDeleteId(null)}>Cancel</button><button type="button" onClick={() => void deleteProject()}>Delete permanently</button></div></div> : null}
       <AlertDialog open={pendingMove !== null} onOpenChange={(open) => { if (!open) setPendingMove(null); }}>
         <AlertDialogContent onOpenAutoFocus={(event) => { event.preventDefault(); confirmDeliveryRef.current?.focus(); }}>
@@ -561,7 +632,7 @@ function ProjectBoardCard({ project, readOnly, onMove }: { project: ProjectBoard
   return <li ref={setNodeRef} style={style} className={isDragging ? styles.projectDragging : undefined}><div className={styles.projectBoardCard}><div><Link className={styles.projectTitle} href={`/relay/projects/${project.id}`}>{project.name}</Link><span>{project.clientName} · {project.dueDate}</span></div>{!readOnly ? <div className={styles.projectBoardActions}><button type="button" aria-label={`Drag ${project.name}`} {...listeners} {...attributes}>Drag</button><select aria-label={`Move ${project.name} to stage`} value={project.currentStageId} onChange={(event) => onMove(project.id, event.target.value)}>{project.stageOptions.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}</select></div> : null}</div></li>;
 }
 
-export function ProjectPage({ controller, outputController, filePort = null, portalController, projectId, readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; filePort?: ProjectFilePort | null; portalController?: ClientPortalController; projectId: string; readOnly: boolean; onChanged(): void }) {
+export function ProjectPage({ controller, outputController, filePort = null, portalController, projectId, readOnly, reviewReadOnly = readOnly, portalReadOnly = readOnly, onChanged }: { controller: ProjectController; outputController: ProjectOutputController; filePort?: ProjectFilePort | null; portalController?: ClientPortalController; projectId: string; readOnly: boolean; reviewReadOnly?: boolean; portalReadOnly?: boolean; onChanged(): void }) {
   const [, setRevision] = useState(0);
   const [notice, setNotice] = useState("");
   const project = controller.actions.inspectProject(projectId);
@@ -581,22 +652,22 @@ export function ProjectPage({ controller, outputController, filePort = null, por
   const client = controller.model.clients.find(({ value }) => value === project.clientId)?.label ?? "Unknown Client";
   const headerFacts = <dl className={styles.projectFacts}><div><dt>Stage</dt><dd>{project.stage}</dd></div><div><dt>Client</dt><dd>{client}</dd></div><div><dt>Due date</dt><dd>{project.dueDate}</dd></div><div><dt>Lead</dt><dd>{project.lead}</dd></div><div><dt>Assignees</dt><dd>{project.assignees.length ? project.assignees.join(", ") : "Unassigned"}</dd></div></dl>;
   return <WorkspacePage family="data-index"><SharedPageHeader eyebrow="Project" title={project.name} description={headerFacts} /><PageContent>
-     <ContentSection title="Overview"><p>Financial type: {project.financialType}. Workflow: {project.workflowSetup.templateName}.</p>{project.financialType === "projectValue" ? <div className={styles.paymentSummary}><div><strong>Agreed amount</strong><span>{project.money.toLocaleString("en-US")}</span></div><div><strong>Payment</strong><span>{project.paymentState === "paid" ? `Paid${project.paidAt ? ` · ${project.paidAt.slice(0, 10)}` : ""}` : "Unpaid"}</span></div>{controller.model.canMarkPayments && !readOnly ? <button type="button" onClick={() => void setPayment(project.paymentState !== "paid")}>{project.paymentState === "paid" ? "Mark unpaid" : "Mark paid"}</button> : null}</div> : <p>Salary Plan Projects earn through their Salary Plan and do not store a separate Project amount.</p>}</ContentSection>
+     <ContentSection title="Overview"><p>{controller.model.canViewFinance ? `Financial type: ${project.financialType}. ` : ""}Workflow: {project.workflowSetup.templateName}.</p>{controller.model.canViewFinance ? project.financialType === "projectValue" ? <div className={styles.paymentSummary}><div><strong>Agreed amount</strong><span>{project.money.toLocaleString("en-US")}</span></div><div><strong>Payment</strong><span>{project.paymentState === "paid" ? `Paid${project.paidAt ? ` · ${project.paidAt.slice(0, 10)}` : ""}` : "Unpaid"}</span></div>{controller.model.canMarkPayments && !readOnly ? <button type="button" onClick={() => void setPayment(project.paymentState !== "paid")}>{project.paymentState === "paid" ? "Mark unpaid" : "Mark paid"}</button> : null}</div> : <p>Salary Plan Projects earn through their Salary Plan and do not store a separate Project amount.</p> : null}</ContentSection>
     <ContentSection id="outputs" title="Outputs and Versions">
       <div className={styles.projectOutputs}>
-        {!readOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void outputForm.handleSubmit(); }}><outputForm.Field name="name">{(field) => <label>New Project Output name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</outputForm.Field><button type="submit" className={styles.primaryButton}>Add Project Output</button></form> : null}
+        {!reviewReadOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void outputForm.handleSubmit(); }}><outputForm.Field name="name">{(field) => <label>New Project Output name<input value={field.state.value} onBlur={field.handleBlur} onChange={(event) => field.handleChange(event.target.value)} /></label>}</outputForm.Field><button type="submit" className={styles.primaryButton}>Add Project Output</button></form> : null}
         {notice ? <p role="status">{notice}</p> : null}
         {outputView.state.kind === "loading" ? <p role="status">Loading Project Outputs…</p> : outputView.state.kind === "error" ? <p role="alert">{outputView.state.message}</p> : null}
-        {outputView.state.kind === "ready" && outputs.length === 0 ? <p>No Project Outputs yet.</p> : outputs.map((output) => <ProjectOutputEditor key={output.id} output={output} controller={outputController} readOnly={readOnly} onChanged={changed} />)}
+        {outputView.state.kind === "ready" && outputs.length === 0 ? <p>No Project Outputs yet.</p> : outputs.map((output) => <ProjectOutputEditor key={output.id} output={output} controller={outputController} readOnly={reviewReadOnly} onChanged={changed} />)}
       </div>
     </ContentSection>
-    <ContentSection title="Client Review">{portalController ? <ClientPortalEditor controller={portalController} onChanged={changed} /> : <p>Client Portals are available for signed-in cloud Workspaces.</p>}</ContentSection>
-    <ContentSection id="files" title="Files and Links">{filePort ? <ProjectFiles port={filePort} onChanged={changed} /> : <p>Safe Project file uploads are available in signed-in cloud Workspaces.</p>}</ContentSection>
+    <ContentSection title="Client Review">{portalController ? <ClientPortalEditor controller={portalController} readOnly={portalReadOnly} onChanged={changed} /> : <p>Client Portals are available for signed-in cloud Workspaces.</p>}</ContentSection>
+    <ContentSection id="files" title="Files and Links">{filePort ? <ProjectFiles port={filePort} readOnly={readOnly} onChanged={changed} /> : <p>Safe Project file uploads are available in signed-in cloud Workspaces.</p>}</ContentSection>
     <ContentSection title="Activity"><p>Activity will stay attached to this Project as its work grows.</p></ContentSection>
   </PageContent></WorkspacePage>;
 }
 
-function ProjectFiles({ port, onChanged }: { port: ProjectFilePort; onChanged(message: string): void }) {
+function ProjectFiles({ port, readOnly, onChanged }: { port: ProjectFilePort; readOnly: boolean; onChanged(message: string): void }) {
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<File | null>(null);
   const usage = port.usage();
@@ -620,12 +691,12 @@ function ProjectFiles({ port, onChanged }: { port: ProjectFilePort; onChanged(me
   }
   return <div className={styles.projectOutputs}>
     <p>{usage.retainedBytes.toLocaleString()} of {usage.limitBytes.toLocaleString()} bytes retained. Archived files and stored Media Versions count.</p>
-    <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void upload(); }}><label>File title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Safe Project file<input type="file" accept=".pdf,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,application/pdf,text/plain,text/markdown,image/jpeg,image/png,image/webp" onChange={(event) => setSelected(event.target.files?.[0] ?? null)} /></label><button type="submit" className={styles.primaryButton}>Upload Project file</button></form>
-    {port.state().kind === "loading" ? <p role="status">Loading Project files…</p> : port.files().length === 0 ? <p>No Project files yet.</p> : <ul>{port.files().map((file) => <li key={file.id}><strong>{file.title}</strong> · {file.fileName} · {file.size.toLocaleString()} bytes · {file.archived ? "Archived" : "Active"}<div>{file.accessUrl ? <a href={file.accessUrl} target="_blank" rel="noreferrer">Open private signed link</a> : null}<label><input type="checkbox" checked={file.portalVisible} disabled={file.archived} onChange={(event) => void port.setSharing(file.id, event.target.checked, event.target.checked && file.allowDownload).then((result) => onChanged(result.ok ? "Portal visibility saved." : result.error.message))} />Visible in Client Portal</label><label><input type="checkbox" checked={file.allowDownload} disabled={file.archived || !file.portalVisible} onChange={(event) => void port.setSharing(file.id, true, event.target.checked).then((result) => onChanged(result.ok ? "Download permission saved." : result.error.message))} />Allow Download</label><button type="button" onClick={() => void archive(file.id, !file.archived)}>{file.archived ? "Restore" : "Archive"}</button><button type="button" onClick={() => void remove(file.id)}>Permanently delete</button></div></li>)}</ul>}
+    {!readOnly ? <form className={styles.outputCreate} onSubmit={(event) => { event.preventDefault(); void upload(); }}><label>File title<input value={title} onChange={(event) => setTitle(event.target.value)} /></label><label>Safe Project file<input type="file" accept=".pdf,.txt,.md,.markdown,.jpg,.jpeg,.png,.webp,application/pdf,text/plain,text/markdown,image/jpeg,image/png,image/webp" onChange={(event) => setSelected(event.target.files?.[0] ?? null)} /></label><button type="submit" className={styles.primaryButton}>Upload Project file</button></form> : null}
+    {port.state().kind === "loading" ? <p role="status">Loading Project files…</p> : port.files().length === 0 ? <p>No Project files yet.</p> : <ul>{port.files().map((file) => <li key={file.id}><strong>{file.title}</strong> · {file.fileName} · {file.size.toLocaleString()} bytes · {file.archived ? "Archived" : "Active"}<div>{file.accessUrl ? <a href={file.accessUrl} target="_blank" rel="noreferrer">Open private signed link</a> : null}{!readOnly ? <><label><input type="checkbox" checked={file.portalVisible} disabled={file.archived} onChange={(event) => void port.setSharing(file.id, event.target.checked, event.target.checked && file.allowDownload).then((result) => onChanged(result.ok ? "Portal visibility saved." : result.error.message))} />Visible in Client Portal</label><label><input type="checkbox" checked={file.allowDownload} disabled={file.archived || !file.portalVisible} onChange={(event) => void port.setSharing(file.id, true, event.target.checked).then((result) => onChanged(result.ok ? "Download permission saved." : result.error.message))} />Allow Download</label><button type="button" onClick={() => void archive(file.id, !file.archived)}>{file.archived ? "Restore" : "Archive"}</button><button type="button" onClick={() => void remove(file.id)}>Permanently delete</button></> : null}</div></li>)}</ul>}
   </div>;
 }
 
-function ClientPortalEditor({ controller, onChanged }: { controller: ClientPortalController; onChanged(message: string): void }) {
+function ClientPortalEditor({ controller, readOnly = false, onChanged }: { controller: ClientPortalController; readOnly?: boolean; onChanged(message: string): void }) {
   const model = controller.actions.view();
   const [publicNotes, setPublicNotes] = useState(model.portal?.publicNotes ?? "");
   const [showDueDate, setShowDueDate] = useState(model.portal?.showDueDate ?? false);
@@ -651,7 +722,7 @@ function ClientPortalEditor({ controller, onChanged }: { controller: ClientPorta
     onChanged(result.message);
   }
 
-  return <div className={styles.portalEditor}>
+  return <fieldset className={styles.portalEditor} disabled={readOnly}>
     <div className={styles.portalStatus}>
       <p><strong>Access:</strong> {model.access === "invalid" ? "Not published" : model.access}</p>
       {model.portal ? <a href={`/client-portal/${model.portal.token}`} target="_blank" rel="noreferrer">Open public portal</a> : null}
@@ -667,7 +738,7 @@ function ClientPortalEditor({ controller, onChanged }: { controller: ClientPorta
       {model.portal ? <><button type="button" onClick={() => void (model.portal?.status === "open" ? controller.actions.close() : controller.actions.open()).then((result) => onChanged(result.message))}>{model.portal.status === "open" ? "Close portal" : "Open portal"}</button><button type="button" onClick={() => void controller.actions.regenerateToken().then((result) => onChanged(result.ok ? "Client Portal link regenerated." : result.error.message))}>Regenerate link</button></> : null}
     </div>
     {previewOpen ? <div className={styles.portalPreview} aria-label="Client Portal preview">{preview.view ? <><p className={styles.eyebrow}>Client preview</p><h3>{preview.view.project.name}</h3><p>{preview.view.project.stage} · {preview.view.project.progress}%</p>{preview.view.project.publicNotes ? <p>{preview.view.project.publicNotes}</p> : null}<ul>{preview.view.outputs.map((output) => <li key={output.id}>{output.name} · current version</li>)}</ul></> : <p>This Project is not available for preview.</p>}</div> : null}
-  </div>;
+  </fieldset>;
 }
 
 type ProjectOutputView = ReturnType<ProjectOutputController["actions"]["view"]>["rows"][number];

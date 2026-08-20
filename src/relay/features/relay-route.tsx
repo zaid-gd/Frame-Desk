@@ -42,6 +42,9 @@ import { RelayExperience } from "../presentation/relay-experience";
 import { createWorkspaceDiscoveryController } from "../application/workspace-discovery-controller";
 import { buildWorkspaceCalendarEvents } from "../domain/workspace-calendar";
 import { serializeCalendarFeed } from "../domain/calendar-feed";
+import { buildTeamAccess } from "../domain/team-access";
+import { useCloudTeamAccessPort } from "../infrastructure/cloud-team-access-port";
+import { createTeamAccessController } from "../application/team-access-controller";
 
 const THEME_KEY = "relay:theme:v1";
 const SIDEBAR_KEY = "relay:sidebar-collapsed:v1";
@@ -93,6 +96,11 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   const entryController = createEntryController({ entryPort, session: sessionFromAuth(auth) });
   const mode = entryController.model.mode ?? "local";
   const cloudPort = useCloudWorkspacePort(mode === "cloud" && Boolean(auth.isSignedIn));
+  const teamAccess = useCloudTeamAccessPort(mode === "cloud" && Boolean(auth.isSignedIn));
+  const teamController = createTeamAccessController(teamAccess);
+  const teamWorkspace = teamAccess.workspace();
+  const currentTeamMember = teamWorkspace?.members.find(({ userId }) => userId === teamWorkspace.currentMemberId);
+  const canManageProjectContent = mode !== "sample" && (mode !== "cloud" || (teamAccess.state().kind === "ready" && (!teamWorkspace || (teamWorkspace.role !== "Viewer" && (currentTeamMember?.permissions.projects ?? true)))));
   const cloudBackupPort = useCloudWorkspaceBackupPort();
   const selectedWorkspacePort = useMemo(() => workspacePort(mode, cloudPort), [cloudPort, mode]);
   const cloudClientPort = useCloudClientPort(mode === "cloud" && Boolean(auth.isSignedIn), cloudPort.loadProjects());
@@ -108,7 +116,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (mode === "cloud") return cloudTemplatePort;
     return createLocalWorkflowTemplatePort();
   }, [cloudTemplatePort, mode]);
-  const templateController = createWorkflowTemplateController({ port: selectedTemplatePort, canManage: mode !== "sample" });
+  const templateController = createWorkflowTemplateController({ port: selectedTemplatePort, canManage: canManageProjectContent });
   const projectClients = selectedClientPort.loadClients().map(({ id, name, archived }) => ({ id, name, archived }));
   const projectTemplates = templateController.actions.list(true);
   const cloudProjectPort = useCloudProjectPort(mode === "cloud" && Boolean(auth.isSignedIn), projectClients, projectTemplates, projectId);
@@ -141,9 +149,9 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (hydrated) return createLocalSalaryPlanPort(window.localStorage, projectClients);
     return createMemorySalaryPlanPort();
   }, [cloudSalaryPlanPort, hydrated, mode, projectClients]);
-  const projectAccess = selectedProjectPort.projectAccess?.() ?? { role: "owner" as const, memberId: "owner", editorsCanViewAll: true, team: false };
+  const projectAccess = selectedProjectPort.projectAccess?.() ?? { ...buildTeamAccess({ role: "owner", memberId: "owner", editorsCanViewAll: true }), team: false };
   const salaryPlanController = createSalaryPlanController({ port: selectedSalaryPlanPort, clients: projectClients, canManage: mode !== "sample" && projectAccess.role === "owner" });
-  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" && projectAccess.role !== "viewer", access: projectAccess, salaryPlans: salaryPlanController.model.plans });
+  const projectController = createProjectController({ port: selectedProjectPort, canManage: mode !== "sample" && projectAccess.role !== "viewer" && (projectAccess.permissions?.projects ?? true), access: projectAccess, salaryPlans: salaryPlanController.model.plans, defaultTemplateId: teamWorkspace?.defaultWorkflowTemplateId ?? projectTemplates[0]?.id ?? "" });
   const projectOutputController = createProjectOutputController({ port: selectedProjectPort });
   const projectFiles = useCloudProjectFilePort(mode === "cloud" && Boolean(auth.isSignedIn), projectId);
   const appOrigin = hydrated ? window.location.origin : null;
@@ -156,7 +164,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
   );
   const clientPortalController = cloudClientPortalPort ? createClientPortalController({ port: cloudClientPortalPort }) : undefined;
   const clientNames = Object.fromEntries(selectedClientPort.loadClients().map((client) => [client.id, client.name]));
-  const firstTemplate = templateController.actions.list()[0];
+  const firstTemplate = templateController.actions.list().find(({ id }) => id === teamWorkspace?.defaultWorkflowTemplateId) ?? templateController.actions.list()[0];
   const defaultProjectSetup = firstTemplate ? templateController.actions.copyProjectSetup(firstTemplate.id) ?? undefined : undefined;
   const workspaceController = createWorkspaceController({
     mode,
@@ -169,8 +177,9 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     salaryPlans: selectedSalaryPlanPort.loadPlans(),
     salaryBatches: selectedSalaryPlanPort.loadBatches(),
     outputCounts: selectedProjectPort.loadOutputCounts(),
-    currencyCode: "USD",
-    access: { canViewMoney: selectedClientPort.canViewMoney(), canViewSalary: mode !== "cloud" || projectAccess.role === "owner" },
+    workspaceName: teamWorkspace?.name ?? "Production Desk",
+    currencyCode: teamWorkspace?.currencyCode ?? "USD",
+    access: { canViewMoney: mode !== "cloud" ? selectedClientPort.canViewMoney() : projectAccess.canViewFinance ?? false, canViewSalary: mode !== "cloud" || projectAccess.role === "owner" },
   });
   const workspaceOutputs = selectedProjectPort.loadWorkspaceOutputs();
   const localCalendarEvents = buildWorkspaceCalendarEvents({ projects: selectedProjectPort.loadProjects(), outputs: workspaceOutputs });
@@ -235,6 +244,14 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     router.push("/relay");
   }
 
+  async function deleteAccount() {
+    const result = await teamController.actions.prepareAccountDeletion();
+    if (!result.ok) { setEntryMessage(result.message); return; }
+    await auth.deleteAccount();
+    window.localStorage.removeItem(RELAY_ENTRY_MODE_KEY);
+    router.push("/relay");
+  }
+
   async function requestNewProject() {
     const result = await workspaceController.actions.requestNewProject();
     if (result.ok) setWorkspaceVersion((version) => version + 1);
@@ -254,6 +271,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
         storageWarning: entryController.model.storageWarning,
         workspace: workspaceController.model,
         backup: backupController,
+        team: teamController,
         clients: clientController,
         templates: templateController,
         projects: projectController,
@@ -269,6 +287,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
       onToggleSidebar={toggleSidebar}
       onToggleTheme={toggleTheme}
       onLeaveWorkspace={leaveWorkspace}
+      onDeleteAccount={deleteAccount}
       onRequestNewProject={requestNewProject}
       onProjectCreated={(url) => { setWorkspaceVersion((version) => version + 1); router.push(url); }}
       onProjectsChanged={() => setWorkspaceVersion((version) => version + 1)}

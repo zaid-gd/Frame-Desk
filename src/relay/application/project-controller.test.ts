@@ -36,6 +36,18 @@ describe("Project creation form", () => {
     expect(controller.actions.salaryPlanSelection("plan_acme")).toEqual({ salaryPlanId: "plan_acme", clientId: "client_acme", financialType: "salaryPlan" });
     expect(controller.actions.salaryPlanSelection("")).toEqual({ salaryPlanId: "", financialType: "projectValue" });
   });
+
+  test("removes finance choices from an Editor without finance access", async () => {
+    const port = createMemoryProjectPort({
+      clients: [{ id: "client_acme", name: "Acme", archived: false }],
+      templates: [createDefaultWorkflowTemplate("template_default", "Default workflow")],
+    });
+    const controller = createProjectController({ port, access: { role: "editor", memberId: "editor", editorsCanViewAll: true, permissions: { projects: true, reviews: true, portals: true, finance: false }, canViewFinance: false, team: true } });
+
+    expect(controller.model).toMatchObject({ canViewFinance: false, canManageSalaryPlans: false, salaryPlans: [] });
+    await expect(controller.actions.create({ name: "Internal cut", clientId: "client_acme", projectGroupId: "", templateId: "template_default", dueDate: "2026-09-12", financialType: "projectValue", agreedAmount: 500 })).resolves.toMatchObject({ ok: true });
+    expect(port.loadProjects()[0]).toMatchObject({ financialType: "nonBillable", money: 0, paymentState: "not-applicable" });
+  });
 });
 
 describe("Projects table", () => {
@@ -125,7 +137,7 @@ describe("Project workflow", () => {
 
   test("lets an authorized Editor mark normal client work paid and records the timestamp", async () => {
     const port = createMemoryProjectPort({ now: () => "2026-08-19T10:00:00.000Z", projects: [project()] });
-    const controller = createProjectController({ port, canManage: true, access: { role: "editor", memberId: "editor_1", editorsCanViewAll: true, team: true } });
+    const controller = createProjectController({ port, canManage: true, access: { role: "editor", memberId: "editor_1", editorsCanViewAll: true, permissions: { projects: true, reviews: true, portals: true, finance: true }, team: true } });
 
     await expect(controller.actions.setPayment("project_alpha", true)).resolves.toEqual({ ok: true, message: "Payment marked paid." });
     expect(port.loadProjects()[0]).toMatchObject({ paymentState: "paid", paidAt: "2026-08-19T10:00:00.000Z" });

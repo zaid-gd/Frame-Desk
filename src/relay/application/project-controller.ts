@@ -1,15 +1,17 @@
 import { newProjectSchema, type NewProjectInput, type ProjectGroupInput, type ProjectViewState } from "../domain/project";
 import type { ProjectAccess, ProjectPort, ProjectWriteResult } from "../ports/project-port";
 import type { SalaryPlan } from "../domain/salary-plan";
+import { buildTeamAccess, canAccessProject } from "../domain/team-access";
 
 function message<T>(result: ProjectWriteResult<T>, success: string) {
   return result.ok ? { ok: true as const, message: success } : { ok: false as const, kind: result.error.kind, message: result.error.message };
 }
 
-export function createProjectController({ port, canManage = true, access = { role: "owner", memberId: "owner", editorsCanViewAll: true, team: false }, salaryPlans = [] }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess; salaryPlans?: readonly SalaryPlan[] }) {
+export function createProjectController({ port, canManage = true, access = { ...buildTeamAccess({ role: "owner", memberId: "owner", editorsCanViewAll: true }), team: false }, salaryPlans = [], defaultTemplateId = "" }: { port: ProjectPort; canManage?: boolean; access?: ProjectAccess; salaryPlans?: readonly SalaryPlan[]; defaultTemplateId?: string }) {
+  const resolvedAccess = { ...access, ...buildTeamAccess(access) };
   const clientNames = new Map(port.loadClients().map((client) => [client.id, client.name]));
   const salaryPlanOptions = salaryPlans.filter(({ archived }) => !archived).map((plan) => ({ value: plan.id, label: `${clientNames.get(plan.clientId) ?? "Unknown Client"} · ${plan.requiredProjectCount} Projects · ${plan.batchAmount.toLocaleString("en-US")}`, clientId: plan.clientId }));
-  const canSee = (project: ReturnType<ProjectPort["loadProjects"]>[number]) => access.role !== "editor" || access.editorsCanViewAll || project.assignees.includes(access.memberId) || project.lead === access.memberId;
+  const canSee = (project: ReturnType<ProjectPort["loadProjects"]>[number]) => canAccessProject(resolvedAccess, project);
   const previewStageMove = (id: string, targetStageId: string) => {
     const project = port.loadProjects().find((row) => row.id === id);
     const target = project?.workflowSetup.stages.find((stage) => stage.id === targetStageId);
@@ -37,13 +39,18 @@ export function createProjectController({ port, canManage = true, access = { rol
   return {
     model: {
       canManage,
+      canViewFinance: resolvedAccess.canViewFinance,
+      canManageSalaryPlans: resolvedAccess.canManageSalaryPlans,
+      defaultTemplateId,
+      canReview: resolvedAccess.canWrite && resolvedAccess.permissions.reviews,
+      canManagePortals: resolvedAccess.canWrite && resolvedAccess.permissions.portals,
       clients: port.loadClients().filter(({ archived }) => !archived).map(({ id: value, name: label }) => ({ value, label })),
       templates: port.loadTemplates().filter(({ archived }) => !archived).map(({ id: value, name: label }) => ({ value, label })),
       salaryPlans: salaryPlanOptions,
       groups: port.loadGroups(),
       projects: port.loadProjects(),
       projectState: port.projectState?.() ?? { kind: "ready" as const },
-      canMarkPayments: canManage && access.role !== "viewer",
+      canMarkPayments: canManage && resolvedAccess.canViewFinance && resolvedAccess.permissions.finance,
       canDeletePermanently: canManage && access.role === "owner",
       deletionEffects: "Permanent deletion removes this Project. Its files, versions, Client Portal history, and Activity will no longer be available through the Project. This cannot be undone.",
     },
@@ -73,7 +80,8 @@ export function createProjectController({ port, canManage = true, access = { rol
       },
       viewQuery(state: ProjectViewState) { const query = new URLSearchParams(); for (const [key, value] of Object.entries(state)) if (value) query.set(key, value); return query.toString(); },
       async create(input: NewProjectInput) {
-        const parsed = newProjectSchema.safeParse(input);
+        const permittedInput = resolvedAccess.canViewFinance ? input : { ...input, financialType: "nonBillable" as const, salaryPlanId: "", agreedAmount: 0 };
+        const parsed = newProjectSchema.safeParse(permittedInput);
         if (!parsed.success) return { ok: false as const, kind: "invalid" as const, message: parsed.error.issues[0].message };
         const result = await port.createProject(parsed.data);
         return result.ok ? { ok: true as const, message: "Project created.", url: `/relay/projects/${result.value.id}` } : { ok: false as const, kind: result.error.kind, message: result.error.message };
@@ -84,7 +92,7 @@ export function createProjectController({ port, canManage = true, access = { rol
       async archive(id: string) { return message(await port.setProjectArchived(id, true), "Project archived. Its history remains available."); },
       async restore(id: string) { return message(await port.setProjectArchived(id, false), "Project restored."); },
       async setPayment(id: string, paid: boolean) {
-        if (!canManage || access.role === "viewer") return { ok: false as const, kind: "forbidden" as const, message: "You do not have permission to change Project payment state." };
+        if (!canManage || !resolvedAccess.canViewFinance || !resolvedAccess.permissions.finance) return { ok: false as const, kind: "forbidden" as const, message: "You do not have permission to change Project payment state." };
         const result = await port.setProjectPayment(id, paid);
         return result.ok ? { ok: true as const, message: paid ? "Payment marked paid." : "Payment marked unpaid." } : { ok: false as const, kind: result.error.kind, message: result.error.message };
       },

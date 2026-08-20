@@ -49,6 +49,26 @@ async function bindStorage(t: ReturnType<typeof convexTest>, reservationId: Id<"
 }
 
 describe("Relay Project files", () => {
+  test("scopes Team file reads to assigned Projects and keeps Viewer writes read-only", async () => {
+    const { t } = setup();
+    const editor = t.withIdentity({ tokenIdentifier: "editor|files" });
+    const viewer = t.withIdentity({ tokenIdentifier: "viewer|files" });
+    await t.run(async (ctx) => {
+      const workspaceId = await ctx.db.insert("relayTeamWorkspaces", { dataOwnerUserId: "owner|files", currentOwnerUserId: "owner|files", name: "Desk", currencyCode: "USD", timeZone: "UTC", defaultWorkflowTemplateId: "template_default", editorsCanViewAll: false, createdAt: "2026-08-01" });
+      for (const member of [{ userId: "owner|files", role: "Owner" as const, projects: true }, { userId: "editor|files", role: "Editor" as const, projects: true }, { userId: "viewer|files", role: "Viewer" as const, projects: false }]) await ctx.db.insert("relayTeamMembers", { workspaceId, userId: member.userId, email: `${member.userId}@example.com`, name: member.userId, role: member.role, status: "active", permissions: { projects: member.projects, reviews: member.projects, portals: member.projects, finance: false }, createdAt: "2026-08-01" });
+      for (const [id, lead] of [["assigned", "editor|files"], ["private", "owner|files"]] as const) {
+        await ctx.db.insert("relayProjects", { ownerUserId: "owner|files", id, name: id, clientId: "client", stage: "Editing", tone: "planned", due: "2026-09-01", progress: "0%", status: "active", financialType: "nonBillable", importedAt: "2026-08-01", lead, assignees: [] });
+        const storageId = await ctx.storage.store(new Blob([id], { type: "text/plain" }));
+        await ctx.db.insert("relayProjectFiles", { ownerUserId: "owner|files", durableId: `file_${id}`, projectId: id, storageId, title: id, fileName: `${id}.txt`, mimeType: "text/plain", size: id.length, archived: false, portalVisible: false, allowDownload: false, createdAt: "2026-08-01" });
+      }
+    });
+
+    await expect(editor.query(listWorkspace, { now: Date.now() })).resolves.toMatchObject([{ id: "file_assigned" }]);
+    await expect(editor.query(list, { projectId: "private", now: Date.now() })).rejects.toThrow("Project not found");
+    await expect(viewer.query(listWorkspace, { now: Date.now() })).resolves.toHaveLength(2);
+    await expect(viewer.mutation(setSharing, { id: "file_assigned", portalVisible: true, allowDownload: false })).rejects.toThrow("permission");
+  });
+
   test("indexes active Workspace files without archived files or Projects", async () => {
     const { t, owner } = setup();
     await seedProject(t);

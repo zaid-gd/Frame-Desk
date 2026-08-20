@@ -1,6 +1,13 @@
 import type { NewProjectInput, ProjectChoice, ProjectGroup, ProjectGroupInput, ProjectRecord, ProjectStageEffect, ProjectTemplate } from "../domain/project";
+import type { TeamAccess, TeamPermissions } from "../domain/team-access";
 
-export type ProjectAccess = { role: "owner" | "editor" | "viewer"; memberId: string; editorsCanViewAll: boolean; team?: boolean };
+export type ProjectAccess = Pick<TeamAccess, "role" | "memberId" | "editorsCanViewAll"> & {
+  permissions?: TeamPermissions;
+  canWrite?: boolean;
+  canViewFinance?: boolean;
+  canManageSalaryPlans?: boolean;
+  team?: boolean;
+};
 
 export type ProjectWriteResult<T = undefined> = { ok: true; value: T } | { ok: false; error: { kind: "unauthorized" | "forbidden" | "not-found" | "invalid" | "transport" | "unavailable"; message: string } };
 

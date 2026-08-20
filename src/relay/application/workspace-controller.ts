@@ -19,7 +19,7 @@ const navigation = [
   { section: "settings", label: "Settings" },
 ] as const;
 
-export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard", defaultProjectSetup, projects = [], clients = [], salaryPlans = [], salaryBatches = [], outputCounts = [], currencyCode = "USD", access = { canViewMoney: true, canViewSalary: true } }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection; defaultProjectSetup?: ProjectSetup; projects?: readonly ProjectRecord[]; clients?: readonly RelayClient[]; salaryPlans?: readonly SalaryPlan[]; salaryBatches?: readonly SalaryBatch[]; outputCounts?: readonly ProjectOutputCount[]; currencyCode?: string; access?: ReportAccess }) {
+export function createWorkspaceController({ mode, workspacePort, clientNames = {}, section = "dashboard", defaultProjectSetup, projects = [], clients = [], salaryPlans = [], salaryBatches = [], outputCounts = [], workspaceName = "Production Desk", currencyCode = "USD", access = { canViewMoney: true, canViewSalary: true } }: { mode: WorkspaceMode; workspacePort: WorkspacePort; clientNames?: Readonly<Record<string, string>>; section?: RelaySection; defaultProjectSetup?: ProjectSetup; projects?: readonly ProjectRecord[]; clients?: readonly RelayClient[]; salaryPlans?: readonly SalaryPlan[]; salaryBatches?: readonly SalaryBatch[]; outputCounts?: readonly ProjectOutputCount[]; workspaceName?: string; currencyCode?: string; access?: ReportAccess }) {
   const title = section[0].toUpperCase() + section.slice(1);
   const periodDate = new Date().toISOString().slice(0, 7);
   const report = buildWorkspaceReport({ period: createReportPeriod({ kind: "month", value: periodDate }), currencyCode, clients, projects, outputCounts, salaryPlans, salaryBatches, access });
@@ -35,13 +35,13 @@ export function createWorkspaceController({ mode, workspacePort, clientNames = {
     model: {
       mode,
       readOnly: mode === "sample",
-      workspaceLabel: "Production Desk",
+      workspaceLabel: workspaceName,
       workspaceDetail: mode === "sample" ? "Read-only sample" : mode === "cloud" ? "Cloud workspace" : "Private local workspace",
       readOnlyNotice: mode === "sample" ? "Sample Workspace · Read-only demo fixtures" : undefined,
       fallbackIdentity: mode === "sample"
         ? { displayName: "Demo Editor", email: "Sample Workspace", initials: "DE" }
         : { displayName: "Local editor", email: "Local Mode", initials: "LE" },
-      navigation,
+      navigation: navigation.filter((item) => item.section !== "reports" || access.canViewMoney),
       page: {
         title,
         description: section === "dashboard" ? "What needs your attention across active production." : `Manage ${section} in the shared Relay workspace.`,

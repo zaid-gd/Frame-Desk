@@ -8,12 +8,10 @@ import { deriveProjectGroupTotals } from "../src/relay/domain/project-group";
 import { projectStageTransition, type ProjectRecord } from "../src/relay/domain/project";
 import { relayStorageUsage } from "./relayStorageUsage";
 import { maybeCreateSalaryBatch } from "./relaySalaryPlans";
-import { relayAccessForCurrentUser } from "./relayAccess";
+import { relayAccessForCurrentUser, relayProjectVisible, requireRelayOwner, requireRelayPermission, type RelayAccess } from "./relayAccess";
 
-async function requireOwner(ctx: MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Sign in to manage Projects.");
-  return identity.tokenIdentifier;
+function visibleTo(access: RelayAccess, project: { lead?: string; assignees?: readonly string[] }) {
+  return relayProjectVisible(access, project);
 }
 
 function validGroup(input: { name: string; clientId: string; startDate: string; endDate: string; notes: string }) {
@@ -37,10 +35,10 @@ export const listGroups = query({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
     const groups = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
-    return groups.filter((group) => args.includeArchived || !group.archived).map((group) => {
+    const projects = (await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect()).filter((project) => visibleTo(access, project));
+    return groups.filter((group) => (args.includeArchived || !group.archived) && (access.role !== "editor" || access.editorsCanViewAll || projects.some((project) => project.projectGroupId === group.durableId))).map((group) => {
       const totals = deriveProjectGroupTotals(projects.map((project) => ({ projectGroupId: project.projectGroupId, progress: Number.parseFloat(project.progress) || 0, money: project.agreedAmount ?? project.outstandingAmount ?? 0 })), group.durableId);
-      return { id: group.durableId, name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes, archived: group.archived, ...totals };
+      return { id: group.durableId, name: group.name, clientId: group.clientId, startDate: group.startDate, endDate: group.endDate, notes: group.notes, archived: group.archived, ...totals, money: access.canViewFinance ? totals.money : 0 };
     });
   },
 });
@@ -49,7 +47,7 @@ export const createGroup = mutation({
   args: projectGroupInputValidator.fields,
   returns: v.object({ id: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     if (!validGroup(args)) throw new Error("Enter valid Project Group details before saving.");
     const client = await clientExists(ctx, ownerUserId, args.clientId);
     if (!client || client.archived) throw new Error("Choose an active Client for this Project Group.");
@@ -63,7 +61,7 @@ export const editGroup = mutation({
   args: { id: v.string(), ...projectGroupInputValidator.fields },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
     if (!group) throw new Error("Project Group not found.");
     const { id: _id, ...input } = args;
@@ -81,7 +79,7 @@ export const setGroupArchived = mutation({
   args: { id: v.string(), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     const group = await ctx.db.query("relayProjectGroups").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
     if (!group) throw new Error("Project Group not found.");
     await ctx.db.patch("relayProjectGroups", group._id, { archived: args.archived });
@@ -97,7 +95,10 @@ export const createProject = mutation({
   args: newProjectInputValidator.fields,
   returns: v.object({ id: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const access = await requireRelayPermission(ctx, "projects");
+    const { ownerUserId } = access;
+    if (!access.canViewFinance && (args.financialType !== "nonBillable" || Boolean(args.salaryPlanId?.trim()) || (args.agreedAmount ?? 0) > 0)) throw new Error("You do not have permission to set Project finance fields.");
+    if (args.financialType === "salaryPlan" && !access.canManageSalaryPlans) throw new Error("Only the Workspace Owner can assign Salary Plans.");
     if (!args.name.trim() || args.name.length > 200 || !isIsoCalendarDate(args.dueDate)) throw new Error("Enter valid Project details before saving.");
     if (args.agreedAmount !== undefined && (!Number.isFinite(args.agreedAmount) || args.agreedAmount < 0)) throw new Error("Enter a valid agreed Project amount.");
     const client = await clientExists(ctx, ownerUserId, args.clientId);
@@ -144,7 +145,7 @@ export const createProject = mutation({
       createdAt,
       stageHistory: [{ stageId: firstStage.id, label: firstStage.label, purpose: firstStage.purpose, enteredAt: createdAt }],
       ...(salaryPlanId ? { salaryPlanId } : {}),
-      lead: "Unassigned",
+      lead: access.role === "editor" ? access.memberId : "Unassigned",
       assignees: [],
     });
     for (const starter of setup.starterOutputs) {
@@ -170,9 +171,9 @@ export const inspectProject = query({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return null;
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", args.id)).unique();
-    if (!project || !project.workflowSetup || !project.financialType) return null;
+    if (!project || !project.workflowSetup || !project.financialType || !visibleTo(access, project)) return null;
     const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
-    return { ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] };
+    return { ...detail, ...(!access.canViewFinance ? { agreedAmount: undefined, outstandingAmount: undefined, paidAt: undefined, paymentState: "not-applicable" as const, financialType: "nonBillable" as const } : { financialType: project.financialType }), dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] };
   },
 });
 
@@ -184,16 +185,16 @@ export const listProjects = query({
     if (!access) return [];
     const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     return projects.flatMap((project) => {
-      if (!project.workflowSetup || !project.financialType) return [];
+      if (!project.workflowSetup || !project.financialType || !visibleTo(access, project)) return [];
       const { ownerUserId: _owner, importedAt: _importedAt, _id: _rowId, _creationTime: _created, ...detail } = project;
-      return [{ ...detail, financialType: project.financialType, dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] }];
+      return [{ ...detail, ...(!access.canViewFinance ? { agreedAmount: undefined, outstandingAmount: undefined, paidAt: undefined, paymentState: "not-applicable" as const, financialType: "nonBillable" as const } : { financialType: project.financialType }), dueDate: project.due, lead: project.lead ?? "Unassigned", assignees: project.assignees ?? [] }];
     });
   },
 });
 
 export const myAccess = query({
   args: {},
-  returns: v.union(v.object({ ownerUserId: v.string(), memberId: v.string(), role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")), canMarkPayments: v.boolean() }), v.null()),
+  returns: v.union(v.object({ ownerUserId: v.string(), memberId: v.string(), role: v.union(v.literal("owner"), v.literal("editor"), v.literal("viewer")), canMarkPayments: v.boolean(), editorsCanViewAll: v.boolean(), permissions: v.object({ projects: v.boolean(), reviews: v.boolean(), portals: v.boolean(), finance: v.boolean() }), canWrite: v.boolean(), canViewFinance: v.boolean(), canManageSalaryPlans: v.boolean() }), v.null()),
   handler: async (ctx) => relayAccessForCurrentUser(ctx),
 });
 
@@ -201,9 +202,10 @@ export const setProjectArchived = mutation({
   args: { id: v.string(), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const access = await requireRelayPermission(ctx, "projects");
+    const { ownerUserId } = access;
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
-    if (!project) throw new Error("Project not found.");
+    if (!project || !visibleTo(access, project)) throw new Error("Project not found.");
     await ctx.db.patch("relayProjects", project._id, { status: args.archived ? "past" : "active" });
     return null;
   },
@@ -216,7 +218,7 @@ export const setProjectPayment = mutation({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access?.canMarkPayments) throw new Error("You do not have permission to mark Project payments.");
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", args.id)).unique();
-    if (!project) throw new Error("Project not found.");
+    if (!project || !visibleTo(access, project)) throw new Error("Project not found.");
     if (project.financialType !== "projectValue") throw new Error("Only normal client Projects have a payment state.");
     const paidAt = args.paid ? new Date().toISOString() : undefined;
     await ctx.db.patch("relayProjects", project._id, {
@@ -231,9 +233,10 @@ export const moveProjectStage = mutation({
   args: { id: v.string(), targetStageId: v.string(), confirmed: v.boolean() },
   returns: v.object({ projectName: v.string(), stage: v.string(), effect: projectStageEffectValidator }),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const access = await requireRelayPermission(ctx, "projects");
+    const { ownerUserId } = access;
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
-    if (!project || !project.workflowSetup || !project.financialType) throw new Error("Project not found.");
+    if (!project || !project.workflowSetup || !project.financialType || !visibleTo(access, project)) throw new Error("Project not found.");
     const record: ProjectRecord = {
       id: project.id,
       name: project.name,
@@ -317,7 +320,7 @@ export const deleteProject = mutation({
   args: { id: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await requireOwner(ctx);
+    const { ownerUserId } = await requireRelayOwner(ctx);
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.id)).unique();
     if (!project) throw new Error("Project not found.");
     await ctx.db.delete("relayProjects", project._id);

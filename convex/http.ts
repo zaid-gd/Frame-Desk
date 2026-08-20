@@ -8,7 +8,7 @@ import { serializeCalendarFeed } from "../src/relay/domain/calendar-feed";
 
 const http = httpRouter();
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const calendarEventsRef = makeFunctionReference<"query", { ownerUserId: string }, Array<{ id: string; date: string; title: string; href: string }>>("relayCalendar:feedEvents");
+const calendarEventsRef = makeFunctionReference<"query", { ownerUserId: string; memberId: string }, Array<{ id: string; date: string; title: string; href: string }>>("relayCalendar:feedEvents");
 
 async function limitedBlob(request: Request) {
   const reader = request.body?.getReader();
@@ -55,11 +55,12 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const url = new URL(request.url);
     const ownerUserId = url.searchParams.get("workspace");
+    const memberId = url.searchParams.get("member");
     const requestedOrigin = url.searchParams.get("origin");
     const signature = url.searchParams.get("signature");
-    const appOrigin = ownerUserId && requestedOrigin && signature ? await verifyCalendarFeedAccess(ownerUserId, requestedOrigin, signature) : null;
-    if (!ownerUserId || !appOrigin) return new Response("Invalid calendar subscription.", { status: 403 });
-    const events = await ctx.runQuery(calendarEventsRef, { ownerUserId });
+    const appOrigin = ownerUserId && memberId && requestedOrigin && signature ? await verifyCalendarFeedAccess(ownerUserId, memberId, requestedOrigin, signature) : null;
+    if (!ownerUserId || !memberId || !appOrigin) return new Response("Invalid calendar subscription.", { status: 403 });
+    const events = await ctx.runQuery(calendarEventsRef, { ownerUserId, memberId });
     const body = serializeCalendarFeed({ name: "Relay commitments", generatedAt: new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z"), events: events.map((event) => ({ ...event, url: new URL(event.href, appOrigin).href })) });
     return new Response(body, { headers: { "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": "inline; filename=relay-calendar.ics", "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
   }),

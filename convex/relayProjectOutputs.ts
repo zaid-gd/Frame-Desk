@@ -2,19 +2,20 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { outputReviewStateValidator, projectOutputCountValidator, relayProjectOutputValidator } from "./relayWorkspaceValidators";
 import { normalizeMediaSource } from "../src/relay/domain/project-output";
-import { relayAccessForCurrentUser } from "./relayAccess";
+import { relayAccessForCurrentUser, relayProjectVisible, requireRelayPermission, type RelayAccess } from "./relayAccess";
 
 const MAX_OUTPUTS = 100;
 const MAX_VERSIONS_PER_PROJECT = 500;
 
-async function ownerId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project Outputs." });
-  return identity.tokenIdentifier;
+async function reviewAccess(ctx: QueryCtx | MutationCtx) {
+  return requireRelayPermission(ctx, "reviews");
 }
 
-async function ownedOutput(ctx: QueryCtx | MutationCtx, ownerUserId: string, id: string) {
-  return ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", id)).unique();
+async function accessibleOutput(ctx: QueryCtx | MutationCtx, access: RelayAccess, id: string) {
+  const output = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", access.ownerUserId).eq("durableId", id)).unique();
+  if (!output) return null;
+  const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", output.projectId)).unique();
+  return project && relayProjectVisible(access, project) ? output : null;
 }
 
 function validName(name: string) {
@@ -33,7 +34,7 @@ export const listOutputs = query({
     if (!access) return [];
     const ownerUserId = access.ownerUserId;
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.projectId)).unique();
-    if (!project) return [];
+    if (!project || !relayProjectVisible(access, project)) return [];
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(MAX_OUTPUTS);
     const versions = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(MAX_VERSIONS_PER_PROJECT);
     const comments = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(1000);
@@ -69,7 +70,7 @@ export const listWorkspaceOutputs = query({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
     const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
-    const activeProjectIds = new Set(projects.filter(({ status }) => status !== "past").map(({ id }) => id));
+    const activeProjectIds = new Set(projects.filter((project) => project.status !== "past" && relayProjectVisible(access, project)).map(({ id }) => id));
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     const versions = await ctx.db.query("relayMediaVersions").withIndex("by_ownerUserId_and_outputId_and_number", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
     return outputs.filter((output) => !output.archived && activeProjectIds.has(output.projectId)).map((output) => ({
@@ -100,9 +101,11 @@ export const listOutputCounts = query({
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
     const ownerUserId = access.ownerUserId;
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", ownerUserId)).collect();
+    const visibleProjectIds = new Set(projects.filter((project) => relayProjectVisible(access, project)).map(({ id }) => id));
     const counts = new Map<string, number>();
     for await (const output of ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId))) {
-      counts.set(output.projectId, (counts.get(output.projectId) ?? 0) + 1);
+      if (visibleProjectIds.has(output.projectId)) counts.set(output.projectId, (counts.get(output.projectId) ?? 0) + 1);
     }
     return [...counts.entries()].map(([projectId, count]) => ({ projectId, count }));
   },
@@ -112,10 +115,11 @@ export const addOutput = mutation({
   args: { projectId: v.string(), name: v.string() },
   returns: v.object({ id: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await reviewAccess(ctx);
+    const ownerUserId = access.ownerUserId;
     if (!validName(args.name)) outputError("invalid", "Enter a Project Output name.");
     const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.projectId)).unique();
-    if (!project) outputError("not-found", "Project not found.");
+    if (!project || !relayProjectVisible(access, project)) outputError("not-found", "Project not found.");
     const outputs = await ctx.db.query("relayProjectOutputs").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(MAX_OUTPUTS);
     if (outputs.length >= MAX_OUTPUTS) outputError("unavailable", "This Project has reached its Project Output safety limit.");
     const id = `output_${crypto.randomUUID()}`;
@@ -128,9 +132,9 @@ export const editOutput = mutation({
   args: { id: v.string(), name: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await reviewAccess(ctx);
     if (!validName(args.name)) outputError("invalid", "Enter a Project Output name.");
-    const output = await ownedOutput(ctx, ownerUserId, args.id);
+    const output = await accessibleOutput(ctx, access, args.id);
     if (!output) outputError("not-found", "Project Output not found.");
     await ctx.db.patch("relayProjectOutputs", output._id, { name: args.name.trim() });
     return null;
@@ -141,8 +145,8 @@ export const setOutputArchived = mutation({
   args: { id: v.string(), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    const output = await ownedOutput(ctx, ownerUserId, args.id);
+    const access = await reviewAccess(ctx);
+    const output = await accessibleOutput(ctx, access, args.id);
     if (!output) outputError("not-found", "Project Output not found.");
     await ctx.db.patch("relayProjectOutputs", output._id, { archived: args.archived });
     return null;
@@ -153,8 +157,8 @@ export const setOutputReviewState = mutation({
   args: { id: v.string(), reviewState: outputReviewStateValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    const output = await ownedOutput(ctx, ownerUserId, args.id);
+    const access = await reviewAccess(ctx);
+    const output = await accessibleOutput(ctx, access, args.id);
     if (!output) outputError("not-found", "Project Output not found.");
     await ctx.db.patch("relayProjectOutputs", output._id, { reviewState: args.reviewState });
     return null;
@@ -165,8 +169,9 @@ export const addMediaVersion = mutation({
   args: { outputId: v.string(), url: v.string() },
   returns: v.object({ id: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    const output = await ownedOutput(ctx, ownerUserId, args.outputId);
+    const access = await reviewAccess(ctx);
+    const ownerUserId = access.ownerUserId;
+    const output = await accessibleOutput(ctx, access, args.outputId);
     if (!output) outputError("not-found", "Project Output not found.");
     const source = normalizeMediaSource(args.url);
     if (!source) outputError("invalid", "Enter a valid HTTP, HTTPS, YouTube, or Vimeo URL.");
@@ -187,9 +192,12 @@ export const resolveComment = mutation({
   args: { id: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await reviewAccess(ctx);
+    const ownerUserId = access.ownerUserId;
     const comment = await ctx.db.query("relayMediaComments").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
     if (!comment) outputError("not-found", "Comment not found.");
+    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", comment.projectId)).unique();
+    if (!project || !relayProjectVisible(access, project)) outputError("not-found", "Comment not found.");
     await ctx.db.patch("relayMediaComments", comment._id, { resolved: true });
     return null;
   },

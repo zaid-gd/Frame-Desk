@@ -3,15 +3,14 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 import type { Doc } from "./_generated/dataModel";
 import { salaryPlanSchema, deriveSalaryPlanProgress, markSalaryBatchReceived, type SalaryBatch, type SalaryPlan, type SalaryProject } from "../src/relay/domain/salary-plan";
 import { salaryBatchValidator, salaryPlanInputValidator, salaryPlanValidator } from "./relayWorkspaceValidators";
+import { relayAccessForCurrentUser, requireRelayOwner } from "./relayAccess";
 
 function salaryError(kind: "unauthorized" | "invalid" | "not-found" | "unavailable", message: string): never {
   throw new ConvexError({ kind, message });
 }
 
 async function requireOwner(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) salaryError("unauthorized", "Sign in to manage Salary Plans.");
-  return identity.tokenIdentifier;
+  return (await requireRelayOwner(ctx)).ownerUserId;
 }
 
 function planFromRow(row: { durableId: string; clientId: string; requiredProjectCount: number; batchAmount: number; startDate: string; notes: string; archived: boolean }): SalaryPlan {
@@ -73,13 +72,13 @@ export const listPlans = query({
   args: { includeArchived: v.optional(v.boolean()) },
   returns: v.array(salaryPlanValidator),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const planRows = await collectPlans(ctx, identity.tokenIdentifier);
-    const batchRows = await collectBatches(ctx, identity.tokenIdentifier);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access || !access.canManageSalaryPlans) return [];
+    const planRows = await collectPlans(ctx, access.ownerUserId);
+    const batchRows = await collectBatches(ctx, access.ownerUserId);
     const progressRows = await Promise.all(planRows.map(async (row) => {
       const plan = planFromRow(row);
-      const projects = await collectProjects(ctx, identity.tokenIdentifier, plan.id);
+      const projects = await collectProjects(ctx, access.ownerUserId, plan.id);
       const progress = deriveSalaryPlanProgress(plan, projects.map((project): SalaryProject => ({ id: project.id, ...(project.salaryPlanId ? { salaryPlanId: project.salaryPlanId } : {}), ...(project.completedAt ? { completedAt: project.completedAt } : {}) })), batchRows.map(batchFromRow));
       return { ...plan, deliveredProjectIds: [...progress.deliveredProjectIds], deliveredProjectCount: progress.deliveredProjectCount, remainingProjectCount: progress.remainingProjectCount, currentAmount: progress.currentAmount };
     }));
@@ -92,9 +91,9 @@ export const listBatches = query({
   args: {},
   returns: v.array(salaryBatchValidator),
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    return (await collectBatches(ctx, identity.tokenIdentifier)).map(batchFromRow);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access || !access.canManageSalaryPlans) return [];
+    return (await collectBatches(ctx, access.ownerUserId)).map(batchFromRow);
   },
 });
 

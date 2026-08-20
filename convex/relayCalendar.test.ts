@@ -8,9 +8,19 @@ process.env.RELAY_FILE_SIGNING_SECRET = "relay-calendar-test-secret-at-least-32-
 
 const modules = import.meta.glob("./**/*.ts");
 const feedUrl = makeFunctionReference<"query", { appOrigin: string }, string | null>("relayCalendar:feedUrl");
-const feedEvents = makeFunctionReference<"query", { ownerUserId: string }, Array<{ id: string; date: string; title: string; href: string }>>("relayCalendar:feedEvents");
+const feedEvents = makeFunctionReference<"query", { ownerUserId: string; memberId: string }, Array<{ id: string; date: string; title: string; href: string }>>("relayCalendar:feedEvents");
 
 describe("Relay cloud calendar subscription", () => {
+  test("keeps an assigned Editor subscription scoped to assigned Projects", async () => {
+    const t = convexTest(schema, modules);
+    await t.run(async (ctx) => {
+      const workspaceId = await ctx.db.insert("relayTeamWorkspaces", { dataOwnerUserId: "owner", currentOwnerUserId: "owner", name: "Desk", currencyCode: "USD", timeZone: "UTC", defaultWorkflowTemplateId: "template_default", editorsCanViewAll: false, createdAt: "2026-08-01" });
+      await ctx.db.insert("relayTeamMembers", { workspaceId, userId: "editor", email: "editor@example.com", name: "Editor", role: "Editor", status: "active", permissions: { projects: true, reviews: true, portals: true, finance: false }, createdAt: "2026-08-01" });
+      for (const [id, lead] of [["assigned", "editor"], ["private", "owner"]] as const) await ctx.db.insert("relayProjects", { ownerUserId: "owner", id, name: id, clientId: "client", stage: "Editing", tone: "planned", due: "2026-09-12", progress: "0%", status: "active", financialType: "nonBillable", importedAt: "2026-08-01", lead, assignees: [] });
+    });
+    await expect(t.query(feedEvents, { ownerUserId: "owner", memberId: "editor" })).resolves.toEqual([{ id: "project:assigned", date: "2026-09-12", title: "assigned due", href: "/relay/projects/assigned" }]);
+  });
+
   test("issues a private feed URL and projects only active Workspace dates", async () => {
     const t = convexTest(schema, modules);
     const owner = t.withIdentity({ tokenIdentifier: "owner|calendar" });
@@ -22,8 +32,8 @@ describe("Relay cloud calendar subscription", () => {
     });
 
     await expect(t.query(feedUrl, { appOrigin: "https://app.relay.test" })).resolves.toBeNull();
-    await expect(owner.query(feedUrl, { appOrigin: "https://app.relay.test" })).resolves.toMatch(/^https:\/\/.*\/relay-calendar\.ics\?workspace=.*&origin=https%3A%2F%2Fapp\.relay\.test&signature=[a-f0-9]{64}$/);
-    await expect(t.query(feedEvents, { ownerUserId: "owner|calendar" })).resolves.toEqual([
+    await expect(owner.query(feedUrl, { appOrigin: "https://app.relay.test" })).resolves.toMatch(/^https:\/\/.*\/relay-calendar\.ics\?workspace=.*&member=.*&origin=https%3A%2F%2Fapp\.relay\.test&signature=[a-f0-9]{64}$/);
+    await expect(t.query(feedEvents, { ownerUserId: "owner|calendar", memberId: "owner|calendar" })).resolves.toEqual([
       { id: "review:output_main", date: "2026-09-09", title: "Main cut review", href: "/relay/projects/project_active#outputs" },
       { id: "output:output_main", date: "2026-09-11", title: "Main cut due", href: "/relay/projects/project_active#outputs" },
       { id: "payment:project_active", date: "2026-09-12", title: "Launch film payment due", href: "/relay/projects/project_active" },

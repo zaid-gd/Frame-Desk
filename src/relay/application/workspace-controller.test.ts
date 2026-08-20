@@ -28,4 +28,18 @@ describe("Relay workspace controller", () => {
       expect.objectContaining({ name: "Demo Project Alpha", clientId: "client_demo", clientName: "Demo Client", stage: "In review" }),
     ]));
   });
+
+  test("uses Workspace identity and removes finance navigation from unauthorized screen models", () => {
+    const controller = createWorkspaceController({
+      mode: "cloud",
+      workspacePort: createMemoryWorkspacePort(),
+      workspaceName: "Dubai Post",
+      currencyCode: "AED",
+      access: { canViewMoney: false, canViewSalary: false },
+    });
+
+    expect(controller.model.workspaceLabel).toBe("Dubai Post");
+    expect(controller.model.currencyCode).toBe("AED");
+    expect(controller.model.navigation.map(({ section }) => section)).not.toContain("reports");
+  });
 });

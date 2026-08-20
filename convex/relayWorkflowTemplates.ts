@@ -2,11 +2,10 @@ import { v } from "convex/values";
 import { mutation, query, type MutationCtx } from "./_generated/server";
 import { createDefaultWorkflowTemplate, validateWorkflowTemplate, type WorkflowTemplate } from "../src/relay/domain/workflow-template";
 import { workflowTemplateInputValidator, workflowTemplateValidator } from "./relayWorkspaceValidators";
+import { relayAccessForCurrentUser, requireRelayPermission } from "./relayAccess";
 
 async function requireOwnerUserId(ctx: MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Sign in to manage Workflow Templates.");
-  return identity.tokenIdentifier;
+  return (await requireRelayPermission(ctx, "projects")).ownerUserId;
 }
 
 function rowToTemplate(row: { durableId: string; archived: boolean; name: string; stages: WorkflowTemplate["stages"]; cancelledLabel: string; starterOutputs: WorkflowTemplate["starterOutputs"]; roles: WorkflowTemplate["roles"]; portalDefaults: WorkflowTemplate["portalDefaults"] }): WorkflowTemplate {
@@ -17,9 +16,9 @@ export const list = query({
   args: { includeArchived: v.optional(v.boolean()) },
   returns: v.array(workflowTemplateValidator),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const rows = await ctx.db.query("relayWorkflowTemplates").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", identity.tokenIdentifier)).take(100);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return [];
+    const rows = await ctx.db.query("relayWorkflowTemplates").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(100);
     if (!rows.length) return [createDefaultWorkflowTemplate("template_default", "Default workflow")];
     return rows.sort((a, b) => a.order - b.order).filter((row) => args.includeArchived || !row.archived).map(rowToTemplate);
   },

@@ -4,10 +4,13 @@
 
 **Blocked by:** 16 — Find work through Calendar, Files, and global search.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The Owner can set Workspace name, one currency, time zone, default Workflow Template, and whether Editors may see all Team Projects.
-- [ ] The free plan permits one Owner plus two invited members with Owner, Editor, or Viewer roles and separate project, review, portal, and finance permissions; Editor finance access starts disabled.
-- [ ] Server authorization and screen models enforce the permission matrix, including Viewer read-only behavior, finance navigation and actions, assigned-Project defaults, and Owner-only Salary Plans.
-- [ ] Ownership must transfer before an Owner leaves or deletes the account; removing a member preserves Projects and Activity, clears open assignments, and leaves Clients outside Team membership.
+- [x] The Owner can set Workspace name, one currency, time zone, default Workflow Template, and whether Editors may see all Team Projects.
+- [x] The free plan permits one Owner plus two invited members with Owner, Editor, or Viewer roles and separate project, review, portal, and finance permissions; Editor finance access starts disabled.
+- [x] Server authorization and screen models enforce the permission matrix, including Viewer read-only behavior, finance navigation and actions, assigned-Project defaults, and Owner-only Salary Plans.
+- [x] Ownership must transfer before an Owner leaves or deletes the account; removing a member preserves Projects and Activity, clears open assignments, and leaves Clients outside Team membership.
 
+## Answer
+
+Added the approved table-and-inspector Team screen and matching Workspace settings form. Cloud access now uses one permission model for Projects, reviews, Client Portals, finance, and Salary Plans. The free Workspace cap, ownership transfer, safe member removal, assignment cleanup, and solo-to-Team setup are covered by focused Relay and Convex tests.

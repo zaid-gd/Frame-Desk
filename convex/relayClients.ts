@@ -1,14 +1,8 @@
 import { v } from "convex/values";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { isRelayClient, validateClientInput } from "../src/relay/domain/client";
 import { relayClientInputValidator, relayClientValidator } from "./relayWorkspaceValidators";
-import { relayAccessForCurrentUser } from "./relayAccess";
-
-async function owner(ctx: MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Sign in to manage Clients.");
-  return identity.tokenIdentifier;
-}
+import { relayAccessForCurrentUser, requireRelayPermission } from "./relayAccess";
 
 export const list = query({
   args: { includeArchived: v.optional(v.boolean()), search: v.optional(v.string()) },
@@ -27,7 +21,7 @@ export const create = mutation({
   args: relayClientInputValidator.fields,
   returns: v.object({ id: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await owner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     if (validateClientInput(args)) throw new Error("Enter a name and valid Client details before saving.");
     const durableId = `client_${crypto.randomUUID()}`;
     await ctx.db.insert("relayClients", { ownerUserId, durableId, archived: false, ...args });
@@ -39,7 +33,7 @@ export const edit = mutation({
   args: { id: v.string(), ...relayClientInputValidator.fields },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await owner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     const existing = await ctx.db.query("relayClients").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
     if (!existing) throw new Error("Client not found.");
     const { id: _id, ...input } = args;
@@ -53,7 +47,7 @@ export const setArchived = mutation({
   args: { id: v.string(), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await owner(ctx);
+    const { ownerUserId } = await requireRelayPermission(ctx, "projects");
     const existing = await ctx.db.query("relayClients").withIndex("by_ownerUserId_and_durableId", (q) => q.eq("ownerUserId", ownerUserId).eq("durableId", args.id)).unique();
     if (!existing) throw new Error("Client not found.");
     await ctx.db.patch("relayClients", existing._id, { archived: args.archived });

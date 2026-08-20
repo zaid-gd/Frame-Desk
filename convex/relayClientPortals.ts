@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { outputReviewStateValidator, relayMediaCommentValidator, relayMediaSourceValidator } from "./relayWorkspaceValidators";
+import { relayAccessForCurrentUser, relayProjectVisible, requireRelayPermission, type RelayAccess } from "./relayAccess";
 
 const MAX_SHARED_OUTPUTS = 100;
 const PIN_ITERATIONS = 210_000;
@@ -20,9 +21,12 @@ function portalError(kind: "unauthorized" | "not-found" | "invalid" | "unavailab
 }
 
 async function ownerId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) portalError("unauthorized", "Sign in to manage Client Portals.");
-  return identity.tokenIdentifier;
+  return requireRelayPermission(ctx, "portals");
+}
+
+async function canReachProject(ctx: QueryCtx | MutationCtx, access: RelayAccess, projectId: string) {
+  const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", access.ownerUserId).eq("id", projectId)).unique();
+  return project && relayProjectVisible(access, project) ? project : null;
 }
 
 function bytesToHex(bytes: Uint8Array) {
@@ -79,7 +83,10 @@ export const getForProject = query({
   args: { projectId: v.string() },
   returns: v.union(v.null(), v.object({ projectId: v.string(), token: v.string(), status: v.union(v.literal("open"), v.literal("closed")), publicNotes: v.string(), showDueDate: v.boolean(), showCompletedDate: v.boolean(), outputIds: v.array(v.string()), expiresAt: v.union(v.string(), v.null()), pinProtected: v.boolean() })),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) return null;
+    const ownerUserId = access.ownerUserId;
+    if (!await canReachProject(ctx, access, args.projectId)) return null;
     const portal = await ctx.db.query("relayClientPortals").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).unique();
     return portal ? { projectId: portal.projectId, token: portal.token, status: portal.status, publicNotes: portal.publicNotes, showDueDate: portal.showDueDate, showCompletedDate: portal.showCompletedDate, outputIds: portal.outputIds, expiresAt: portal.expiresAt, pinProtected: Boolean(portal.pinHash && portal.pinSalt) } : null;
   },
@@ -89,8 +96,9 @@ export const publish = mutation({
   args: { projectId: v.string(), publicNotes: v.string(), showDueDate: v.boolean(), showCompletedDate: v.boolean(), outputIds: v.array(v.string()), expiresAt: v.union(v.string(), v.null()), pin: v.string(), removePin: v.boolean() },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", args.projectId)).unique();
+    const access = await ownerId(ctx);
+    const ownerUserId = access.ownerUserId;
+    const project = await canReachProject(ctx, access, args.projectId);
     if (!project) portalError("not-found", "Project not found.");
     if (args.publicNotes.length > 2_000) portalError("invalid", "Keep public notes under 2,000 characters.");
     if (args.expiresAt && !Number.isFinite(Date.parse(args.expiresAt))) portalError("invalid", "Enter a valid expiry date and time.");
@@ -117,7 +125,9 @@ export const setOpen = mutation({
   args: { projectId: v.string(), open: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await ownerId(ctx);
+    const ownerUserId = access.ownerUserId;
+    if (!await canReachProject(ctx, access, args.projectId)) portalError("not-found", "Client Portal not found.");
     const portal = await ctx.db.query("relayClientPortals").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).unique();
     if (!portal) portalError("not-found", "Client Portal not found.");
     await ctx.db.patch("relayClientPortals", portal._id, { status: args.open ? "open" : "closed", updatedAt: new Date().toISOString() });
@@ -129,7 +139,9 @@ export const regenerateToken = mutation({
   args: { projectId: v.string() },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
+    const access = await ownerId(ctx);
+    const ownerUserId = access.ownerUserId;
+    if (!await canReachProject(ctx, access, args.projectId)) portalError("not-found", "Client Portal not found.");
     const portal = await ctx.db.query("relayClientPortals").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).unique();
     if (!portal) portalError("not-found", "Client Portal not found.");
     const token = newToken();

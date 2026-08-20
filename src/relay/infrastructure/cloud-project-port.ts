@@ -14,7 +14,7 @@ const refs = {
   outputs: makeFunctionReference<"query", { projectId: string }, ProjectOutput[]>("relayProjectOutputs:listOutputs"),
   workspaceOutputs: makeFunctionReference<"query", Record<string, never>, ProjectOutput[]>("relayProjectOutputs:listWorkspaceOutputs"),
   outputCounts: makeFunctionReference<"query", Record<string, never>, Array<{ projectId: string; count: number }>>("relayProjectOutputs:listOutputCounts"),
-  access: makeFunctionReference<"query", Record<string, never>, { ownerUserId: string; memberId: string; role: "owner" | "editor" | "viewer"; canMarkPayments: boolean } | null>("relayProjects:myAccess"),
+  access: makeFunctionReference<"query", Record<string, never>, { ownerUserId: string; memberId: string; role: "owner" | "editor" | "viewer"; canMarkPayments: boolean; editorsCanViewAll: boolean; permissions: { projects: boolean; reviews: boolean; portals: boolean; finance: boolean }; canWrite: boolean; canViewFinance: boolean; canManageSalaryPlans: boolean } | null>("relayProjects:myAccess"),
   createProject: makeFunctionReference<"mutation", NewProjectInput, { id: string }>("relayProjects:createProject"),
   createGroup: makeFunctionReference<"mutation", ProjectGroupInput, { id: string }>("relayProjects:createGroup"),
   editGroup: makeFunctionReference<"mutation", ProjectGroupInput & { id: string }, null>("relayProjects:editGroup"),
@@ -63,7 +63,7 @@ export function useCloudProjectPort(enabled: boolean, clients: readonly ProjectC
   const deleteProject = useMutation(refs.deleteProject);
   return useMemo(() => ({
     projectId: selectedProjectId ?? "",
-    projectAccess: (): ProjectAccess => access ? { role: access.role, memberId: access.memberId, editorsCanViewAll: true, team: access.role !== "owner" } : { role: "viewer", memberId: "unknown", editorsCanViewAll: false, team: true },
+    projectAccess: (): ProjectAccess => access ? { role: access.role, memberId: access.memberId, editorsCanViewAll: access.editorsCanViewAll, permissions: access.permissions, canWrite: access.canWrite, canViewFinance: access.canViewFinance, canManageSalaryPlans: access.canManageSalaryPlans, team: access.role !== "owner" } : { role: "viewer", memberId: "unknown", editorsCanViewAll: false, team: true },
     loadOutputCounts: () => outputCounts ?? [],
     projectState: () => ({ kind: projects === undefined ? "loading" as const : "ready" as const }),
     loadClients: () => clients,

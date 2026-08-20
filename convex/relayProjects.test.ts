@@ -99,19 +99,21 @@ describe("Relay cloud Projects and Project Groups", () => {
       const template = createDefaultWorkflowTemplate("template_launch", "Launch workflow");
       const { id: durableId, ...input } = template;
       await ctx.db.insert("relayWorkflowTemplates", { ownerUserId: "owner", durableId, order: 0, ...input });
-      const teamId = await ctx.db.insert("teamWorkspaces", { ownerUserId: "owner", name: "Relay Team", inviteCode: "RELAY1", createdAt: "2026-08-01T00:00:00.000Z" });
+      const teamId = await ctx.db.insert("relayTeamWorkspaces", { dataOwnerUserId: "owner", currentOwnerUserId: "owner", name: "Relay Team", currencyCode: "USD", timeZone: "UTC", defaultWorkflowTemplateId: "template_default", editorsCanViewAll: true, createdAt: "2026-08-01T00:00:00.000Z" });
       for (const user of [
         { userId: "owner", role: "Owner" as const },
         { userId: "editor", role: "Editor" as const },
-        { userId: "viewer", role: "Reviewer" as const },
-      ]) await ctx.db.insert("teamMembers", { teamId, userId: user.userId, email: `${user.userId}@example.com`, name: user.userId, role: user.role, status: "active", permissions: { editProjects: user.role !== "Reviewer" }, createdAt: "2026-08-01T00:00:00.000Z", joinedAt: "2026-08-01T00:00:00.000Z" });
+        { userId: "viewer", role: "Viewer" as const },
+      ]) await ctx.db.insert("relayTeamMembers", { workspaceId: teamId, userId: user.userId, email: `${user.userId}@example.com`, name: user.userId, role: user.role, status: "active", permissions: user.role === "Owner" ? { projects: true, reviews: true, portals: true, finance: true } : user.role === "Editor" ? { projects: true, reviews: true, portals: true, finance: false } : { projects: false, reviews: false, portals: false, finance: false }, createdAt: "2026-08-01T00:00:00.000Z", joinedAt: "2026-08-01T00:00:00.000Z" });
     });
     const { id } = await owner.mutation(createProject, { ...projectInput, agreedAmount: 2400 });
-    await expect(editor.query(myAccess, {})).resolves.toMatchObject({ ownerUserId: "owner", role: "editor", canMarkPayments: true });
+    await expect(editor.query(myAccess, {})).resolves.toMatchObject({ ownerUserId: "owner", role: "editor", canMarkPayments: false });
     await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ agreedAmount: 2400, paymentState: "unpaid" });
     await expect(owner.mutation(setProjectPayment, { id, paid: true })).resolves.toMatchObject({ paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
     await expect(owner.query(inspectProject, { id })).resolves.toMatchObject({ paymentState: "paid", paidAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
-    await expect(editor.mutation(setProjectPayment, { id, paid: false })).resolves.toEqual({});
+    await expect(editor.mutation(setProjectPayment, { id, paid: false })).rejects.toThrow("permission to mark");
+    await expect(editor.mutation(createProject, { ...projectInput, agreedAmount: 1 })).rejects.toThrow("finance fields");
+    await expect(editor.mutation(createProject, { ...projectInput, financialType: "salaryPlan", salaryPlanId: "plan_salary" })).rejects.toThrow("finance fields");
     await expect(viewer.mutation(setProjectPayment, { id, paid: true })).rejects.toThrow("permission to mark");
     await expect(other.mutation(setProjectPayment, { id, paid: false })).rejects.toThrow("Project not found");
   });

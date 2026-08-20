@@ -6,7 +6,7 @@ import { relayStorageUsage } from "./relayStorageUsage";
 import type { Id } from "./_generated/dataModel";
 import { createFileAccessUrl, createUploadUrl } from "./relayProjectFileAccess";
 import { env } from "./_generated/server";
-import { relayAccessForCurrentUser } from "./relayAccess";
+import { relayAccessForCurrentUser, relayProjectVisible } from "./relayAccess";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const FREE_WORKSPACE_BYTES = 200 * 1024 * 1024;
@@ -21,12 +21,6 @@ const FILE_POLICIES = {
 } as const;
 type SafeMimeType = keyof typeof FILE_POLICIES;
 const projectFileValidator = v.object({ id: v.string(), projectId: v.string(), title: v.string(), fileName: v.string(), mimeType: v.string(), size: v.number(), archived: v.boolean(), portalVisible: v.boolean(), allowDownload: v.boolean(), accessUrl: v.union(v.string(), v.null()) });
-
-async function ownerId(ctx: QueryCtx | MutationCtx) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project files." });
-  return identity.tokenIdentifier;
-}
 
 function fileError(kind: "invalid" | "not-found" | "unavailable", message: string): never {
   throw new ConvexError({ kind, message });
@@ -60,6 +54,15 @@ async function requireProject(ctx: QueryCtx | MutationCtx, ownerUserId: string, 
   const project = await ctx.db.query("relayProjects").withIndex("by_ownerUserId_and_id", (q) => q.eq("ownerUserId", ownerUserId).eq("id", projectId)).unique();
   if (!project) fileError("not-found", "Project not found.");
   return project;
+}
+
+async function projectAccess(ctx: QueryCtx | MutationCtx, projectId: string, write: boolean) {
+  const access = await relayAccessForCurrentUser(ctx);
+  if (!access) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project files." });
+  const project = await requireProject(ctx, access.ownerUserId, projectId);
+  if (!relayProjectVisible(access, project)) fileError("not-found", "Project not found.");
+  if (write && (!access.canWrite || !access.permissions.projects)) throw new ConvexError({ kind: "invalid", message: "You do not have permission to manage Project files." });
+  return access;
 }
 
 async function retainedBytes(ctx: QueryCtx | MutationCtx, ownerUserId: string) {
@@ -152,8 +155,7 @@ export const prepareUpload = mutation({
   args: { projectId: v.string(), fileName: v.string(), mimeType: v.string(), size: v.number() },
   returns: v.object({ uploadUrl: v.string(), reservationId: v.id("relayUploadReservations") }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    await requireProject(ctx, ownerUserId, args.projectId);
+    const { ownerUserId } = await projectAccess(ctx, args.projectId, true);
     validateFile(args.fileName, args.mimeType, args.size);
     const reservationId = await reserveServiceCapacity(ctx, ownerUserId, args.projectId, args.size);
     if (await retainedBytes(ctx, ownerUserId) + args.size > FREE_WORKSPACE_BYTES) fileError("unavailable", "The free Workspace storage limit is 200 MB. Archive keeps its size; permanently delete files to free space.");
@@ -167,7 +169,9 @@ export const cancelUpload = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const reservation = await ctx.db.get("relayUploadReservations", args.reservationId);
-    if (!reservation || reservation.ownerUserId !== await ownerId(ctx) || reservation.status !== "pending") return null;
+    if (!reservation || reservation.status !== "pending") return null;
+    const { ownerUserId } = await projectAccess(ctx, reservation.projectId, true);
+    if (reservation.ownerUserId !== ownerUserId) return null;
     if (reservation.storageId) await ctx.storage.delete(reservation.storageId);
     await releaseReservation(ctx, reservation);
     return null;
@@ -202,12 +206,19 @@ export const finishUpload = action({
   args: { projectId: v.string(), reservationId: v.id("relayUploadReservations"), storageId: v.id("_storage"), fileName: v.string(), mimeType: v.string(), title: v.string(), portalVisible: v.optional(v.boolean()), allowDownload: v.optional(v.boolean()) },
   returns: v.union(v.object({ ok: v.literal(true), id: v.string() }), v.object({ ok: v.literal(false), error: v.string() })),
   handler: async (ctx, args): Promise<{ ok: true; id: string } | { ok: false; error: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) fileError("invalid", "Sign in to finish a Project file upload.");
+    const ownerUserId = await ctx.runQuery(internal.relayProjectFiles.resolveUploadAccess, { projectId: args.projectId });
+    if (!ownerUserId) fileError("invalid", "You do not have permission to finish this Project file upload.");
     const blob = await ctx.storage.get(args.storageId);
     const withinReadLimit = Boolean(blob && blob.size <= MAX_FILE_BYTES);
     const bytes = withinReadLimit ? new Uint8Array(await blob!.arrayBuffer()) : new Uint8Array();
-    return ctx.runMutation(internal.relayProjectFiles.finalizeUpload, { ...args, ownerUserId: identity.tokenIdentifier, contentSafe: withinReadLimit && contentMatchesType(bytes, (blob?.type || args.mimeType).toLowerCase()) });
+    return ctx.runMutation(internal.relayProjectFiles.finalizeUpload, { ...args, ownerUserId, contentSafe: withinReadLimit && contentMatchesType(bytes, (blob?.type || args.mimeType).toLowerCase()) });
+  },
+});
+
+export const resolveUploadAccess = internalQuery({
+  args: { projectId: v.string() }, returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    try { return (await projectAccess(ctx, args.projectId, true)).ownerUserId; } catch { return null; }
   },
 });
 
@@ -266,8 +277,7 @@ export const list = query({
   args: { projectId: v.string(), now: v.number() },
   returns: v.object({ retainedBytes: v.number(), limitBytes: v.number(), files: v.array(projectFileValidator) }),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    await requireProject(ctx, ownerUserId, args.projectId);
+    const { ownerUserId } = await projectAccess(ctx, args.projectId, false);
     const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", ownerUserId).eq("projectId", args.projectId)).take(500);
     return { retainedBytes: await retainedBytes(ctx, ownerUserId), limitBytes: FREE_WORKSPACE_BYTES, files: await Promise.all(files.map(async (file) => ({ id: file.durableId, projectId: file.projectId, title: file.title, fileName: file.fileName, mimeType: file.mimeType, size: file.size, archived: file.archived, portalVisible: file.portalVisible, allowDownload: file.allowDownload, accessUrl: await createFileAccessUrl({ fileId: file.durableId, ownerUserId }, args.now) }))) };
   },
@@ -279,9 +289,9 @@ export const listWorkspace = query({
   handler: async (ctx, args) => {
     const access = await relayAccessForCurrentUser(ctx);
     if (!access) return [];
-    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
-    const activeProjectIds = new Set(projects.filter(({ status }) => status !== "past").map(({ id }) => id));
-    const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", access.ownerUserId)).collect();
+    const projects = await ctx.db.query("relayProjects").withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
+    const activeProjectIds = new Set(projects.filter((project) => project.status !== "past" && relayProjectVisible(access, project)).map(({ id }) => id));
+    const files = await ctx.db.query("relayProjectFiles").withIndex("by_ownerUserId_and_projectId", (q) => q.eq("ownerUserId", access.ownerUserId)).take(500);
     return Promise.all(files.filter((file) => !file.archived && activeProjectIds.has(file.projectId)).map(async (file) => ({
       id: file.durableId,
       projectId: file.projectId,
@@ -301,8 +311,10 @@ export const setSharing = mutation({
   args: { id: v.string(), portalVisible: v.boolean(), allowDownload: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const ownerUserId = await ownerId(ctx);
-    const file = await ownedFile(ctx, ownerUserId, args.id);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project files." });
+    const file = await ownedFile(ctx, access.ownerUserId, args.id);
+    await projectAccess(ctx, file.projectId, true);
     await ctx.db.patch("relayProjectFiles", file._id, { portalVisible: args.portalVisible, allowDownload: args.portalVisible && args.allowDownload });
     return null;
   },
@@ -367,7 +379,10 @@ export const setArchived = mutation({
   args: { id: v.string(), archived: v.boolean() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const file = await ownedFile(ctx, await ownerId(ctx), args.id);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project files." });
+    const file = await ownedFile(ctx, access.ownerUserId, args.id);
+    await projectAccess(ctx, file.projectId, true);
     await ctx.db.patch("relayProjectFiles", file._id, { archived: args.archived, ...(args.archived ? { portalVisible: false } : {}) });
     return null;
   },
@@ -377,7 +392,10 @@ export const permanentlyDelete = mutation({
   args: { id: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const file = await ownedFile(ctx, await ownerId(ctx), args.id);
+    const access = await relayAccessForCurrentUser(ctx);
+    if (!access) throw new ConvexError({ kind: "unauthorized", message: "Sign in to manage Project files." });
+    const file = await ownedFile(ctx, access.ownerUserId, args.id);
+    await projectAccess(ctx, file.projectId, true);
     await ctx.storage.delete(file.storageId);
     await ctx.db.delete("relayProjectFiles", file._id);
     await relayStorageUsage.delete(ctx, { namespace: file.ownerUserId, key: file.durableId, id: `file:${file.durableId}` });

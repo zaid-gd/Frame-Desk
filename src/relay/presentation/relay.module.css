@@ -53,6 +53,35 @@
 .errorNotice, .successNotice { margin: 0; padding: 14px 22px; border-top: 1px solid var(--relay-border); font-weight: 650; }
 .errorNotice { color: var(--relay-error); }
 .successNotice { color: var(--relay-success); }
+.teamStack, .settingsStack { display: grid; gap: 20px; }
+.teamToolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; color: var(--relay-muted); font-size: 13px; }
+.teamGrid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(300px, .55fr); overflow: hidden; }
+.teamTable { min-width: 0; border-right: 1px solid var(--relay-border); }
+.teamTable .cardTitle span, .workspaceSettings .cardTitle span { color: var(--relay-muted); font-size: 12px; }
+.teamTable td:first-child { padding: 0; }
+.teamTable td button { width: 100%; border: 0; background: transparent; color: var(--relay-ink); padding: 14px 18px; text-align: left; cursor: pointer; }
+.teamTable td button strong, .teamTable td button small { display: block; }
+.teamTable td button small, .memberInspector small { margin-top: 4px; color: var(--relay-muted); font-size: 12px; }
+.teamTable tr[data-selected="true"] { background: color-mix(in srgb, var(--relay-action) 9%, var(--relay-card)); box-shadow: inset 3px 0 var(--relay-action); }
+.memberInspector { min-width: 0; }
+.inspectorBody { display: grid; gap: 18px; padding: 20px; }
+.inspectorBody > div:first-child strong, .inspectorBody > div:first-child small { display: block; }
+.inspectorBody > label, .inviteForm label, .workspaceSettings form > label { display: grid; gap: 7px; color: var(--relay-muted); font-size: 12px; font-weight: 650; }
+.inspectorBody select, .inviteForm input, .inviteForm select, .workspaceSettings input, .workspaceSettings select { min-height: 40px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 8px 10px; font: inherit; }
+.inspectorBody fieldset { display: grid; gap: 10px; margin: 0; border: 1px solid var(--relay-border); border-radius: 7px; padding: 14px; }
+.inspectorBody fieldset legend { color: var(--relay-muted); font-size: 12px; font-weight: 650; }
+.inspectorBody fieldset label { display: flex; align-items: center; gap: 9px; text-transform: capitalize; }
+.inspectorBody p { margin: 0; color: var(--relay-muted); font-size: 13px; line-height: 1.5; }
+.inspectorActions { display: grid; gap: 8px; }
+.inspectorActions button:not(.primaryButton) { min-height: 38px; border: 1px solid var(--relay-border); border-radius: 7px; background: var(--relay-card); color: var(--relay-ink); padding: 0 12px; font: inherit; cursor: pointer; }
+.inviteForm { display: grid; grid-template-columns: 1fr 1.4fr .7fr auto; align-items: end; gap: 14px; padding: 18px; }
+.workspaceSettings form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 20px 22px; }
+.settingsToggle { grid-column: 1 / -1; display: flex !important; align-items: start; gap: 10px !important; border-top: 1px solid var(--relay-border); padding-top: 18px; }
+.settingsToggle input { min-height: auto; margin-top: 3px; }
+.settingsToggle span, .settingsToggle strong, .settingsToggle small { display: block; }
+.settingsToggle strong { color: var(--relay-ink); }
+.settingsToggle small { margin-top: 4px; font-weight: 450; line-height: 1.45; }
+.workspaceSettings .formActions { grid-column: 1 / -1; }
 
 .welcome {
   min-height: 100dvh;
@@ -336,6 +365,10 @@
   .reportGrid { grid-template-columns: 1fr; padding-left: 16px; padding-right: 16px; }
   .table { min-width: 680px; }
   .tableWrap { overflow-x: auto; }
+  .teamGrid, .workspaceSettings form, .inviteForm { grid-template-columns: 1fr; }
+  .teamTable { border-right: 0; border-bottom: 1px solid var(--relay-border); }
+  .settingsToggle, .workspaceSettings .formActions { grid-column: auto; }
+  .teamToolbar { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 700px) {
