@@ -6,7 +6,8 @@ function secret() {
 }
 
 function siteUrl() {
-  return env.CONVEX_SITE_URL && env.CONVEX_SITE_URL !== "undefined" ? env.CONVEX_SITE_URL : "https://relay-calendar.invalid";
+  const convexSiteUrl = (env as typeof env & { readonly CONVEX_SITE_URL?: string }).CONVEX_SITE_URL;
+  return convexSiteUrl && convexSiteUrl !== "undefined" ? convexSiteUrl : "https://relay-calendar.invalid";
 }
 
 function normalizeAppOrigin(value: string) {
