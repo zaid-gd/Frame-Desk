@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/site";
 
-const publicRoutes = ["", "/accessibility", "/contact", "/privacy", "/terms"];
+const publicRoutes = [""];
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date("2026-07-22T00:00:00.000Z");

@@ -9,62 +9,43 @@ import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk", weight: ["600", "700"] });
 
-const siteTitle = "Frame Desk | Video Production Workspace for Editors";
-const siteDescription = "Plan edits, track deadlines, manage client feedback, organize media, and monitor production work in one focused workspace built for video editors.";
+const siteTitle = "Relay | Video Production Workspace";
+const siteDescription = "Run video production work from one clear workspace, with local and cloud modes.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  applicationName: "Frame Desk",
+  applicationName: "Relay",
   title: siteTitle,
   description: siteDescription,
-  keywords: ["video editing", "project tracker", "local-first", "editing workflow", "salary batch"],
-  authors: [{ name: "Frame Desk" }],
-  creator: "Frame Desk",
+  keywords: ["video production", "project workspace", "local-first", "editing workflow"],
+  authors: [{ name: "Relay" }],
+  creator: "Relay",
   openGraph: {
     title: siteTitle,
     description: siteDescription,
     type: "website",
     url: "/",
-    siteName: "Frame Desk",
-    images: [
-      {
-        url: "/og-image.png",
-        width: 1600,
-        height: 900,
-        alt: "Frame Desk dashboard overview"
-      }
-    ]
+    siteName: "Relay",
   },
   twitter: {
     card: "summary_large_image",
     title: siteTitle,
     description: siteDescription,
-    images: ["/og-image.png"]
-  },
-  icons: {
-    icon: [
-      { url: "/brand/icons/app-icon-dark-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/brand/icons/app-icon-dark-64.png", sizes: "64x64", type: "image/png" }
-    ],
-    shortcut: "/brand/icons/app-icon-dark-32.png",
-    apple: "/brand/icons/app-icon-dark-256.png"
   }
 };
 
 const structuredData = {
   "@context": "https://schema.org",
   "@type": "WebApplication",
-  name: "Frame Desk",
+  name: "Relay",
   url: siteUrl,
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   description: siteDescription,
-  image: `${siteUrl}/og-image.png`,
   publisher: {
     "@type": "Organization",
-    name: "Frame Desk",
+    name: "Relay",
     url: siteUrl,
-    email: "Cutlab.Studios@gmail.com"
   }
 };
 
@@ -81,33 +62,11 @@ export const viewport: Viewport = {
 const themeBootScript = `
 (function () {
   try {
-    var raw = window.localStorage.getItem("video-editing-work-tracker:settings:v1");
-    var settings = raw ? JSON.parse(raw) : {};
-    var theme = ["Light", "Dark", "System"].indexOf(settings.theme) >= 0 ? settings.theme : "Dark";
-    var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    var isDark = theme === "Dark" || (theme === "System" && prefersDark);
-    var accent = typeof settings.accentColor === "string" && /^#[0-9a-fA-F]{6}$/.test(settings.accentColor) ? settings.accentColor : "#14B8A6";
-    var accentValue = parseInt(accent.slice(1), 16);
-    var toLinear = function (channel) {
-      var normalized = channel / 255;
-      return normalized <= 0.03928 ? normalized / 12.92 : Math.pow((normalized + 0.055) / 1.055, 2.4);
-    };
-    var luminance = function (red, green, blue) {
-      return toLinear(red) * 0.2126 + toLinear(green) * 0.7152 + toLinear(blue) * 0.0722;
-    };
-    var accentLuminance = luminance((accentValue >> 16) & 255, (accentValue >> 8) & 255, accentValue & 255);
-    var inkLuminance = luminance(4, 47, 46);
-    var whiteContrast = 1.05 / (accentLuminance + 0.05);
-    var inkContrast = (Math.max(accentLuminance, inkLuminance) + 0.05) / (Math.min(accentLuminance, inkLuminance) + 0.05);
-    var accentForeground = inkContrast >= whiteContrast ? "#042F2E" : "#FFFFFF";
+    var isDark = window.localStorage.getItem("relay:theme:v1") === "dark";
     var root = document.documentElement;
-    root.style.setProperty("--app-accent", accent);
-    root.style.setProperty("--app-accent-foreground", accentForeground);
     root.style.colorScheme = isDark ? "dark" : "light";
     root.dataset.theme = isDark ? "dark" : "light";
     root.classList.toggle("dark", isDark);
-    root.classList.toggle("cutlab-density-compact", settings.density === "Compact");
-    root.classList.toggle("cutlab-density-comfortable", settings.density !== "Compact");
   } catch {}
 })();
 `;
@@ -135,7 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
         />
-        <Script id="cutlab-theme-boot" strategy="beforeInteractive">
+        <Script id="relay-theme-boot" strategy="beforeInteractive">
           {themeBootScript}
         </Script>
         <style data-clerk-modal-centering dangerouslySetInnerHTML={{ __html: clerkModalCenteringCss }} />

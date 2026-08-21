@@ -56,6 +56,8 @@ Run the full suite when changing Convex functions or schema, authentication, pro
 npm run check:full
 ```
 
+`check:full` follows the active Relay runtime. It keeps the old team and file data tests while excluding retired Frame Desk UI-only verifiers such as `verify:team`; those commands remain available only for work on archived Frame Desk source.
+
 Describe the checks you ran in the pull request. Include clear reproduction and verification steps for user-facing fixes.
 
 ## Code Style

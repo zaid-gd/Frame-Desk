@@ -1,7 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 import styles from "./access.module.css";
 
 function safeReturnTo(value: string | null) {
@@ -9,10 +8,12 @@ function safeReturnTo(value: string | null) {
 }
 
 export function AccessForm({ returnTo }: { returnTo?: string }) {
-  const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => setHydrated(true), []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,8 +33,7 @@ export function AccessForm({ returnTo }: { returnTo?: string }) {
         return;
       }
 
-      router.replace(safeReturnTo(returnTo ?? null));
-      router.refresh();
+      window.location.assign(safeReturnTo(returnTo ?? null));
     } catch {
       setMessage("Access could not be verified. Check your connection and try again.");
     } finally {
@@ -58,7 +58,7 @@ export function AccessForm({ returnTo }: { returnTo?: string }) {
           aria-describedby={message ? "access-message" : undefined}
           aria-invalid={message ? true : undefined}
         />
-        <button type="submit" disabled={isSubmitting}>
+        <button type="submit" disabled={!hydrated || isSubmitting}>
           {isSubmitting ? "Checking…" : "Continue"}
         </button>
       </div>

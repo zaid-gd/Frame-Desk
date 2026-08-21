@@ -17,8 +17,209 @@ import {
   storedTeamRoleValidator,
   teamActivityKindValidator,
 } from "./domainValidators";
+import { projectGroupInputValidator, relayClientInputValidator, relayProjectValidator, salaryBatchValidator, salaryPlanInputValidator, workflowTemplateInputValidator } from "./relayWorkspaceValidators";
+import { mediaProviderValidator, outputReviewStateValidator } from "./relayWorkspaceValidators";
 
 export default defineSchema({
+  relayTeamWorkspaces: defineTable({
+    dataOwnerUserId: v.string(),
+    currentOwnerUserId: v.string(),
+    name: v.string(),
+    currencyCode: v.string(),
+    timeZone: v.string(),
+    defaultWorkflowTemplateId: v.string(),
+    editorsCanViewAll: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_dataOwnerUserId", ["dataOwnerUserId"])
+    .index("by_currentOwnerUserId", ["currentOwnerUserId"]),
+
+  relayTeamMembers: defineTable({
+    workspaceId: v.id("relayTeamWorkspaces"),
+    userId: v.string(),
+    email: v.string(),
+    name: v.string(),
+    role: v.union(v.literal("Owner"), v.literal("Editor"), v.literal("Viewer")),
+    status: memberStatusValidator,
+    permissions: v.object({ projects: v.boolean(), reviews: v.boolean(), portals: v.boolean(), finance: v.boolean() }),
+    createdAt: v.string(),
+    joinedAt: v.optional(v.string()),
+  })
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_userId_and_status", ["userId", "status"])
+    .index("by_email_and_status", ["email", "status"])
+    .index("by_workspaceId_and_userId", ["workspaceId", "userId"])
+    .index("by_workspaceId_and_email", ["workspaceId", "email"]),
+
+  relayTeamActivity: defineTable({
+    workspaceId: v.id("relayTeamWorkspaces"),
+    actorUserId: v.string(),
+    actorName: v.string(),
+    kind: v.union(v.literal("member_invited"), v.literal("member_joined"), v.literal("member_role_updated"), v.literal("member_removed"), v.literal("member_left")),
+    message: v.string(),
+    createdAt: v.string(),
+  }).index("by_workspaceId_and_createdAt", ["workspaceId", "createdAt"]),
+
+  relayWorkflowTemplates: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    order: v.number(),
+    archived: v.boolean(),
+    ...workflowTemplateInputValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"]),
+
+  relayClients: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    ...relayClientInputValidator.fields,
+    archived: v.boolean(),
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"]),
+
+  relaySalaryPlans: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    archived: v.boolean(),
+    ...salaryPlanInputValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_clientId", ["ownerUserId", "clientId"]),
+
+  relaySalaryBatches: defineTable({
+    ownerUserId: v.string(),
+    ...salaryBatchValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_id", ["ownerUserId", "id"])
+    .index("by_ownerUserId_and_planId", ["ownerUserId", "planId"]),
+
+  relayProjectGroups: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    archived: v.boolean(),
+    ...projectGroupInputValidator.fields,
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"]),
+
+  relayProjects: defineTable({
+    ownerUserId: v.string(),
+    ...relayProjectValidator.fields,
+    importedAt: v.string(),
+  })
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_and_id", ["ownerUserId", "id"])
+    .index("by_ownerUserId_and_workflowTemplateId_and_workflowStageId", ["ownerUserId", "workflowTemplateId", "workflowStageId"])
+    .index("by_ownerUserId_and_salaryPlanId", ["ownerUserId", "salaryPlanId"]),
+
+  relayProjectOutputs: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    name: v.string(),
+    reviewState: outputReviewStateValidator,
+    archived: v.boolean(),
+    roleId: v.optional(v.string()),
+    relativeDeadlineDays: v.optional(v.number()),
+    currentVersionId: v.optional(v.string()),
+  })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayMediaVersions: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    outputId: v.string(),
+    number: v.number(),
+    provider: mediaProviderValidator,
+    providerId: v.optional(v.string()),
+    normalizedUrl: v.string(),
+    addedAt: v.string(),
+    size: v.optional(v.number()),
+  })
+    .index("by_ownerUserId_and_outputId_and_number", ["ownerUserId", "outputId", "number"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayProjectFiles: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    storageId: v.id("_storage"),
+    title: v.string(),
+    fileName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    archived: v.boolean(),
+    portalVisible: v.boolean(),
+    allowDownload: v.boolean(),
+    createdAt: v.string(),
+  })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"])
+    .index("by_storageId", ["storageId"]),
+
+  relayStoragePolicy: defineTable({
+    key: v.literal("service"),
+    acceptsUploads: v.boolean(),
+    remainingBytes: v.optional(v.number()),
+    reserveBytes: v.optional(v.number()),
+    heldBytes: v.optional(v.number()),
+  }).index("by_key", ["key"]),
+
+  relayUploadReservations: defineTable({
+    ownerUserId: v.string(),
+    projectId: v.string(),
+    size: v.number(),
+    declaredSize: v.number(),
+    storageId: v.optional(v.id("_storage")),
+    status: v.union(v.literal("pending"), v.literal("expired")),
+    createdAt: v.string(),
+    expiresAt: v.number(),
+  }).index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayMediaComments: defineTable({
+    ownerUserId: v.string(),
+    durableId: v.string(),
+    projectId: v.string(),
+    versionId: v.string(),
+    body: v.string(),
+    resolved: v.boolean(),
+    authorName: v.optional(v.string()),
+    createdAt: v.optional(v.string()),
+  })
+    .index("by_ownerUserId_and_durableId", ["ownerUserId", "durableId"])
+    .index("by_ownerUserId_and_versionId", ["ownerUserId", "versionId"])
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"]),
+
+  relayClientPortals: defineTable({
+    ownerUserId: v.string(),
+    projectId: v.string(),
+    token: v.string(),
+    status: v.union(v.literal("open"), v.literal("closed")),
+    publicNotes: v.string(),
+    showDueDate: v.boolean(),
+    showCompletedDate: v.boolean(),
+    outputIds: v.array(v.string()),
+    expiresAt: v.union(v.string(), v.null()),
+    pinHash: v.optional(v.string()),
+    pinSalt: v.optional(v.string()),
+    createdAt: v.string(),
+    updatedAt: v.string(),
+  })
+    .index("by_ownerUserId_and_projectId", ["ownerUserId", "projectId"])
+    .index("by_token", ["token"]),
+
+  relayWorkspaceImports: defineTable({
+    ownerUserId: v.string(),
+    importedAt: v.string(),
+    recordCount: v.number(),
+  }).index("by_ownerUserId", ["ownerUserId"]),
+
   workItems: defineTable({
     userId: v.string(),
     id: v.string(),

@@ -1,16 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse, type NextRequest } from "next/server";
 import {
   ACCESS_COOKIE_NAME,
   getAccessPassword,
   verifyAccessToken,
 } from "@/lib/access-wall";
+import { isRetiredFrameDeskPath } from "@/lib/relay-runtime-boundary";
 
 const PUBLIC_PATHS = new Set([
   "/access",
   "/api/access",
 ]);
 
-export default async function middleware(request: NextRequest) {
+function isPublicPath(pathname: string) {
+  return PUBLIC_PATHS.has(pathname) || pathname.startsWith("/__clerk/");
+}
+
+export default clerkMiddleware(async (_auth, request: NextRequest) => {
   const { pathname, search } = request.nextUrl;
   const password = getAccessPassword();
   const token = request.cookies.get(ACCESS_COOKIE_NAME)?.value;
@@ -24,7 +30,7 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(destination, request.url));
   }
 
-  if (PUBLIC_PATHS.has(pathname)) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -35,13 +41,18 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.redirect(accessUrl);
   }
 
+  if (isRetiredFrameDeskPath(pathname)) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   return NextResponse.next();
-}
+});
 
 export const config = {
   matcher: [
     "/((?!.+\\.[\\w]+$|_next).*)",
     "/",
     "/(api|trpc)(.*)",
+    "/__clerk/:path*",
   ],
 };

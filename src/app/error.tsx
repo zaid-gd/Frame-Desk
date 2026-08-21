@@ -12,10 +12,10 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--app-muted)]">Unexpected error</p>
             <h1 id="error-heading" className="mt-2 font-[family-name:var(--font-space-grotesk)] text-[30px] font-bold leading-tight">
-              Frame Desk needs a refresh
+              Relay needs a refresh
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-[var(--text-secondary)]">
-              The tracker hit an unexpected app error. Your saved projects stay in local browser storage.
+              Relay hit an unexpected error. Work saved in Local Mode stays in this browser.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -27,7 +27,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
               variant="outline"
               className="min-h-11 border-[var(--app-border)] text-[var(--app-highlight)]"
             >
-              <Link href="/">Back to Dashboard</Link>
+              <Link href="/">Back to Relay</Link>
             </Button>
           </div>
         </div>

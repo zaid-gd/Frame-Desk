@@ -14,6 +14,7 @@ type OptionalAuthValue = {
   openSignIn: AuthAction;
   openSignUp: AuthAction;
   signOut: ClerkState["signOut"];
+  deleteAccount(): Promise<void>;
 };
 
 const localOpenSignIn: AuthAction = () => undefined;
@@ -26,7 +27,8 @@ const localAuth: OptionalAuthValue = {
   user: null,
   openSignIn: localOpenSignIn,
   openSignUp: localOpenSignUp,
-  signOut: localSignOut
+  signOut: localSignOut,
+  deleteAccount: async () => undefined,
 };
 
 const OptionalAuthContext = createContext<OptionalAuthValue>(localAuth);
@@ -68,7 +70,8 @@ export function ClerkAuthBridge({ children }: { children: ReactNode }) {
     user,
     openSignIn,
     openSignUp,
-    signOut
+    signOut,
+    deleteAccount: async () => { await user?.delete(); },
   }), [isLoaded, isSignedIn, openSignIn, openSignUp, signOut, user]);
 
   return <OptionalAuthContext.Provider value={value}>{children}</OptionalAuthContext.Provider>;

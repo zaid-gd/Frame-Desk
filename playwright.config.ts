@@ -5,6 +5,7 @@ loadE2EEnvironment();
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["cloud-workflow.spec.ts", "local-project.spec.ts"],
   fullyParallel: false,
   timeout: 90_000,
   expect: {
@@ -24,8 +25,20 @@ export default defineConfig({
   },
   projects: [
     {
-      name: "chromium",
+      name: "chrome",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "edge",
+      use: { ...devices["Desktop Edge"], channel: "msedge" },
+    },
+    {
+      name: "firefox",
+      use: { ...devices["Desktop Firefox"] },
+    },
+    {
+      name: "webkit",
+      use: { ...devices["Desktop Safari"] },
     },
   ],
   globalSetup: "./e2e/global-setup.ts",

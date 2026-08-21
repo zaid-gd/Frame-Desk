@@ -7,6 +7,14 @@ export async function openApp(page: Page, path: string) {
     await setupClerkTestingToken({ page });
   }
   await page.goto(path);
+  if (page.url().includes("/access")) {
+    if (cloudE2EAvailable()) await waitForClerk(page);
+    const accessPassword = process.env.ACCESS_WALL_PASSWORD;
+    if (!accessPassword) throw new Error("ACCESS_WALL_PASSWORD is required for protected browser tests.");
+    await page.getByLabel("Access password").fill(accessPassword);
+    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page).toHaveURL(new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
+  }
   await expect(page.getByText("Loading workspace", { exact: true })).toBeHidden();
 }
 
