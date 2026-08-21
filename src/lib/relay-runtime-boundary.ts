@@ -25,7 +25,6 @@ const RETIRED_FRAME_DESK_PATHS = new Set([
 ]);
 
 const RETIRED_FRAME_DESK_PREFIXES = [
-  "/client-portal/",
   "/profile/",
   "/prototype/",
   "/u/",

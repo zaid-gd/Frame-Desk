@@ -168,7 +168,8 @@ function RelayBrand() {
   return <div className={styles.brand} aria-label="Relay"><span className={styles.brandMark} aria-hidden="true"><i /><i /></span><span className={styles.brandName}>Relay</span></div>;
 }
 
-function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, team, clients, templates, projects, salaryPlans, outputs, files, portal, discovery, collapsed, theme, analyticsEnabled, onSetOptionalAnalytics, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onDeleteAccount, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; analyticsEnabled: boolean; onSetOptionalAnalytics(enabled: boolean): void; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onDeleteAccount(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
+function RelayShell({ section, projectId, mode, identity, storageWarning, workspace, backup, team, clients, templates, projects, salaryPlans, outputs, files, portal, discovery, collapsed, theme, analyticsEnabled, onSetOptionalAnalytics, onToggleSidebar, onToggleTheme, onLeaveWorkspace, onDeleteAccount, onRequestNewProject, onProjectCreated, onProjectsChanged, onClientsChanged, onTemplatesChanged, onSalaryPlansChanged }: RelayExperienceProps["shell"] & { section: RelaySection; analyticsEnabled: boolean; onSetOptionalAnalytics(enabled: boolean): void; onToggleSidebar(): void; onToggleTheme(): void; onLeaveWorkspace(): Promise<void>; onDeleteAccount(): Promise<void>; onRequestNewProject(): Promise<{ ok: boolean; message: string }>; onProjectCreated(url: string): void; onProjectsChanged(): void; onClientsChanged(): void; onTemplatesChanged(): void; onSalaryPlansChanged(): void }) {
+  const router = useRouter();
   const [message, setMessage] = useState("");
   const [showNewProject, setShowNewProject] = useState(false);
   const shellSearchParams = useSearchParams();
@@ -225,7 +226,18 @@ function RelayShell({ section, projectId, mode, identity, storageWarning, worksp
           <div className={styles.content}>
             {storageWarning ? <div className={styles.warning} role="status"><MonitorDown size={18} aria-hidden="true" />{storageWarning}</div> : null}
             {workspace.readOnlyNotice ? <div className={styles.warning}><FolderKanban size={18} aria-hidden="true" />{workspace.readOnlyNotice}</div> : null}
-            {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => readOnly ? setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.") : setShowNewProject(true)} /> : null}
+            {!projectId && section !== "projects" ? <RelayPageHeader model={workspace.page} onNewProject={() => {
+              if (readOnly) {
+                setMessage("Sample Workspace is read-only. Choose Local Mode or create an account to make changes.");
+              } else if (mode === "cloud") {
+                router.push("/relay/projects?new=true");
+              } else {
+                void onRequestNewProject().then((result) => {
+                  setMessage(result.message);
+                  if (result.ok) onProjectsChanged();
+                });
+              }
+            }} /> : null}
             {projectId ? <ProjectPage controller={projects} outputController={outputs} filePort={files} portalController={portal} projectId={projectId} readOnly={projectReadOnly} reviewReadOnly={readOnly || !projects.model.canReview} portalReadOnly={readOnly || !projects.model.canManagePortals} onChanged={onProjectsChanged} /> : section === "dashboard" ? <Dashboard workspace={workspace} /> : section === "projects" ? <ProjectsPage controller={projects} workspace={workspace} readOnly={projectReadOnly} showNewProject={showNewProject} onNewProject={() => projectReadOnly ? setMessage("You do not have permission to change Projects in this Workspace.") : setShowNewProject(true)} onCancelNewProject={() => setShowNewProject(false)} onProjectCreated={onProjectCreated} onChanged={onProjectsChanged} /> : section === "clients" ? <ClientsPage controller={clients} readOnly={projectReadOnly} onChanged={onClientsChanged} /> : section === "templates" ? <TemplatesPage controller={templates} onChanged={onTemplatesChanged} /> : section === "calendar" ? <CalendarPage controller={discovery} /> : section === "files" ? <FilesPage controller={discovery} /> : section === "reports" ? <ReportsPage workspace={workspace} salaryController={salaryPlans} readOnly={readOnly} onChanged={onSalaryPlansChanged} /> : section === "team" ? <TeamPage controller={team} /> : section === "settings" ? <WorkspaceSettings controller={team} backup={backup} templates={templates} analyticsEnabled={analyticsEnabled} onSetOptionalAnalytics={onSetOptionalAnalytics} onDeleteAccount={onDeleteAccount} /> : <SectionPlaceholder section={section} title={workspace.page.title} />}
           </div>
         </main>

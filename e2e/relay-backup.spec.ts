@@ -16,6 +16,7 @@ test("backs up and restores persisted Local Mode work", async ({ page }) => {
   await page.getByRole("button", { name: "New project" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Local draft saved" })).toBeVisible();
   await page.reload();
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
   await expect(page.getByRole("cell", { name: /Untitled local project/ })).toBeVisible();
 
   await page.getByRole("link", { name: "Settings" }).click();
@@ -29,7 +30,7 @@ test("backs up and restores persisted Local Mode work", async ({ page }) => {
 
   await page.evaluate(() => localStorage.removeItem("relay:local-workspace:v2"));
   await page.reload();
-  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
   await expect(page.getByText("Untitled local project", { exact: true })).toHaveCount(0);
 
   await page.getByRole("link", { name: "Settings" }).click();
@@ -46,7 +47,7 @@ test("backs up and restores persisted Local Mode work", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Restored 2 records in Local Mode" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Projects" }).click();
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
   await expect(page.getByRole("cell", { name: /Untitled local project/ })).toBeVisible();
   await page.reload();
   await expect(page.getByRole("cell", { name: /Untitled local project/ })).toBeVisible();

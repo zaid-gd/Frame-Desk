@@ -2,6 +2,13 @@ import { describe, expect, test } from "vitest";
 import { serializeCalendarFeed } from "./calendar-feed";
 
 describe("read-only calendar feed", () => {
+  test("omits records without a calendar date", () => {
+    expect(serializeCalendarFeed({
+      name: "Relay commitments",
+      events: [{ id: "project:draft", date: "Not set", title: "Draft due", url: "/relay/projects/draft" }],
+    })).not.toContain("project:draft");
+  });
+
   test("serializes all-day events as a valid subscribed calendar", () => {
     const feed = serializeCalendarFeed({
       name: "Relay commitments",

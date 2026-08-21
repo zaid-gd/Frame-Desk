@@ -8,6 +8,7 @@ export async function openApp(page: Page, path: string) {
   }
   await page.goto(path);
   if (page.url().includes("/access")) {
+    if (cloudE2EAvailable()) await waitForClerk(page);
     const accessPassword = process.env.ACCESS_WALL_PASSWORD;
     if (!accessPassword) throw new Error("ACCESS_WALL_PASSWORD is required for protected browser tests.");
     await page.getByLabel("Access password").fill(accessPassword);

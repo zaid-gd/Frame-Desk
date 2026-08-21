@@ -134,7 +134,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
     if (hydrated) return createLocalProjectPort({ storage: window.localStorage, clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
     return createMemoryProjectPort({ clients: projectClients, templates: projectTemplates, selectedProjectId: projectId });
   }, [cloudProjectPort, hydrated, mode, projectClients, projectId, projectTemplates]);
-  const clientViewPort = useMemo(() => ({
+  const clientViewPort = useMemo(() => mode === "sample" ? selectedClientPort : ({
     ...selectedClientPort,
     loadProjects: () => selectedProjectPort.loadProjects().map((project) => ({
       id: project.id,
@@ -149,7 +149,7 @@ export function RelayRoute({ section, projectId, cloudConfigured }: { section?: 
       ...(project.projectGroupId ? { projectGroupId: project.projectGroupId } : {}),
     })),
     loadProjectGroups: () => selectedProjectPort.loadGroups().map(({ id, clientId, name }) => ({ id, clientId, name })),
-  }), [selectedClientPort, selectedProjectPort]);
+  }), [mode, selectedClientPort, selectedProjectPort]);
   const cloudSalaryPlanPort = useCloudSalaryPlanPort(mode === "cloud" && Boolean(auth.isSignedIn));
   const selectedSalaryPlanPort = useMemo(() => {
     if (mode === "sample") return createSampleSalaryPlanPort();

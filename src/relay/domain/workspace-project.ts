@@ -41,6 +41,8 @@ export function createWorkspaceProjectDraft(id: string, name: string, setup?: Pr
     tone: "planned",
     due: "Not set",
     progress: "0%",
+    financialType: "nonBillable",
+    paymentState: "not-applicable",
     ...(setup && firstStage ? { workflowTemplateId: setup.templateId, workflowStageId: firstStage.id, workflowSetup: structuredClone(setup) } : {}),
   };
 }

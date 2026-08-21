@@ -6,7 +6,6 @@ describe("Relay runtime boundary", () => {
     "/account",
     "/calendar",
     "/client-portal",
-    "/client-portal/invite-token",
     "/clients",
     "/projects",
     "/profile/edit",
@@ -24,6 +23,7 @@ describe("Relay runtime boundary", () => {
     "/api/access",
     "/relay",
     "/relay/dashboard",
+    "/client-portal/invite-token",
     "/sign-in",
     "/sign-up",
   ])("leaves the Relay route %s active", (pathname) => {

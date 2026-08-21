@@ -11,6 +11,16 @@ const activeRelayFiles = [
   ...listFiles("src/app/relay"),
   ...listFiles("src/relay"),
 ];
+
+const retiredPresentationPaths = [
+  "src/app/tracker-app.tsx",
+  "src/legacy-frame-desk",
+];
+for (const path of retiredPresentationPaths) {
+  if (!existsSync(path) || (path === "src/legacy-frame-desk" && listFiles(path).length === 0)) continue;
+  failures += 1;
+  console.error(`${path} still contains the replaced Frame Desk presentation.`);
+}
 for (const file of activeRelayFiles) {
   const source = readFileSync(file, "utf8");
   for (const imported of importedModules(source)) {
@@ -39,6 +49,14 @@ for (const [path, text] of [
   ["/", "<title>Welcome to Relay</title>"],
   ["/relay", "<title>Welcome to Relay</title>"],
   ["/relay/dashboard", "Relay"],
+  ["/relay/projects", "Relay"],
+  ["/relay/clients", "Relay"],
+  ["/relay/templates", "Relay"],
+  ["/relay/calendar", "Relay"],
+  ["/relay/files", "Relay"],
+  ["/relay/team", "Relay"],
+  ["/relay/settings", "Relay"],
+  ["/client-portal/release-smoke-token", "Relay"],
 ]) {
   const response = await fetch(`${baseUrl}${path}`, { headers });
   const body = await response.text();
@@ -49,7 +67,7 @@ for (const [path, text] of [
   if (path === "/") verifySecurityHeaders(response);
 }
 
-for (const path of ["/projects", "/settings", "/client-portal/old-token", "/u/old-profile"]) {
+for (const path of ["/projects", "/settings", "/u/old-profile"]) {
   const response = await fetch(`${baseUrl}${path}`, { headers, redirect: "manual" });
   const location = response.headers.get("location");
   if (![307, 308].includes(response.status) || !location?.endsWith("/")) {

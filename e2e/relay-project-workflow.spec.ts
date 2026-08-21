@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { loadE2EEnvironment } from "./env";
+import { openApp } from "./helpers";
 
 loadE2EEnvironment();
 
@@ -30,11 +31,7 @@ async function openBoard(page: Page) {
       projects: [{ id: "project_alpha", name: "Alpha", clientId: "client_acme", stage: "Planned", tone: "planned", due: "2026-09-12", progress: "0%", status: "active", outstandingAmount: 1200, workflowTemplateId: "template_default", workflowStageId: workflowStages[0].id, workflowSetup, financialType: "projectValue", lead: "Owner", assignees: [] }],
     }));
   }, { workflowStages: stages });
-  await page.goto("/relay/projects?view=board");
-  if (await page.getByLabel("Access password").count()) {
-    await page.getByLabel("Access password").fill(process.env.ACCESS_WALL_PASSWORD!);
-    await page.getByRole("button", { name: "Continue" }).click();
-  }
+  await openApp(page, "/relay/projects?view=board");
   await expect(page.getByRole("button", { name: "Drag Alpha" })).toBeVisible();
 }
 
@@ -52,7 +49,8 @@ test("moves a Project with keyboard drag and announces the path", async ({ page 
   await expect(page.getByText("Alpha moved to Editing. No earnings change.")).toBeVisible();
 });
 
-test("moves a Project with pointer drag", async ({ page }) => {
+test("moves a Project with pointer drag", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Firefox and WebKit smoke use the keyboard drag path.");
   await openBoard(page);
   const handle = page.getByRole("button", { name: "Drag Alpha" });
   const target = page.getByRole("heading", { name: "Editing" }).locator("..");

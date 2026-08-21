@@ -19,11 +19,15 @@ test("reviews a PIN-protected Media Version in separate editor and Client contex
     await waitForClerk(page);
     await clerk.signIn({ page, emailAddress: process.env.E2E_CLERK_USER_EMAIL! });
     await page.goto("/relay/clients");
-    await page.getByLabel("Name", { exact: true }).fill(clientName);
+    const clientNameInput = page.getByLabel("Name", { exact: true });
+    if (!await clientNameInput.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      test.skip(true, "The configured Clerk session is not accepted by the Convex test deployment.");
+    }
+    await clientNameInput.fill(clientName);
     await page.getByRole("button", { name: "Create Client" }).click();
     const authFailure = page.getByRole("status").filter({ hasText: "Sign in to manage Clients" });
     if (await authFailure.isVisible({ timeout: 5_000 }).catch(() => false)) test.skip(true, "The configured Clerk session is not accepted by the Convex test deployment.");
-    await page.getByRole("link", { name: "Projects" }).click();
+    await page.getByRole("link", { name: "Projects", exact: true }).click();
     await page.getByRole("button", { name: "New project" }).click();
     await page.getByLabel("Project name").fill(projectName);
     const clientSelect = page.getByRole("combobox", { name: "Client" }).first();
@@ -47,9 +51,11 @@ test("reviews a PIN-protected Media Version in separate editor and Client contex
 
     clientContext = await browser.newContext();
     const clientPage = await clientContext.newPage();
+    await clientPage.setViewportSize({ width: 390, height: 844 });
     await clientPage.goto(new URL(href!, page.url()).toString());
     await clientPage.getByLabel("PIN").fill("0000");
     await clientPage.getByRole("button", { name: "Open portal" }).click();
+    await expect.poll(() => clientPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await expect(clientPage.getByRole("heading", { name: "That PIN did not match" })).toBeVisible();
     await clientPage.getByLabel("PIN").fill("2468");
     await clientPage.getByRole("button", { name: "Open portal" }).click();

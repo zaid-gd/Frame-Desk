@@ -1,19 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { loadE2EEnvironment } from "./env";
+import { openApp } from "./helpers";
 
 loadE2EEnvironment();
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/relay");
-  if (page.url().includes("/access")) {
-    await page.getByLabel("Access password").fill(process.env.ACCESS_WALL_PASSWORD!);
-    await page.getByRole("button", { name: "Continue" }).click();
-  }
+  await openApp(page, "/relay");
   await page.evaluate(() => {
     window.localStorage.setItem("relay:entry-mode:v1", "sample");
     window.localStorage.removeItem("relay:local-workspace:v2");
   });
-  await page.goto("/relay/dashboard");
+  await page.goto("/relay/dashboard", { waitUntil: "domcontentloaded" });
   await expect(page.getByText("Sample Workspace · Read-only demo fixtures")).toBeVisible();
 });
 

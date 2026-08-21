@@ -17,7 +17,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com",
   "worker-src 'self' blob:",
-  "upgrade-insecure-requests"
+  ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const nextConfig = {

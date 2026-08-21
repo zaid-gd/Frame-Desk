@@ -31,7 +31,7 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "verify:team:live": "node scripts/verify-team-live.mjs",
-    "verify:browser": "playwright test e2e/access-gate-helper.spec.ts e2e/relay-entry.spec.ts e2e/relay-backup.spec.ts",
+    "verify:browser": "playwright test e2e/access-gate-helper.spec.ts e2e/relay-entry.spec.ts e2e/relay-backup.spec.ts e2e/relay-project-workflow.spec.ts e2e/relay-discovery.spec.ts --project=chrome --project=edge && playwright test e2e/relay-client-review.spec.ts --project=chrome && playwright test e2e/access-gate-helper.spec.ts e2e/relay-entry.spec.ts e2e/relay-project-workflow.spec.ts e2e/relay-discovery.spec.ts --project=firefox --project=webkit",
     "verify:cloudflare-auth": "node scripts/verify-cloudflare-auth.mjs",
     "verify:light-highlights": "node scripts/verify-light-highlights.mjs",
     "verify:light-logo": "node scripts/verify-light-logo.mjs",
